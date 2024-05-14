@@ -44,6 +44,7 @@ public class Message {
         this.tmsg = tmsg;
         this.tclient = tclient;
         this.text = tmsg.getText();
+        this.isPrivate = tmsg.isUserMessage(); //TODO this is a guess
 
         StringTokenizer st = new StringTokenizer(text);
         String firstWord = "";
@@ -79,6 +80,10 @@ public class Message {
         } catch (TelegramApiException e) {
             //TODO what is error handling?
         }
+    }
+
+    public boolean isPrivate() {
+        return isPrivate;
     }
 
 }
