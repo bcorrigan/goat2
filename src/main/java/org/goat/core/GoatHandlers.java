@@ -46,7 +46,7 @@ public class GoatHandlers implements LongPollingSingleThreadUpdateConsumer {
 
     public static void main(String[] args) {
         try (TelegramBotsLongPollingApplication botsApplication = new TelegramBotsLongPollingApplication()) {
-            botsApplication.registerBot(BotConfig.GOAT_TOKEN, new GoatHandlers(BotConfig.GOAT_TOKEN));
+            botsApplication.registerBot(BotStats.GOAT_TOKEN, new GoatHandlers(BotStats.GOAT_TOKEN));
             Thread.currentThread().join();
         } catch (Exception e) {
             log.error("Error registering bot", e);

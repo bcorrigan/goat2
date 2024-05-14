@@ -3,6 +3,8 @@ package org.goat.core;
 public class BotStats {
     private static BotStats instance;
 
+    public static final String GOAT_TOKEN = "secret:secret";
+
     private BotStats() {
         //pass
     }
