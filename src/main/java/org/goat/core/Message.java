@@ -19,6 +19,10 @@ public class Message {
 
     private TelegramClient tclient;
 
+    public String getModCommand() {
+        return modCommand;
+    }
+
     //"command" that modules may be interested in
     private String modCommand;
 
@@ -33,6 +37,10 @@ public class Message {
 
     //true if sent "privately" ie 1-1
     private boolean isPrivate;
+
+    public String getChatname() {
+        return chatname;
+    }
 
     //the name of the chat room?
     private String chatname;
