@@ -33,7 +33,7 @@ public class GoatHandlers implements LongPollingSingleThreadUpdateConsumer {
     public void consume(Update update) {
         System.out.println("Woohoo, got:" + update.getMessage().getText());
 
-        Message msg = new Message(update.getMessage(), telegramClient);
+        Message msg = new Message(update.getMessage());
 
         //create an object that contains the information to send back the message
         SendMessage sendMessageRequest = new SendMessage(update.getMessage().getChatId().toString(), "you said: " + update.getMessage().getText());

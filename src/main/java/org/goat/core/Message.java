@@ -3,8 +3,10 @@ package org.goat.core;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import org.telegram.telegrambots.meta.generics.TelegramClient;
+import org.goat.Goat;
 
 import java.util.StringTokenizer;
+import java.util.concurrent.LinkedBlockingQueue;
 
 /**
  * This will let us slightly abstract / wrap interaction with telegram and simplify code in modules
@@ -15,7 +17,10 @@ public class Message {
     //true if this message was sent by the *owner* of the bot
     private boolean isAuthorised;
 
-    private org.telegram.telegrambots.meta.api.objects.message.Message tmsg;
+    /**
+     * The outqueue instance for sending messages
+     */
+    private static LinkedBlockingQueue<Message> outqueue = Goat.outqueue;
 
     private TelegramClient tclient;
 
@@ -31,6 +36,8 @@ public class Message {
 
     //the raw text (aka trailing)
     private String text;
+
+    private Long chatId;
 
     //who sent this message?
     private String sender;
@@ -48,11 +55,14 @@ public class Message {
     //true if user "directly addressed" bot. For example, said "goat, blah blah blah".
     private boolean directlyAddressed;
 
-    public Message(org.telegram.telegrambots.meta.api.objects.message.Message tmsg, TelegramClient tclient) {
-        this.tmsg = tmsg;
-        this.tclient = tclient;
-        this.text = tmsg.getText();
-        this.isPrivate = tmsg.isUserMessage(); //TODO this is a guess
+    public Message(org.telegram.telegrambots.meta.api.objects.message.Message tmsg) {
+        this(tmsg.getChatId(), tmsg.getText(), tmsg.isUserMessage());
+    }
+
+    public Message(Long chatId, String text, Boolean isPrivate) {
+        this.chatId = chatId;
+        this.text = text;
+        this.isPrivate = isPrivate;
 
         StringTokenizer st = new StringTokenizer(text);
         String firstWord = "";
@@ -75,19 +85,19 @@ public class Message {
         }
     }
 
+
     private void setDirectlyAddressed(boolean direct) {
         this.directlyAddressed = direct;
     }
 
     //Create a reply and send it immediately.
     public void reply(String msg) {
+        outqueue.add(new Message(chatId, text, isPrivate));
+    }
+
+    public SendMessage getSendMessage() {
         //create an object that contains the information to send back the message
-        SendMessage sendMessageRequest = new SendMessage(this.tmsg.getChatId().toString(), msg);
-        try {
-            tclient.execute(sendMessageRequest);
-        } catch (TelegramApiException e) {
-            //TODO what is error handling?
-        }
+        return new SendMessage(this.chatId.toString(), text);
     }
 
     public boolean isPrivate() {

@@ -3,12 +3,13 @@ package org.goat;
 import org.goat.core.*;
 import org.goat.module.Core;
 import org.goat.module.ModuleCommands;
-import static org.goat.util.Passwords.*;
+//import static org.goat.util.Passwords.*;
 
 import java.io.*;
 import java.net.URL;
 import java.util.Locale;
 import java.util.concurrent.LinkedBlockingQueue;
+
 
 public class Goat {
     private static boolean showhelp;
