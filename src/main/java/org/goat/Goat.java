@@ -3,7 +3,7 @@ package org.goat;
 import org.goat.core.*;
 import org.goat.module.Core;
 import org.goat.module.ModuleCommands;
-//import static org.goat.util.Passwords.*;
+import static org.goat.util.Passwords.*;
 
 import java.io.*;
 import java.net.URL;
@@ -129,15 +129,15 @@ public class Goat {
 
     private void setDefaultStats() {
         // syntax is ugly here because we're accessing a scala companion object
-        BuildInfo$ buildInfo = goat.BuildInfo$.MODULE$;
+        //BuildInfo$ buildInfo = goat.BuildInfo$.MODULE$;
 
         BotStats bs = BotStats.getInstance();
-        bs.setVersion(buildInfo.version() + "-r" + buildInfo.gitRevision());
-        String nick = getPassword("irc.nick");
+        //bs.setVersion(buildInfo.version() + "-r" + buildInfo.gitRevision());
+        String nick = getPassword("nick");
         bs.setBotname(nick);
         bs.setClientName(nick);
         bs.setOwner(nick);
-        bs.setServername(getPassword("irc.server"));
+        bs.setToken(getPassword("telegram.token"));
     }
 
     public static Properties getProps() {

@@ -85,6 +85,12 @@ public class ServerConnection extends Thread {
         private volatile boolean keeprunning = true;
 
         public InputHandler() {
+            try (TelegramBotsLongPollingApplication botsApplication = new TelegramBotsLongPollingApplication()) {
+                botsApplication.registerBot(BotStats.getInstance().getToken(), this);
+                //Thread.currentThread().join();
+            } catch (Exception e) {
+                System.err.println("Error registering bot" + e);
+            }
             System.out.println("New inputHandler created");
         }
 

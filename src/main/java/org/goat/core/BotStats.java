@@ -18,7 +18,7 @@ import java.util.Set;
  */
 public class BotStats {
     private static BotStats instance;
-    public static final String GOAT_TOKEN = "sekret";
+    private String token;
 
     /**
      * Made this a CopyOnWriteArrayList to hopefully avoid the concurrent modification exceptions.
@@ -92,6 +92,14 @@ public class BotStats {
      * List of names to ignore.
      */
     private List<String> ignoreNames = new CopyOnWriteArrayList<String>();
+
+    public void setToken(String token) {
+        this.token = token;
+    }
+
+    protected String getToken() {
+        return token;
+    }
 
     public String getBotname() {
         return botname;
