@@ -102,7 +102,9 @@ public class Message {
 
     public SendMessage getSendMessage() {
         //create an object that contains the information to send back the message
-        return new SendMessage(this.chatId.toString(), text);
+        SendMessage sm =  new SendMessage(this.chatId.toString(), text);
+        sm.setParseMode("html");
+        return sm;
     }
 
     public boolean isPrivate() {

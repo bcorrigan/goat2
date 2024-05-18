@@ -1,5 +1,6 @@
 package org.goat.module;
 
+import org.goat.core.Constants;
 import org.goat.core.Module;
 import org.goat.core.Message;
 import org.goat.core.BotStats;
@@ -37,7 +38,7 @@ public class GoatSay extends Module {
         } else if (msg.matches(".*goat\\W*$")) {
             // Goat doesn't like talking to other goats.
             if (!m.getSender().toLowerCase().matches("goat")) {
-                m.reply("Goat!");
+                m.reply(Constants.BOLD + "Goat!" + Constants.END_BOLD);
             }
         }
     }

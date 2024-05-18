@@ -101,7 +101,16 @@ public class ServerConnection extends Thread {
 
         public void consume(Update update) {
                 try {
-                    Message m = new Message(update.getMessage());
+                    Message m;
+
+                    if (update.hasEditedMessage()) {
+                        m = new Message(update.getEditedMessage());
+                    } else if (update.hasMessage()) {
+                        m = new Message(update.getMessage());
+                    } else {
+                        System.out.println("Unknown update type!: " + update.toString());
+                        return;
+                    }
 
                     inqueue.add(m); //add to inqueue
                     if (debug)
