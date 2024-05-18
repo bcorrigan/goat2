@@ -31,6 +31,10 @@ public class Message {
     //"command" that modules may be interested in
     private String modCommand;
 
+    public String getModText() {
+        return modText;
+    }
+
     //all the rest after the modCommand... (aka modTrailing)
     private String modText;
 
@@ -40,6 +44,10 @@ public class Message {
 
     //the raw text (aka trailing)
     private String text;
+
+    public Long getChatId() {
+        return chatId;
+    }
 
     private Long chatId;
 
@@ -60,7 +68,7 @@ public class Message {
     private boolean directlyAddressed;
 
     public Message(org.telegram.telegrambots.meta.api.objects.message.Message tmsg) {
-        this(tmsg.getChatId(), tmsg.getText(), tmsg.isUserMessage(), tmsg.getFrom().getUserName());
+        this(tmsg.getChatId(), tmsg.getText(), tmsg.isUserMessage(), tmsg.getFrom().getFirstName());
     }
 
     public Message(Long chatId, String text, Boolean isPrivate, String sender) {
@@ -69,7 +77,7 @@ public class Message {
         this.isPrivate = isPrivate;
         this.sender = sender;
 
-        StringTokenizer st = new StringTokenizer(text);
+        StringTokenizer st = new StringTokenizer(text); //NPE if text is empty?
         String firstWord = "";
         if (st.hasMoreTokens()) {
             firstWord = st.nextToken() ;
@@ -98,6 +106,10 @@ public class Message {
     //Create a reply and send it immediately.
     public void reply(String msg) {
         outqueue.add(new Message(chatId, msg, isPrivate, sender));
+    }
+
+    public void send() {
+        outqueue.add(this);
     }
 
     public SendMessage getSendMessage() {

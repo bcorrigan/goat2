@@ -6,6 +6,7 @@ import org.goat.core.Constants;
 import org.goat.core.Module;
 import org.goat.core.Message;
 import org.goat.util.Dict;
+import org.goat.util.Emoji;
 import org.goat.util.Scores;
 import static org.goat.util.Scores.*;
 import org.goat.util.ScoresWithMatches;
@@ -194,7 +195,7 @@ public class WordGame extends Module implements Runnable, Comparator<String> {
                 wonWithLongest=true;
             }
         } else {
-            reply = "Nobody guessed a correct answer :( ";
+            reply = "Nobody guessed a correct answer " + Emoji.DISAPPOINTED_FACE;
         }
 
 
@@ -405,7 +406,7 @@ public class WordGame extends Module implements Runnable, Comparator<String> {
                 m.reply(sb.toString());
             }
             else
-                m.reply("Nobody has a score yet :(");
+                m.reply("Nobody has a score yet " + Emoji.ASTONISHED_FACE);
         } catch (IOException ioe) {
             m.reply("I had an i/o problem while trying to fetch the scores table");
         }
@@ -424,7 +425,7 @@ public class WordGame extends Module implements Runnable, Comparator<String> {
                 m.reply(sb.toString());
             }
             else
-                m.reply("Nobody has won a match yet :(");
+                m.reply("Nobody has won a match yet " + Emoji.DISAPPOINTED_BUT_RELIEVED_FACE);
         } catch (IOException ioe) {
             m.reply("I had an i/o problem while trying to fetch the match scores table");
         }

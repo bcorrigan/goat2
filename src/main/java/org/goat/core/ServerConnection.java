@@ -107,8 +107,11 @@ public class ServerConnection extends Thread {
                         m = new Message(update.getEditedMessage());
                     } else if (update.hasMessage()) {
                         m = new Message(update.getMessage());
+                    } else if (update.hasChannelPost()) {
+                        m = new Message(update.getChannelPost());
                     } else {
                         System.out.println("Unknown update type!: " + update.toString());
+
                         return;
                     }
 
