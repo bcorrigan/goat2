@@ -38,11 +38,9 @@ public class ServerConnection extends Thread {
 
     /**
      * Connects us to Telegram..
-     *
-     * @param botToken API token
      */
-    public ServerConnection(String botToken) {
-        telegramClient = new OkHttpTelegramClient(botToken);
+    public ServerConnection() {
+        telegramClient = new OkHttpTelegramClient(BotStats.getInstance().getToken());
         reconnect();
     }
 
@@ -51,6 +49,7 @@ public class ServerConnection extends Thread {
         oh = new OutputHandler();
 
         oh.start();
+        ih.start();
     }
 
     private void reconnect() {
@@ -81,15 +80,17 @@ public class ServerConnection extends Thread {
         }
     }
 
-    class InputHandler implements LongPollingSingleThreadUpdateConsumer {
+    class InputHandler extends Thread implements LongPollingSingleThreadUpdateConsumer {
         private volatile boolean keeprunning = true;
 
-        public InputHandler() {
+        public void run() {
             try (TelegramBotsLongPollingApplication botsApplication = new TelegramBotsLongPollingApplication()) {
                 botsApplication.registerBot(BotStats.getInstance().getToken(), this);
-                //Thread.currentThread().join();
+                Thread.currentThread().join();
             } catch (Exception e) {
-                System.err.println("Error registering bot" + e);
+                System.err.println("Error registering bot, msg: " + e);
+                e.printStackTrace();
+                System.exit(2);
             }
             System.out.println("New inputHandler created");
         }
@@ -102,9 +103,9 @@ public class ServerConnection extends Thread {
                 try {
                     Message m = new Message(update.getMessage());
 
-                            inqueue.add(m); //add to inqueue
-                            if (debug)
-                                System.out.println(m.toString());
+                    inqueue.add(m); //add to inqueue
+                    if (debug)
+                        System.out.println(m.toString());
 
                 } catch (Exception e) {
                     System.err.println("Unexpected exception in InputHandler :" );

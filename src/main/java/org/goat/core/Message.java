@@ -97,7 +97,7 @@ public class Message {
 
     //Create a reply and send it immediately.
     public void reply(String msg) {
-        outqueue.add(new Message(chatId, text, isPrivate, sender));
+        outqueue.add(new Message(chatId, msg, isPrivate, sender));
     }
 
     public SendMessage getSendMessage() {

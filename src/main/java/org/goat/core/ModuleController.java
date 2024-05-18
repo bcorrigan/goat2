@@ -56,8 +56,10 @@ public class ModuleController  {
     private BotStats bot = BotStats.getInstance();
 
     public ModuleController() {
+        System.out.println("Starting construction of module controller..");
         buildAllModulesList();
-        buildScriptModulesList();
+        //buildScriptModulesList();
+        System.out.println("constructed module controller?");
     }
 
     /**
@@ -207,7 +209,7 @@ public class ModuleController  {
         if(bot.isTesting())
             return;
 
-        Reflections reflections = new Reflections("goat");
+        Reflections reflections = new Reflections("org.goat");
         Set<Class<? extends Module>> allModules =
                 reflections.getSubTypesOf(Module.class);
 

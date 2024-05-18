@@ -1,8 +1,8 @@
 package org.goat;
 
 import org.goat.core.*;
-import org.goat.module.Core;
-import org.goat.module.ModuleCommands;
+//import org.goat.module.Core;
+//import org.goat.module.ModuleCommands;
 import static org.goat.util.Passwords.*;
 
 import java.io.*;
@@ -24,7 +24,7 @@ public class Goat {
     public static void main(String[] args) {
         argv=args;
         new Goat() ;
-
+        System.out.println("Shouldn't get here?");
         System.exit(0) ;
     }
 
@@ -36,10 +36,9 @@ public class Goat {
             showHelp();
             System.exit(0);
         }
-
-        System.out.print("Connecting to " + BotStats.getInstance().getServername() + " ... ");
-        sc = new ServerConnection(BotStats.getInstance().getServername()); //lets init the connection..
-        System.out.println("connected.\n");
+        System.out.print("Connecting to telegram... ");
+        sc = new ServerConnection(); //lets init the connection..
+        System.out.println("We appear to be connected.\n");
         loadDefaultModules(modController);
         try {
             Thread.sleep(100);   //lets give the logon a chance to progress before adding messages to queues
@@ -105,21 +104,21 @@ public class Goat {
 
     private void loadDefaultModules(ModuleController modController) {
         Class<?>[] defaultModules = {
-                goat.module.CTCP.class,
-                goat.module.ModuleCommands.class,
+                org.goat.module.GoatSay.class
+                /*goat.module.ModuleCommands.class,
                 goat.module.NickServ.class,
                 goat.module.Help.class,
                 goat.module.Auth.class,
                 goat.module.Core.class,
                 goat.module.UserManagement.class,
-                goat.module.ServerCommands.class
+                goat.module.ServerCommands.class*/
         } ;
         try {
             for(int i=0; i<defaultModules.length; i++)
                 modController.loadInAllChannels(defaultModules[i]);
-            ModuleCommands moduleCommands = (ModuleCommands) modController.getLoaded("ModuleCommands");
+            /*ModuleCommands moduleCommands = (ModuleCommands) modController.getLoaded("ModuleCommands");
             moduleCommands.modControl = modController;
-            moduleCommands.inAllChannels = true;
+            moduleCommands.inAllChannels = true;*/
         } catch (IllegalAccessException e) {
             e.printStackTrace();
         } catch (InstantiationException e) {
