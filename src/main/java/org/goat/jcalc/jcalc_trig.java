@@ -19,23 +19,23 @@ public class jcalc_trig {
     Vector functions = new Vector(funcs.length);
     
     
-    public boolean isFunction(String s){
+    public boolean isFunction(String s) throws InterruptedException {
         if(functions.contains(s))
             return true;
         else
             return false;
     }
     
-    public String[] getFunctions(){
+    public String[] getFunctions() throws InterruptedException {
         return funcs;
     }
     
-    public int numOperans(String s){
+    public int numOperans(String s) throws InterruptedException{
         return 1;
     }
     
     
-    public jcalc_trig(int scale, jcalc_math jm){
+    public jcalc_trig(int scale, jcalc_math jm) throws InterruptedException {
         this.jmath = jm;
         
         // note that setScale changes class variables... perhaps this
@@ -49,7 +49,7 @@ public class jcalc_trig {
 
     }
     
-    public BigDecimal execute(String function, Vector operans) {
+    public BigDecimal execute(String function, Vector operans) throws InterruptedException {
         function = function.toLowerCase();
         BigDecimal bd = (BigDecimal)operans.elementAt(0);
         
@@ -69,16 +69,22 @@ public class jcalc_trig {
         return null;
     }
     
-    public BigDecimal sin(BigDecimal bd){
+    public BigDecimal sin(BigDecimal bd) throws InterruptedException {
         
         //System.out.print(bd +"=>");
         
         if(bd.compareTo(ZERO)>0){
             while(bd.compareTo(pi_class.getValue(scale))>0){
+                if(Thread.currentThread().isInterrupted()) {
+                    throw new InterruptedException();
+                }
                 bd = bd.subtract(pi_class.getValue(scale).multiply(TWO) );
             }
         }else if(bd.compareTo(ZERO)<0){
             while(bd.compareTo(pi_class.getValue(scale).negate().multiply(TWO))<0){
+                if(Thread.currentThread().isInterrupted()) {
+                    throw new InterruptedException();
+                }
                 bd = bd.add(pi_class.getValue(scale));
             }
         }
@@ -92,14 +98,14 @@ public class jcalc_trig {
         return bd;
     }
 
-    public BigDecimal cos(BigDecimal bd){
+    public BigDecimal cos(BigDecimal bd) throws InterruptedException {
         //bd = pi_class.getValue().divide(TWO,scale,BigDecimal.ROUND_HALF_UP).add(bd);
         bd = pi_class.getValue().divide(TWO,scale,BigDecimal.ROUND_HALF_UP).subtract(bd);
         //bd = bd.subtract(pi_class.getValue().divide(TWO,scale,BigDecimal.ROUND_HALF_UP));
         return sin(bd);
     }
     
-    public BigDecimal tan(BigDecimal bd){
+    public BigDecimal tan(BigDecimal bd) throws InterruptedException {
         BigDecimal top = sin(bd);
         BigDecimal bottom = cos(bd);
         //System.out.println(top);
@@ -112,15 +118,15 @@ public class jcalc_trig {
         return top.divide(bottom, 2*scale, BigDecimal.ROUND_HALF_UP);
     }
     
-    public BigDecimal csc(BigDecimal bd){
+    public BigDecimal csc(BigDecimal bd) throws InterruptedException {
         return ONE.divide( sin(bd), 2*scale, BigDecimal.ROUND_HALF_UP);
     }
     
-    public BigDecimal sec(BigDecimal bd){
+    public BigDecimal sec(BigDecimal bd) throws InterruptedException {
         return ONE.divide( cos(bd), 2*scale, BigDecimal.ROUND_HALF_UP);
     }    
     
-    public BigDecimal cot(BigDecimal bd){
+    public BigDecimal cot(BigDecimal bd) throws InterruptedException {
         return ONE.divide( tan(bd), 2*scale, BigDecimal.ROUND_HALF_UP);
     }    
     
@@ -133,7 +139,7 @@ public class jcalc_trig {
      * @param scl
      * @return teh new scale.
      */
-    public int setScale(int scl){
+    public int setScale(int scl) throws InterruptedException {
         if(scl<16)
             scl=16;
         
@@ -151,7 +157,7 @@ public class jcalc_trig {
      *  @param bd
      *  @returns BigDecimal
      */     
-    public BigDecimal taylor(BigDecimal bd){
+    public BigDecimal taylor(BigDecimal bd) throws InterruptedException {
         //1 3 5 7 9 
         BigDecimal prev = new BigDecimal(bd.longValue()+1);
         BigDecimal curr = new BigDecimal(bd.toString());
@@ -162,7 +168,9 @@ public class jcalc_trig {
         
         long iteration = 2;
         while(curr.compareTo(prev)!=0){
-            
+            if(Thread.currentThread().isInterrupted()) {
+                throw new InterruptedException();
+            }
             prev = curr;
             
             BigDecimal iter = new BigDecimal(iteration);

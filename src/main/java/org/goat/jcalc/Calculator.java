@@ -39,7 +39,7 @@ import java.util.*;
  *  write a test program that'll take a range of scales, and a range of numbers
  *      for each one of those it'll run the test harnes, substituting the vars
  *      with the current number of the test harness iteration, enable multiple variables
- *
+ *modText.append(st.nextToken()).append(' ');
  *  test the heck out of trig (see above)
  *      (both of these need to be tested with all ranges
  *      do all equalities on that one web site
@@ -133,12 +133,12 @@ public class Calculator {
     /**
      *  Converts an infix equation to a reverse polish notation equation. Currently
      *  only used internally, but developers could use this to display an equation
-     *  in rpn.
+     *  in rpn." create 
      *
      *  @param equation - infix equation
      *  @return Vector - reverse polish notation equation
      */    
-    public Vector infix_to_rpn(String equation) throws CalculatorException {
+    public Vector infix_to_rpn(String equation) throws CalculatorException, InterruptedException {
 
         Stack op_stack       = new Stack();
         Vector polish_vector = new Vector();
@@ -605,7 +605,7 @@ public class Calculator {
      *  called will be changing as the code gets cleaned up.
      *
      */    
-    public boolean execute_command(String command){
+    public boolean execute_command(String command) throws InterruptedException {
         
         if(command.equals("clear")){
             entries.clear();
@@ -637,7 +637,7 @@ public class Calculator {
     }
 
     
-    private String commandSubstitution(String equation) throws CalculatorException {
+    private String commandSubstitution(String equation) throws CalculatorException, InterruptedException {
         //
         // doing ans/entry/del substitution here
         // this is ugly, but don't know a better way...
@@ -669,7 +669,9 @@ public class Calculator {
         }
         
         while(equation.indexOf("ans(")>-1 || equation.indexOf("entry(")>-1){
-
+            if(Thread.currentThread().isInterrupted()) {
+                throw new InterruptedException();
+            }
             //System.out.println("debug: " + entries.getEntry(1));
 
             String replacing;
@@ -833,7 +835,7 @@ public class Calculator {
      *  Currently, this is only being called within the Calculator class, but this could
      *  be used, for example, by a GUI to read in saved sessions.
      */
-    public void addEntry(String equation, String result){
+    public void addEntry(String equation, String result) throws InterruptedException {
         entries.addEntry(equation,result);
     }
     
@@ -857,7 +859,7 @@ public class Calculator {
      *  code to execute the test harness for the Calculator class. While developing I like
      *  to hit one button, (no matter which class I am editing) and run the test harness.
      */
-    public static void main(String[] args) {
+    public static void main(String[] args) throws InterruptedException {
         //System.out.println( (1^3<<100>>99|2 ) );
         boolean runTester = true;
         
@@ -915,20 +917,24 @@ public class Calculator {
     	opCon.setLimitFactorial(limit);
     }
     
-    public Calculator(){
+    public Calculator() {
         this(32);
         //System.out.println("empty");
     }//end - public Calculator
     
-    public Calculator(int scl){
+    public Calculator(int scl) {
         //System.out.println("full");
         int scale = scl;
         for(int i=0; i<u_commands.length; i++){
             unary_commands.add(u_commands[i]);
         }
-        
-        variables = new VariableTable(scale);
-        opCon = new OperatorControlCenter(variables,scale);        
+        try {
+            variables = new VariableTable(scale);
+            opCon = new OperatorControlCenter(variables, scale);
+        } catch(InterruptedException ie) {
+            System.out.println("Couldn't make a calculator");
+            System.exit(1);
+        }
 
         /*
         BigDecimal oone = new BigDecimal(".01");

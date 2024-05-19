@@ -80,7 +80,7 @@ public class OperatorControlCenter {
         return scale;
     }
     
-    public boolean setScale(int i) {
+    public boolean setScale(int i) throws InterruptedException {
         boolean good = true;
         if(i<16){
             scale = 16;
@@ -177,7 +177,7 @@ public class OperatorControlCenter {
     }
     
     
-    public OperatorControlCenter(VariableTable vt, int scale){
+    public OperatorControlCenter(VariableTable vt, int scale) throws InterruptedException {
         this.scale = scale;
         
         jmath = new jcalc_math(scale);
@@ -527,6 +527,9 @@ public class OperatorControlCenter {
                     String num = last.toString();
                     if(last.scale()>scale){
                         FIX: while(num.indexOf('.')>-1 && num.charAt(num.indexOf('.')+1+scale)=='0'){
+                            if(Thread.currentThread().isInterrupted()) {
+                                throw new InterruptedException();
+                            }
                             //System.out.println("trying to fix");
                             for(int i=1; i< (scale>>2); i++){
                                 if(num.charAt(num.indexOf('.')+1+scale-i)!='0'){
@@ -541,6 +544,9 @@ public class OperatorControlCenter {
                         }
 
                         FIX: while(num.indexOf('.')>-1 && num.charAt(num.indexOf('.')+1+scale)=='9'){
+                            if(Thread.currentThread().isInterrupted()) {
+                                throw new InterruptedException();
+                            }
                             //System.out.println("trying to fix 9 ");
                             for(int i=1; i< (scale>>2); i++){
                                 if(num.charAt(num.indexOf('.')+1+scale-i)!='9'){
@@ -568,6 +574,9 @@ public class OperatorControlCenter {
                 //System.out.println(integer_power + " is too big");
                 System.err.println("WARNING: " + last +"^"+integer_power+ " may take a while");
                 for(; integer_power.compareTo(BigInteger.ONE)>0; integer_power = integer_power.subtract(BigInteger.ONE)){
+                    if(Thread.currentThread().isInterrupted()) {
+                        throw new InterruptedException();
+                    }
                     last = last.multiply(left).setScale((5+scale), BigDecimal.ROUND_HALF_UP);
                 }                
             }
@@ -807,6 +816,9 @@ public class OperatorControlCenter {
             }
             
             while(left.compareTo(right)>=0){
+                if(Thread.currentThread().isInterrupted()) {
+                    throw new InterruptedException();
+                }
                 left = left.subtract(right);
             }
 

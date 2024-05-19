@@ -77,6 +77,8 @@ public class Message {
         this.isPrivate = isPrivate;
         this.sender = sender;
 
+        StringBuilder modTextSB = new StringBuilder();
+
         StringTokenizer st = new StringTokenizer(text); //NPE if text is empty?
         String firstWord = "";
         if (st.hasMoreTokens()) {
@@ -87,15 +89,19 @@ public class Message {
             setDirectlyAddressed(true);
             if (st.hasMoreTokens()) {
                 this.modCommand = st.nextToken();
-                while (st.hasMoreTokens())
-                    this.modText = st.nextToken() + ' ';//TODO all this String concatenation in loops is nae use, need to replace with StringBuffer. But StringBuilder comes with jdk1.5, so will just wait till it is widespread
+                while (st.hasMoreTokens()) {
+                    modTextSB.append(st.nextToken()).append(' ');
+                    //this.modText = modText + st.nextToken() + ' ';//TODO all this String concatenation in loops is nae use, need to replace with StringBuffer. But StringBuilder comes with jdk1.5, so will just wait till it is widespread
+                }
             }
         } else {
             setDirectlyAddressed(false);
             this.modCommand = firstWord;
             while (st.hasMoreTokens())
-                this.modText = st.nextToken() + ' ';
+                modTextSB.append(st.nextToken()).append(' ');
+                //this.modText = modText + st.nextToken() + ' ';
         }
+        this.modText = modTextSB.toString().trim();
     }
 
 

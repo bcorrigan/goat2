@@ -107,7 +107,8 @@ public class Goat {
                 org.goat.module.GoatSay.class,
                 org.goat.module.WordGame.class,
                 org.goat.module.Remind.class,
-                org.goat.module.CountDown.class
+                org.goat.module.CountDown.class,
+                org.goat.module.Calc.class
                 /*goat.module.ModuleCommands.class,
                 goat.module.NickServ.class,
                 goat.module.Help.class,

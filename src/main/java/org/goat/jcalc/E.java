@@ -10,12 +10,12 @@ public class E implements variable_interface{
     int scale;
     BigDecimal value;
     
-    public E(int scl){
+    public E(int scl) throws InterruptedException {
         this.scale = scl;
         value = this.calculate_value(scl);
     }
     
-    public BigDecimal calculate_value(int scl){
+    public BigDecimal calculate_value(int scl) throws InterruptedException {
         //System.out.println("calculating for: " + scl);
         if(value==null){
             value = new BigDecimal("2.5");
@@ -27,6 +27,9 @@ public class E implements variable_interface{
         int iteration = 3;
         
         while(prev.compareTo(value)!=0){
+            if(Thread.currentThread().isInterrupted()) {
+                throw new InterruptedException();
+            }
             prev = value;
             
             BigDecimal fact = new BigDecimal(iteration);
@@ -39,7 +42,7 @@ public class E implements variable_interface{
     }//end - public BigDecimal calculate_value(int scl)
     
     
-    public BigDecimal getValue(int scl){
+    public BigDecimal getValue(int scl) throws InterruptedException {
         if(scl>15 && scl!=scale){
             this.scale=scl;
         }else if(scl<16){

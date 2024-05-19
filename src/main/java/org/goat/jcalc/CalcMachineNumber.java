@@ -11,7 +11,7 @@ public class CalcMachineNumber {
     BigDecimal human = null;
     
     
-    public CalcMachineNumber(String s){
+    public CalcMachineNumber(String s) throws InterruptedException {
         setValue(s);
         
     }
@@ -22,7 +22,7 @@ public class CalcMachineNumber {
     }
     
     
-    private void setValue(String s){
+    private void setValue(String s) throws InterruptedException {
         //takes a machine number, such as 10101xb or FFxh or IVxR
         //and sets this machines values to it
         this.machine = s;
@@ -47,7 +47,7 @@ public class CalcMachineNumber {
     }
 
     
-    BigDecimal binaryToDecimal(String s){
+    BigDecimal binaryToDecimal(String s) throws InterruptedException {
         //takes a string of ones and zeros
         //expects nothign else, exception will be thrown otherwise
         BigDecimal result = new BigDecimal(0);

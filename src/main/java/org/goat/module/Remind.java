@@ -49,12 +49,15 @@ public class Remind extends org.goat.core.Module {
         //} else {
         //	user = new User(m.sender) ;
         //}
+        System.out.println("Got here:" + m.toString());
         Pattern messagePattern = Pattern.compile("^\\s*\\w*\\s+in\\s+(((\\d+\\.?\\d*|\\.\\d+)\\s+(weeks?|days?|hours?|hrs?|minutes?|mins?|seconds?|secs?)[\\s,]*(and)?\\s+)+)(.*)\\s*$");
-        Matcher matcher = messagePattern.matcher(m.getText());
+        System.out.println("modText:" + m.getModText());
+        Matcher matcher = messagePattern.matcher(m.getModText());
         if (matcher.matches()) {
+            System.out.println("1");
             String reminderMessage = matcher.group(6);
             String periods = matcher.group(2);
-
+            System.out.println("2");
             long set = System.currentTimeMillis();
             long due = set;
 
@@ -65,7 +68,7 @@ public class Remind extends org.goat.core.Module {
                 timeZone = users.getUser(m.getSender()).getTimeZoneString();
             cal = new GregorianCalendar(TimeZone.getTimeZone(timeZone));
 
-
+            System.out.println("3");
 
             try {
                 double weeks = getPeriod(periods, "weeks|week");
@@ -79,12 +82,12 @@ public class Remind extends org.goat.core.Module {
                 m.reply("I can't quite deal with numbers like that!");
                 return;
             }
-
+            System.out.println("4");
             if (due == set) {
                 m.reply("Example of correct usage: \"Remind me in 1 hour, 10 minutes to check the oven.\"  I understand all combinations of weeks, days, hours, minutes and seconds.");
                 return;
             }
-
+            System.out.println("5");
             Reminder reminder = new Reminder(m.getChatId(), getName(m), m.getSender(), reminderMessage, set, due);
             String name = getName(m);
             String replyName = null;
@@ -92,14 +95,16 @@ public class Remind extends org.goat.core.Module {
                 replyName = "you";
             else
                 replyName = name;
-
+            System.out.println("6");
             cal.setTimeInMillis( reminder.getDueTime() );
 
             String date = String.format(Locale.UK, "%1$td/%1$tm/%1$ty %1$tR", cal);
             m.reply(m.getSender() + ": Okay, I'll remind " + replyName + " about that on " + date + " " + timeZone);
             reminders.add(reminder);
+            System.out.println("7");
             timer.interrupt();
         }
+        System.out.println("8");
     }
 
     private String getName(Message m) {

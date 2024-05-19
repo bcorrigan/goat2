@@ -12,7 +12,7 @@ public class jcalc_math {
     Vector functions = new Vector(funcs.length);
 
     
-    public boolean isFunction(String s){
+    public boolean isFunction(String s) throws InterruptedException {
         if(functions.contains(s))
             return true;
         else
@@ -27,7 +27,7 @@ public class jcalc_math {
         return 1;
     }
 
-    public BigDecimal execute(String function, Vector operans) {
+    public BigDecimal execute(String function, Vector operans) throws InterruptedException  {
         function = function.toLowerCase();
         if(function.equals("ln")){
             //return this.ln(bd);
@@ -38,7 +38,7 @@ public class jcalc_math {
     
     
     
-    public jcalc_math(int scale){
+    public jcalc_math(int scale) throws InterruptedException {
         this.setScale(scale);
         
         for(int i=0; i<funcs.length; i++){
@@ -46,7 +46,7 @@ public class jcalc_math {
         }
     }    
     
-    public static BigDecimal factorial(BigDecimal bd){
+    public static BigDecimal factorial(BigDecimal bd) throws InterruptedException {
         BigInteger bi = bd.toBigInteger();
         
         if(bi.compareTo(BigInteger.ZERO)==0){
@@ -56,13 +56,16 @@ public class jcalc_math {
         BigInteger i = bi.subtract(BigInteger.ONE);
         BigInteger sum = bi;
         while(i.compareTo(BigInteger.ONE)>0){
+            if(Thread.currentThread().isInterrupted()) {
+                throw new InterruptedException();
+            }
             sum = sum.multiply(i);
             i=i.subtract(BigInteger.ONE);
         }
         return new BigDecimal(sum);
     }
     
-    public static BigDecimal pow(BigDecimal left, BigDecimal right){
+    public static BigDecimal pow(BigDecimal left, BigDecimal right) throws InterruptedException {
         BigDecimal orig = new BigDecimal(left.toString());
         for(int i=1; i<right.intValue(); i++){
             left = left.multiply(orig);
@@ -76,7 +79,7 @@ public class jcalc_math {
      *
      *
      */    
-    public static BigDecimal dirtyRound(BigDecimal bd, int scl){
+    public static BigDecimal dirtyRound(BigDecimal bd, int scl) throws InterruptedException {
         //System.out.println(bd.scale() +"="+ scl);
         
         if(scl>=bd.scale())
@@ -116,11 +119,18 @@ public class jcalc_math {
             //}
             
             BigDecimal increment = ONE.movePointLeft(scl-1);
+
+            if(Thread.currentThread().isInterrupted()) {
+                throw new InterruptedException();
+            }
             //System.out.println("\t"+increment);
             return new_bd.add(increment);
         }
         
         ZERO: while(num.charAt(last_spot-2)=='0'){
+            if(Thread.currentThread().isInterrupted()) {
+                throw new InterruptedException();
+            }
             for(int i=0; i<test_length; i++){
                 if(num.charAt(last_spot-2-i)!='0'){
                     break ZERO;
@@ -137,7 +147,7 @@ public class jcalc_math {
         return new BigDecimal(num);
     }
     
-    static BigDecimal sqrt(BigDecimal bd, int scale){
+    static BigDecimal sqrt(BigDecimal bd, int scale) throws InterruptedException {
         scale *= 2;
         int safe_scale = scale + 5;
         
@@ -149,6 +159,9 @@ public class jcalc_math {
         
         
         while(prev.compareTo(curr)!=0){
+            if(Thread.currentThread().isInterrupted()) {
+                throw new InterruptedException();
+            }
             prev = curr;
             
             BigDecimal top = curr.multiply(curr).subtract(bd);
@@ -165,7 +178,7 @@ public class jcalc_math {
         //return curr.setScale(scale, BigDecimal.ROUND_HALF_EVEN);
     }    
     
-    public int setScale(int scl){
+    public int setScale(int scl) throws InterruptedException {
         if(scl<16)
             scl=16;
         

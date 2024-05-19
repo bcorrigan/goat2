@@ -35,7 +35,7 @@ public class Entries extends java.util.Observable  {
     }
     
     
-    public void delete(int i) throws CalculatorException {
+    public void delete(int i) throws CalculatorException, InterruptedException {
         if(i>entries_list.size()||i<1){
             throw new CalculatorException("Domain error");
         }
@@ -45,7 +45,7 @@ public class Entries extends java.util.Observable  {
     }    
     
     
-    public String getAns(int i) throws CalculatorException {
+    public String getAns(int i) throws CalculatorException, InterruptedException {
         if(i>entries_list.size()||i<1){
             System.out.println("size: " + entries_list.size());
             throw new CalculatorException("Domain error");
@@ -54,7 +54,7 @@ public class Entries extends java.util.Observable  {
     }
 
     
-    public String getEntry(int i) throws CalculatorException {
+    public String getEntry(int i) throws CalculatorException, InterruptedException {
         if(i>entries_list.size()||i<1){
             throw new CalculatorException("Domain error");
         }
@@ -65,7 +65,7 @@ public class Entries extends java.util.Observable  {
     }        
 
     
-    public Vector getAllEntries(){
+    public Vector getAllEntries() throws InterruptedException {
         Vector return_vector = new Vector(entries_list.size()*2);
         for(int i=0; i<entries_list.size(); i++){
             Entry e = (Entry)entries_list.elementAt(i);
@@ -76,7 +76,7 @@ public class Entries extends java.util.Observable  {
     }
 
     
-    public void addEntry(String equation, String results){
+    public void addEntry(String equation, String results) throws InterruptedException {
         Entry e = new Entry(equation,results);
         entries_list.add(e);
         setChanged();
