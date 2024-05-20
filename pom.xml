@@ -115,6 +115,11 @@
             <version>0.10.2</version>
         </dependency>
         <dependency>
+            <groupId>com.zoho</groupId>
+            <artifactId>hawking</artifactId>
+            <version>0.1.8</version>
+        </dependency>
+        <dependency>
             <groupId>org.mapdb</groupId>
             <artifactId>mapdb</artifactId>
             <version>3.1.0</version>

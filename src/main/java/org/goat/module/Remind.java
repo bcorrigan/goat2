@@ -20,9 +20,14 @@ import java.util.*;
 import java.util.regex.*;
         import java.io.*;
 
-        import org.goat.Goat;
+import com.zoho.hawking.HawkingTimeParser;
+import com.zoho.hawking.language.english.model.DateGroup;
+import com.zoho.hawking.language.english.model.ParserOutput;
+import org.goat.Goat;
 import org.goat.core.*;
         import org.goat.util.Reminder;
+import com.zoho.hawking.datetimeparser.configuration.HawkingConfiguration;
+import com.zoho.hawking.language.english.model.DatesFound;
 
 public class Remind extends org.goat.core.Module {
 
@@ -31,6 +36,9 @@ public class Remind extends org.goat.core.Module {
     private ReminderTimer timer;
     private LinkedList<Reminder> reminders = new LinkedList<Reminder>();
     private ExecutorService pool = Goat.modController.getPool();
+    HawkingConfiguration hawkingConfiguration;
+    HawkingTimeParser parser;
+    Pattern taskPattern = Pattern.compile("^.*?\\s+to\\s+(.*?)$");
 
     public Remind() {
         loadReminders();
@@ -40,71 +48,49 @@ public class Remind extends org.goat.core.Module {
         timer = new ReminderTimer(this);
         pool.execute(timer);
         users = org.goat.Goat.getUsers() ;
+        this.hawkingConfiguration = new HawkingConfiguration();
+        try {
+            hawkingConfiguration.setFiscalYearStart(4);
+            hawkingConfiguration.setFiscalYearEnd(3);
+            hawkingConfiguration.setTimeZone("Europe/London");
+        } catch(Exception e) {
+            e.printStackTrace();
+            System.out.println("Fatal error in Remind module:" + e.getMessage());
+            System.exit(1);
+        }
+        parser = new HawkingTimeParser();
     }
 
     public void processChannelMessage(Message m) {
-        //User user ;
-        //if (users.hasUser(m.sender)) {
-        //	user = users.getUser(m.sender) ;
-        //} else {
-        //	user = new User(m.sender) ;
-        //}
-        System.out.println("Got here:" + m.toString());
-        Pattern messagePattern = Pattern.compile("^\\s*\\w*\\s+in\\s+(((\\d+\\.?\\d*|\\.\\d+)\\s+(weeks?|days?|hours?|hrs?|minutes?|mins?|seconds?|secs?)[\\s,]*(and)?\\s+)+)(.*)\\s*$");
-        System.out.println("modText:" + m.getModText());
-        Matcher matcher = messagePattern.matcher(m.getModText());
-        if (matcher.matches()) {
-            System.out.println("1");
-            String reminderMessage = matcher.group(6);
-            String periods = matcher.group(2);
-            System.out.println("2");
-            long set = System.currentTimeMillis();
-            long due = set;
+        DatesFound dates = parser.parse(m.getText(), new Date(), this.hawkingConfiguration, "eng");
+        List<ParserOutput> po = dates.getParserOutputs();
+        if (!po.isEmpty()) {
+            long due = po.getFirst().getDateRange().getStart().getMillis();
+            Matcher matcher = taskPattern.matcher(m.getModText());
+            if(matcher.matches()) {
+                String task = matcher.group(1);
+                Reminder reminder = new Reminder(m.getChatId(), getName(m), m.getSender(), task, System.currentTimeMillis(), due);
+                String name = getName(m);
+                String replyName = null;
+                if(name.equals(m.getSender()))
+                    replyName = "you";
+                else
+                    replyName = name;
+                System.out.println("6");
+                GregorianCalendar cal = new GregorianCalendar(TimeZone.getDefault());
+                cal.setTimeInMillis( reminder.getDueTime() );
 
-
-            GregorianCalendar cal;
-            String timeZone = "GMT";
-            if (users.hasUser(m.getSender()) && ! users.getUser(m.getSender()).getTimeZoneString().equals(""))
-                timeZone = users.getUser(m.getSender()).getTimeZoneString();
-            cal = new GregorianCalendar(TimeZone.getTimeZone(timeZone));
-
-            System.out.println("3");
-
-            try {
-                double weeks = getPeriod(periods, "weeks|week");
-                double days = getPeriod(periods, "days|day");
-                double hours = getPeriod(periods, "hours|hrs|hour|hr");
-                double minutes = getPeriod(periods, "minutes|mins|minute|min");
-                double seconds = getPeriod(periods, "seconds|secs|second|sec");
-                due += (weeks * 604800 + days * 86400 + hours * 3600 + minutes * 60 + seconds) * 1000;
+                String date = String.format(Locale.UK, "%1$td/%1$tm/%1$ty %1$tR", cal);
+                m.reply(m.getSender() + ": Okay, I'll remind " + replyName + " about that on " + date);
+                reminders.add(reminder);
+                System.out.println("7");
+                timer.interrupt();
+            } else {
+                m.reply("Sorry, I could work out the date, but not what you want to be reminded of!");
             }
-            catch (NumberFormatException e) {
-                m.reply("I can't quite deal with numbers like that!");
-                return;
-            }
-            System.out.println("4");
-            if (due == set) {
-                m.reply("Example of correct usage: \"Remind me in 1 hour, 10 minutes to check the oven.\"  I understand all combinations of weeks, days, hours, minutes and seconds.");
-                return;
-            }
-            System.out.println("5");
-            Reminder reminder = new Reminder(m.getChatId(), getName(m), m.getSender(), reminderMessage, set, due);
-            String name = getName(m);
-            String replyName = null;
-            if(name.equals(m.getSender()))
-                replyName = "you";
-            else
-                replyName = name;
-            System.out.println("6");
-            cal.setTimeInMillis( reminder.getDueTime() );
-
-            String date = String.format(Locale.UK, "%1$td/%1$tm/%1$ty %1$tR", cal);
-            m.reply(m.getSender() + ": Okay, I'll remind " + replyName + " about that on " + date + " " + timeZone);
-            reminders.add(reminder);
-            System.out.println("7");
-            timer.interrupt();
+        } else {
+            m.reply("Sorry, I can't work out any kind of date or time from that!");
         }
-        System.out.println("8");
     }
 
     private String getName(Message m) {

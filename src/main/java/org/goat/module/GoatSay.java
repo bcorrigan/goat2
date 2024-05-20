@@ -40,6 +40,12 @@ public class GoatSay extends Module {
             if (!m.getSender().toLowerCase().matches("goat")) {
                 m.reply(Constants.BOLD + "Goat!" + Constants.END_BOLD);
             }
+        } else if (msg.matches("^\\s*" + botname + "\\W+version\\W*")) {
+            String version = "Version:" + Runtime.class.getPackage().getImplementationVersion();
+            version += " Vendor:" + Runtime.class.getPackage().getImplementationVendor();
+            version += " Title:" + Runtime.class.getPackage().getImplementationTitle();
+            version += " os.version:" + System.getProperty("os.name");
+            m.reply(version);
         }
     }
 

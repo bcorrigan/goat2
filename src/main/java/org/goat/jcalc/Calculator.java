@@ -133,7 +133,7 @@ public class Calculator {
     /**
      *  Converts an infix equation to a reverse polish notation equation. Currently
      *  only used internally, but developers could use this to display an equation
-     *  in rpn." create 
+     *  in rpn." create
      *
      *  @param equation - infix equation
      *  @return Vector - reverse polish notation equation
