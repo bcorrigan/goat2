@@ -76,14 +76,12 @@ public class Remind extends org.goat.core.Module {
                     replyName = "you";
                 else
                     replyName = name;
-                System.out.println("6");
                 GregorianCalendar cal = new GregorianCalendar(TimeZone.getDefault());
                 cal.setTimeInMillis( reminder.getDueTime() );
 
                 String date = String.format(Locale.UK, "%1$td/%1$tm/%1$ty %1$tR", cal);
                 m.reply(m.getSender() + ": Okay, I'll remind " + replyName + " about that on " + date);
                 reminders.add(reminder);
-                System.out.println("7");
                 timer.interrupt();
             } else {
                 m.reply("Sorry, I could work out the date, but not what you want to be reminded of!");
@@ -136,7 +134,7 @@ public class Remind extends org.goat.core.Module {
             while (true) {
 
                 // If the list is empty, wait until something gets added.
-                if (secretary.reminders.size() == 0) {
+                if (secretary.reminders.isEmpty()) {
                     try {
                         wait();
                     }

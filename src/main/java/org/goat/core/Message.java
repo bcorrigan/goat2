@@ -4,8 +4,10 @@ import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import org.telegram.telegrambots.meta.generics.TelegramClient;
 import org.goat.Goat;
+import org.goat.util.Pager;
 
 import java.util.StringTokenizer;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingQueue;
 
 /**
@@ -17,6 +19,7 @@ public class Message {
     //true if this message was sent by the *owner* of the bot
     private boolean isAuthorised;
 
+    private static ConcurrentHashMap<Long, Pager> pagerCache = new ConcurrentHashMap<>() ;
     /**
      * The outqueue instance for sending messages
      */
@@ -79,6 +82,10 @@ public class Message {
 
         StringBuilder modTextSB = new StringBuilder();
 
+        if(text==null) {
+            return;
+        }
+
         StringTokenizer st = new StringTokenizer(text); //NPE if text is empty?
         String firstWord = "";
         if (st.hasMoreTokens()) {
@@ -111,7 +118,7 @@ public class Message {
 
     //Create a reply and send it immediately.
     public void reply(String msg) {
-        outqueue.add(new Message(chatId, msg, isPrivate, sender));
+        outqueue.add(createPagedReply(msg));
     }
 
     public void send() {
@@ -132,5 +139,77 @@ public class Message {
     public String getSender() {
         return sender;
     }
+
+    //paging stuff
+
+    /**
+     * Creates a new paged reply, using createReply(), and initializes the pager cache with the supplied string
+     *
+     * @param text The text to be paged and sent
+     *
+     * @return a message containing the first chunk of paged text, which the caller will most likely want to send()
+     */
+    public Message createPagedReply(String text) {
+        return createPagedPrivmsg(chatId, text);
+    }
+
+    public Message createPagedPrivmsg(long to, String message) {
+        Message ret;
+        if(Pager.shouldPaginate(message)) {
+            Pager pager = new Pager(message) ;
+            pagerCache.put(to, pager) ;
+            ret = new Message(to, pager.getNext(), isPrivate, sender) ;
+        } else {
+            ret = new Message(chatId, message, isPrivate, sender);
+        }
+        return ret;
+    }
+
+    public boolean hasNextPage() {
+        return hasNextPage(chatId);
+    }
+
+    public boolean hasNextPage(Long key) {
+        boolean ret = false;
+        if (pagerCache.containsKey(key) ) {
+            Pager pager = pagerCache.get(key) ;
+            if (pager.isEmpty())
+                pagerCache.remove(key);
+            else
+                ret = true;
+        }
+        return ret ;
+    }
+
+    /**
+     * returns a reply message via createReply containing the next page of text, if any, from the pager cache for the current channel/nick (ie, "params")
+     *
+     * @return aforesaid message, if there is more text in the buffer, else an empty message.
+     */
+    public Message createNextPage() {
+        Message ret;
+        if (hasNextPage() )
+            ret = new Message(chatId, nextPage(chatId), isPrivate, sender) ;
+        else {
+            ret = new Message(chatId, "", isPrivate, sender);
+        }
+
+        return ret;
+    }
+
+    public String nextPage(Long key) {
+        String ret = "";
+        if (hasNextPage(key) ) {
+            Pager pager = pagerCache.get(key);
+            ret = pager.getNext();
+            if(pager.isEmpty())
+                pagerCache.remove(key);
+        }
+        return ret;
+    }
+
+
+
+
 
 }
