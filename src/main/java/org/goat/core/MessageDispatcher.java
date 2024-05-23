@@ -66,10 +66,15 @@ public class MessageDispatcher {
             return;
         } not sure how this maps to telegram exactly */
 
+        if(!msg.hasText()) {
+            //we don't do anything interesting with picture messages or anything yet...
+            return;
+        }
+
         List<Module> modules = BotStats.getInstance().getModules();
-        ArrayList<Module> modulesWantingAll = new ArrayList<Module>(),
-                modulesWantingSome = new ArrayList<Module>(),
-                modulesWantingOne = new ArrayList<Module>();
+        ArrayList<Module> modulesWantingAll = new ArrayList<>(),
+                modulesWantingSome = new ArrayList<>(),
+                modulesWantingOne = new ArrayList<>();
 
         for(Module mod : modules) {
             if(mod.messageType() == Module.WANT_ALL_MESSAGES)
@@ -107,7 +112,7 @@ public class MessageDispatcher {
             Iterator<String> it = channels.iterator();
             String chan;
             while (it.hasNext()) {
-                chan = (String) it.next();
+                chan = it.next();
                 if (chan.equals(msg.getChatname()))
                     sendMessage(msg, mod);
             }

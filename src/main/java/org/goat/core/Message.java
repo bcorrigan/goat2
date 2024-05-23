@@ -19,6 +19,15 @@ public class Message {
     //true if this message was sent by the *owner* of the bot
     private boolean isAuthorised;
 
+    public boolean hasText() {
+        return hasText;
+    }
+
+    //thought about - have a Message interface, then implement TextMessage, PictureMessage etcetc
+    //But I think in telegram you can have messages which are all of these at once so maybe
+    //just add processPictureMsg to Module and call it a day?
+    private boolean hasText;
+
     private static ConcurrentHashMap<Long, Pager> pagerCache = new ConcurrentHashMap<>() ;
     /**
      * The outqueue instance for sending messages
@@ -83,8 +92,10 @@ public class Message {
         StringBuilder modTextSB = new StringBuilder();
 
         if(text==null) {
+            hasText=false;
             return;
         }
+        hasText=true;
 
         StringTokenizer st = new StringTokenizer(text); //NPE if text is empty?
         String firstWord = "";

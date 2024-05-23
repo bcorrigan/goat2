@@ -179,6 +179,11 @@ public abstract class Module implements Runnable {
      */
     public abstract void processChannelMessage(Message m);
 
+    //called when the bot receives a message which has PICTURE data.
+    public void processPictureMessage(Message m) {
+        //do nowt
+    }
+
     public void dispatchMessage(Message m) {
         if(running) {
             queueIncomingMessage(m);

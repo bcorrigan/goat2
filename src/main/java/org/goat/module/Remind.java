@@ -53,6 +53,7 @@ public class Remind extends org.goat.core.Module {
             hawkingConfiguration.setFiscalYearStart(4);
             hawkingConfiguration.setFiscalYearEnd(3);
             hawkingConfiguration.setTimeZone("Europe/London");
+            hawkingConfiguration.setDateFormat("DD/MM/YYYY");
         } catch(Exception e) {
             e.printStackTrace();
             System.out.println("Fatal error in Remind module:" + e.getMessage());
@@ -63,9 +64,33 @@ public class Remind extends org.goat.core.Module {
 
     public void processChannelMessage(Message m) {
         DatesFound dates = parser.parse(m.getText(), new Date(), this.hawkingConfiguration, "eng");
-        List<ParserOutput> po = dates.getParserOutputs();
-        if (!po.isEmpty()) {
-            long due = po.getFirst().getDateRange().getStart().getMillis();
+        List<ParserOutput> pos = dates.getParserOutputs();
+        if (!pos.isEmpty()) {
+            ParserOutput nearest=null;
+            boolean only_past=true;
+            for(ParserOutput po : pos) {
+                if (po.getDateRange().getStart().getMillis() < System.currentTimeMillis() ) {
+                    continue; //this date is in the past
+                }
+                only_past=false;
+                if(nearest==null) {
+                    nearest=po;
+                    continue;
+                }
+                if(nearest.getDateRange().getStart().getMillis() > po.getDateRange().getStart().getMillis()) {
+                    //this one is nearer
+                    nearest=po;
+                }
+            }
+            if(only_past) {
+                m.reply("Ha ha. I'll get my delorean then McFly.");
+                return;
+            }
+            if(nearest==null) {
+                m.reply("Something went wrong!");
+            }
+
+            long due = nearest.getDateRange().getStart().getMillis();
             Matcher matcher = taskPattern.matcher(m.getModText());
             if(matcher.matches()) {
                 String task = matcher.group(1);
