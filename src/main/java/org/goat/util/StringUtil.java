@@ -546,11 +546,12 @@ public class StringUtil {
         }
     }
 
+    //don't need this in telegram with its luxurious msg size and recognition of newlines
     public static String smush(String text) {
         // convert all whitespace (except form feeds) to spaces
-        text = text.replaceAll("[\\t\\n\\x0B\\r]", " ") ;
+        //text = text.replaceAll("[\\t\\n\\x0B\\r]", " ") ;
         // condense all multi-space down to two spaces
-        text = text.replaceAll(" {3,}", "  ") ;
+        //text = text.replaceAll(" {3,}", "  ") ;
         return text ;
     }
 

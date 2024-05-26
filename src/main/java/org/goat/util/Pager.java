@@ -145,7 +145,7 @@ public class Pager {
     }
 
     public static Boolean shouldPaginate(String text) {
-        return ((byteLength(text) > defaultMaxBytes) || text.matches("(?s).*[\\r\\n\\f].*"));
+        return (byteLength(text) > defaultMaxBytes);
     }
 
     /* private things */

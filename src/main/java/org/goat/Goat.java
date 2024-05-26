@@ -111,7 +111,8 @@ public class Goat {
                 org.goat.module.Calc.class,
                 org.goat.module.More.class,
                 org.goat.module.DiceRoll.class,
-                org.goat.module.Define.class
+                org.goat.module.Define.class,
+                org.goat.module.Weather.class
                 /*goat.module.ModuleCommands.class,
                 goat.module.NickServ.class,
                 goat.module.Help.class,
