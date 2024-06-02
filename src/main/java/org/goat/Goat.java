@@ -113,6 +113,7 @@ public class Goat {
                 org.goat.module.DiceRoll.class,
                 org.goat.module.Define.class,
                 org.goat.module.Weather.class
+                //CljTest.class
                 /*goat.module.ModuleCommands.class,
                 goat.module.NickServ.class,
                 goat.module.Help.class,
@@ -124,14 +125,13 @@ public class Goat {
         try {
             for(int i=0; i<defaultModules.length; i++)
                 modController.loadInAllChannels(defaultModules[i]);
+            modController.load("CljTest");
             /*ModuleCommands moduleCommands = (ModuleCommands) modController.getLoaded("ModuleCommands");
             moduleCommands.modControl = modController;
             moduleCommands.inAllChannels = true;*/
-        } catch (IllegalAccessException e) {
+        } catch (Exception e) {
             e.printStackTrace();
-        } catch (InstantiationException e) {
-            e.printStackTrace();
-        }
+        }     
     }
 
     private void setDefaultStats() {

@@ -103,7 +103,7 @@ public class ModuleController  {
             bootModule(mod);
             return mod;
         } else {
-            moduleName = "goat.module." + moduleName;
+            moduleName = "org.goat.module." + moduleName;
             return load(Class.forName(moduleName));
         }
 
@@ -131,7 +131,7 @@ public class ModuleController  {
         module = (Module) modClass.newInstance();
 
         bootModule(module);
-        module.moduleName=modClass.getName().replace("goat.module.", "");
+        module.moduleName=modClass.getName().replace("org.goat.module.", "");
         return module;
     }
 
