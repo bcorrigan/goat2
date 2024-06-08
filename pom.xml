@@ -82,7 +82,13 @@
               <artifactId>jline</artifactId>
               <version>0.9.94</version>
          </dependency>           
-    </dependencies>
+        <dependency>
+            <groupId>quil</groupId>
+            <artifactId>quil</artifactId>
+            <version>4.3.1563</version>
+        </dependency>
+
+        </dependencies>
 
     <build>
         <directory>${project.basedir}/target</directory>
@@ -190,4 +196,10 @@
             </plugins>
         </pluginManagement>
     </build>
+    <repositories>
+    <repository>
+      <id>clojars.org</id>
+      <url>https://repo.clojars.org</url>
+    </repository>
+    </repositories>
 </project>
