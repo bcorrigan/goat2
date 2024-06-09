@@ -75,7 +75,7 @@
      (query db [(format (str "select d.word,d.definition,r.hits"
                              " from defs d, ranks r"
                              " where d.word=r.word"
-                             " and d.length=7"
+                             " and d.length=5"
                              " %s"
                              " order by random()"
                              " limit 1") hits)]))))

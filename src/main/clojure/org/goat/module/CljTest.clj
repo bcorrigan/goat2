@@ -1,14 +1,12 @@
 (ns org.goat.module.CljTest (:gen-class
                              :extends org.goat.core.Module)
     (:require [quil.core :as q :include-macros true]
-              [org.goat.words.words :as words]))
-
-(def guesses ["WRONG" "SPETH" "JANET", "HOUSE"])
-(def answer "RIGHT")
+              [org.goat.words.words :as words]
+              [clojure.java.io :as io]))
 
 (def state
   "key is :game-states->chatid - returning
-  {:guesses '(\"WRONG HOUSE\") :answer \"RIGHT\"
+  {:guesses [\"WRONG HOUSE\"] :answer \"RIGHT\"
   :size 5 :answerdef \"definition\" :hits 1000 }"
   (atom {}))
 
@@ -49,8 +47,8 @@
   [chatid answer size answerdef hits]
   (let [chat-key (keyword (str chatid))]
     (swap! state assoc-in [:game-states chat-key]
-          {:guesses [] :answer answer :size size
-           :answerdef answerdef :hits hits})))
+           {:guesses [] :answer answer :size size
+            :answerdef answerdef :hits hits})))
 
 (defn contains-char? [string c]
   (boolean (some #(= % c) string)))
@@ -61,7 +59,7 @@
     If letter is in the answer, but in the wrong position in the guess - :semiknown
     If letter is NOT in the answer - :wrong
     A vec of these keywords is returned representing each letter in the supplied guess."
-  [guess]
+  [guess answer]
   (vec (for [i (range (count guess))
              :let [ges_let (get guess i)
                    ans_let (get answer i)]]
@@ -95,54 +93,61 @@
   (q/rect x y 50 50))
 
 (defn draw-board
-  "Draws the board letter by letter according to current guesses array."
-  [gr]
-  (q/with-graphics gr
-    (q/background 17 17 18)
-    (println (range 10 (+ 10 (* 60 (count guesses))) 60))
+  "Draws the board letter by letter according to the chat's guesses array"
+  [gr chatid]
+  (let [guesses (get-gameprop :guesses)
+        answer (get-gameprop :answer)]
+    (q/with-graphics gr
+      (q/background 17 17 18)
+      (println (range 10 (+ 10 (* 60 (count guesses))) 60))
 
-    (doseq [i (range (count guesses))
-            j (range (count (get guesses i)))]
-      (let [guess (get guesses i)
-            letter (nth (seq guess) j)
-            sym (get (tosyms guess) j)
-            y (+ 10 (* 60 i))
-            x (+ 10 (* 60 j))]
-        (draw-letter letter x y sym)))
+      (doseq [i (range (count guesses))
+              j (range (count (get guesses i)))]
+        (let [guess (get guesses i)
+              letter (nth (seq guess) j)
+              sym (get (tosyms guess answer) j)
+              y (+ 10 (* 60 i))
+              x (+ 10 (* 60 j))]
+          (draw-letter letter x y sym)))
 
-    (doseq [y (range (+ 10 (* 60 (count guesses))) (+ 10 (* 60 6)) 60)
-            x (range 10 260 60)]
-      (draw-unrevealed x y))))
+      (doseq [y (range (+ 10 (* 60 (count guesses))) (+ 10 (* 60 6)) 60)
+              x (range 10 260 60)]
+        (draw-unrevealed x y)))))
 
 (defn draw
   "Initites all the drawing and puts the image into /tmp"
-  []
-  (let [gr (q/create-graphics 310 370 :java2d "/tmp/wordle.png")]
+  [chatid]
+  (let [gr (q/create-graphics 310 370 :java2d)]
     (q/with-graphics gr
-      (draw-board gr)
-      (q/save "/tmp/wordle.png")
+      (draw-board gr chatid)
+      (q/save (format "/tmp/wordle.%s.png" chatid))
       (.dispose gr)
-      (q/exit))))
+      (q/exit)))
+  (-> (format "/tmp/wordle.%s.png" chatid) io/file .toPath java.nio.file.Files/readAllBytes))
 
+(defn get-img
+  "Setup sketch, call drawing fn, get the png, return the bytes"
+  [chatid]
+  (q/defsketch org.goat.module.CljTest
+    :host "host"
+    :size [310 370]
+    :setup (partial draw chatid)))
 
 (defn -processChannelMessage
   [_ m]
 
   (if (= "wordle" (.getModCommand m))
     (if (not (playing? (.getChatId m)))
-        (let [worddata (words/get-word :easy)
-              word (get worddata :word)
-              definition (get worddata :definition)
-              hits (get worddata :hits)]
-          (new-game! (.getChatId m) word 5 definition hits)
-          ;; TODO draw board and reply with it here..
-          )
+      (let [worddata (words/get-word :easy)
+            word (get worddata :word)
+            definition (get worddata :definition)
+            hits (get worddata :hits)]
+        (new-game! (.getChatId m) word 5 definition hits)
+        ;; TODO draw board and reply with it here..
+        (get-img (.getChatId m))
+        )
       (.reply m "We're already playing a game, smart one.")))
 
-  (q/defsketch org.goat.module.CljTest
-    :host "host"
-    :size [310 370]
-    :setup draw)
   ;(draw)
   (.reply m "OK bazz, check image was written now."))
 
