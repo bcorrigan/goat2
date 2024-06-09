@@ -1,6 +1,7 @@
 (ns org.goat.module.CljTest (:gen-class
                              :extends org.goat.core.Module)
-    (:require [quil.core :as q :include-macros true]))
+    (:require [quil.core :as q :include-macros true]
+              [org.goat.words.words :as words]))
 
 (def guesses ["WRONG" "SPETH" "JANET", "HOUSE"])
 (def answer "RIGHT")
@@ -29,6 +30,19 @@
   (let [chat-key (keyword (str chatid))
         current-guesses (get-in @state [:game-states chat-key :guesses])]
     (swap! state assoc-in [:game-states chat-key :guesses] (conj current-guesses guess))))
+
+(defn get-gameprop
+  "Get given property for given chatid game"
+  [chatid property]
+  (let [chat-key (keyword (str chatid))]
+    (get-in @state [:game-states chat-key property])))
+
+(defn clear-game!
+  "For a given chatid, remove all the game state entirely"
+  [chatid]
+  (let [chat-key (keyword (str chatid))]
+    (swap! state assoc-in [:game-states]
+           (dissoc (get-in @state [:game-states]) chat-key))))
 
 (defn new-game!
   "Add state for a new game of wordle."
@@ -110,8 +124,21 @@
       (.dispose gr)
       (q/exit))))
 
+
 (defn -processChannelMessage
   [_ m]
+
+  (if (= "wordle" (.getModCommand m))
+    (if (not (playing? (.getChatId m)))
+        (let [worddata (words/get-word :easy)
+              word (get worddata :word)
+              definition (get worddata :definition)
+              hits (get worddata :hits)]
+          (new-game! (.getChatId m) word 5 definition hits)
+          ;; TODO draw board and reply with it here..
+          )
+      (.reply m "We're already playing a game, smart one.")))
+
   (q/defsketch org.goat.module.CljTest
     :host "host"
     :size [310 370]
