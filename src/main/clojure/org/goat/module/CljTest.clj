@@ -12,43 +12,38 @@
 
 (defn playing?
   "true if we're playing a game on the given chatid"
-  [chatid]
-  (let [chat-key (keyword (str chatid))]
-    (not (nil? (get-in @state [:game-states chat-key])))))
+  [chat-key]
+  (not (nil? (get-in @state [:game-states chat-key]))))
 
 (defn guesses-made
   "How many guesses have been made for the given chatid game?"
-  [chatid]
-  (let [chat-key (keyword (str chatid))]
-    (count (get-in @state [:game-states chat-key :guesses]))))
+  [chat-key]
+  (count (get-in @state [:game-states chat-key :guesses])))
 
 (defn add-guess!
   "Append the given guess to the state map."
-  [chatid guess]
-  (let [chat-key (keyword (str chatid))
-        current-guesses (get-in @state [:game-states chat-key :guesses])]
-    (swap! state assoc-in [:game-states chat-key :guesses] (conj current-guesses guess))))
+  [chat-key guess]
+  (let [current-guesses (get-in @state [:game-states chat-key :guesses])]
+    (swap! state assoc-in [:game-states chat-key :guesses]
+           (conj current-guesses guess))))
 
 (defn get-gameprop
   "Get given property for given chatid game"
-  [chatid property]
-  (let [chat-key (keyword (str chatid))]
-    (get-in @state [:game-states chat-key property])))
+  [chat-key property]
+  (get-in @state [:game-states chat-key property]))
 
 (defn clear-game!
   "For a given chatid, remove all the game state entirely"
-  [chatid]
-  (let [chat-key (keyword (str chatid))]
-    (swap! state assoc-in [:game-states]
-           (dissoc (get-in @state [:game-states]) chat-key))))
+  [chat-key]
+  (swap! state assoc-in [:game-states]
+         (dissoc (get-in @state [:game-states]) chat-key)))
 
 (defn new-game!
   "Add state for a new game of wordle."
-  [chatid answer size answerdef hits]
-  (let [chat-key (keyword (str chatid))]
-    (swap! state assoc-in [:game-states chat-key]
-           {:guesses [] :answer answer :size size
-            :answerdef answerdef :hits hits})))
+  [chat-key answer size answerdef hits]
+  (swap! state assoc-in [:game-states chat-key]
+         {:guesses [] :answer answer :size size
+          :answerdef answerdef :hits hits}))
 
 (defn contains-char? [string c]
   (boolean (some #(= % c) string)))
@@ -56,9 +51,9 @@
 (defn tosyms
   "Compare given guess to answer. For each letter:
     If letter is correct and in right position - :revealed
-    If letter is in the answer, but in the wrong position in the guess - :semiknown
+    If letter is in the answer, but in the wrong position - :semiknown
     If letter is NOT in the answer - :wrong
-    A vec of these keywords is returned representing each letter in the supplied guess."
+    A vec of these keywords is returned for each letter in the supplied guess."
   [guess answer]
   (vec (for [i (range (count guess))
              :let [ges_let (get guess i)
@@ -94,9 +89,9 @@
 
 (defn draw-board
   "Draws the board letter by letter according to the chat's guesses array"
-  [gr chatid]
-  (let [guesses (get-gameprop :guesses)
-        answer (get-gameprop :answer)]
+  [gr chat-key]
+  (let [guesses (get-gameprop chat-key :guesses)
+        answer (get-gameprop chat-key :answer)]
     (q/with-graphics gr
       (q/background 17 17 18)
       (println (range 10 (+ 10 (* 60 (count guesses))) 60))
@@ -116,40 +111,46 @@
 
 (defn draw
   "Initites all the drawing and puts the image into /tmp"
-  [chatid]
+  [chat-key]
   (let [gr (q/create-graphics 310 370 :java2d)]
     (q/with-graphics gr
-      (draw-board gr chatid)
-      (q/save (format "/tmp/wordle.%s.png" chatid))
+      (draw-board gr chat-key)
+      (q/save (format "/tmp/wordle.%s.png" (str (symbol chat-key))))
       (.dispose gr)
       (q/exit)))
-  (-> (format "/tmp/wordle.%s.png" chatid) io/file .toPath java.nio.file.Files/readAllBytes))
+  (-> (format "/tmp/wordle.%s.png" (str (symbol chat-key)))
+      io/file .toPath java.nio.file.Files/readAllBytes))
 
 (defn get-img
   "Setup sketch, call drawing fn, get the png, return the bytes"
-  [chatid]
+  [chat-key]
   (q/defsketch org.goat.module.CljTest
     :host "host"
     :size [310 370]
-    :setup (partial draw chatid)))
+    :setup (partial draw chat-key)))
 
 (defn -processChannelMessage
   [_ m]
-
-  (if (= "wordle" (.getModCommand m))
-    (if (not (playing? (.getChatId m)))
-      (let [worddata (words/get-word :easy)
-            word (get worddata :word)
-            definition (get worddata :definition)
-            hits (get worddata :hits)]
-        (new-game! (.getChatId m) word 5 definition hits)
-        ;; TODO draw board and reply with it here..
-        (get-img (.getChatId m))
-        )
-      (.reply m "We're already playing a game, smart one.")))
-
+  (let [chat-key (keyword (str (.getChatId m)))
+        guess (.getModText m)]
+    (if (= "wordle" (.getModCommand m))
+      (if (not (playing? chat-key)
+        (let [worddata (words/get-word :easy)
+              word (get worddata :word)
+              definition (get worddata :definition)
+              hits (get worddata :hits)]
+          (new-game! chat-key word 5 definition hits)
+          (.replyWithImage m (get-img chat-key))
+        (.reply m "We're already playing a game, smart one.")))))
+    (if (playing? chat-key)
+      (if (= 5 (count (re-matches #"[a-zA-Z]*" guess)))
+        (do
+          (add-guess! chat-key guess)
+          (.replyWithImage m (get-img chat-key))
+          ; TODO check win condiction?
+          )))
   ;(draw)
-  (.reply m "OK bazz, check image was written now."))
+  (.reply m "OK bazz, check image was written now.")))
 
 (defn -processPrivateMessage
   [this m]

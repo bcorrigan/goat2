@@ -54,18 +54,24 @@
 
   ;; Load words file
   (with-db-transaction [transaction db]
-    (process-file-by-lines "resources/words_with_defs" (partial insert-def-line! transaction)))
+    (process-file-by-lines "resources/words_with_defs"
+                           (partial insert-def-line! transaction)))
 
   (with-db-transaction [transaction db]
-    (process-file-by-lines "resources/words-googlehits-rank" (partial insert-rank-line! transaction))))
+    (process-file-by-lines "resources/words-googlehits-rank"
+                           (partial insert-rank-line! transaction))))
 
 (defn tbl-exists?
   "Check the given table exists"
   [tbl]
-  (not (empty? (query db [(format "select name from sqlite_master where type='table' AND name='%s'" tbl)]))))
+  (not (empty? (query db [(format (str "select name"
+                                       " from sqlite_master"
+                                       " where type='table'"
+                                       " AND name='%s'") tbl)]))))
 
 (defn get-word
-  "Get a random word. Provide argument :hard to get a hard word, :easy to get an easy word."
+  "Get a random word. Provide argument :hard to get a hard word,
+   :easy to get an easy word."
   ([] (get-word :normal))
   ([difficulty]
    (let [hits (cond
