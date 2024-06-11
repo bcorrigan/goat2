@@ -122,9 +122,7 @@
       (draw-board gr chat-key)
       (q/save (format "/tmp/wordle.%s.png" (str (symbol chat-key))))
       (.dispose gr)
-      (q/exit)))
-  (-> (format "/tmp/wordle.%s.png" (str (symbol chat-key)))
-      io/file .toPath java.nio.file.Files/readAllBytes))
+      (q/exit))))
 
 (defn get-img
   "Setup sketch, call drawing fn, get the png, return the bytes"

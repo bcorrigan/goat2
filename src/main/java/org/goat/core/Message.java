@@ -1,11 +1,14 @@
 package org.goat.core;
 
+import org.telegram.telegrambots.meta.api.methods.botapimethods.PartialBotApiMethod;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
-import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
+import org.telegram.telegrambots.meta.api.methods.send.SendPhoto;
+import org.telegram.telegrambots.meta.api.objects.InputFile;
 import org.telegram.telegrambots.meta.generics.TelegramClient;
 import org.goat.Goat;
 import org.goat.util.Pager;
 
+import java.io.File;
 import java.util.StringTokenizer;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -18,6 +21,9 @@ import java.util.concurrent.LinkedBlockingQueue;
 public class Message {
     //true if this message was sent by the *owner* of the bot
     private boolean isAuthorised;
+
+    //don't think we need an enum for "type" of message. ie a telegram msg could have text AND various other media
+    private boolean hasImage=false;
 
     public boolean hasText() {
         return hasText;
@@ -63,6 +69,8 @@ public class Message {
 
     private Long chatId;
 
+    private File image;
+
     //who sent this message?
     private String sender;
 
@@ -81,6 +89,15 @@ public class Message {
 
     public Message(org.telegram.telegrambots.meta.api.objects.message.Message tmsg) {
         this(tmsg.getChatId(), tmsg.getText(), tmsg.isUserMessage(), tmsg.getFrom().getFirstName());
+    }
+
+    //private - only used to construct outgoing messages for now
+    private Message(Long chatId, File image, Boolean isPrivate, String sender) {
+        this.chatId = chatId;
+        this.image = image;
+        this.isPrivate = isPrivate;
+        this.sender = sender;
+        hasImage=true;
     }
 
     public Message(Long chatId, String text, Boolean isPrivate, String sender) {
@@ -132,16 +149,41 @@ public class Message {
         outqueue.add(createPagedReply(msg));
     }
 
+    public void replyWithImage(File image) {
+        outqueue.add(new Message(chatId, image, isPrivate, sender));
+    }
+
     public void send() {
         outqueue.add(this);
     }
 
-    public SendMessage getSendMessage() {
-        //create an object that contains the information to send back the message
-        SendMessage sm =  new SendMessage(this.chatId.toString(), text);
-        sm.setParseMode("html");
-        return sm;
+    public PartialBotApiMethod getSendMessage() {
+        if(!hasImage) {
+            //create an object that contains the information to send back the message
+            SendMessage sm = new SendMessage(this.chatId.toString(), text);
+            sm.setParseMode("html");
+            return sm;
+        } else {
+            return new SendPhoto(this.chatId.toString(), new InputFile(image));
+        }
     }
+
+    /*
+    public void sendImageUploadingAFile(String filePath, String chatId) {
+    // Create send method
+    SendPhoto sendPhotoRequest = new SendPhoto();
+    // Set destination chat id
+    sendPhotoRequest.setChatId(chatId);
+    // Set the photo file as a new photo (You can also use InputStream with a constructor overload)
+    sendPhotoRequest.setPhoto(new InputFile(new File(filePath)));
+    try {
+        // Execute the method
+        telegramClient.execute(sendPhotoRequest);
+    } catch (TelegramApiException e) {
+        e.printStackTrace();
+    }
+}
+     */
 
     public boolean isPrivate() {
         return isPrivate;
