@@ -150,7 +150,13 @@ public class ServerConnection extends Thread {
                         break;
 
                     try {
-                        telegramClient.execute(m.getSendMessage());
+                        //unfortunately API does not expose the Method class which is top of the OOP hierarchy for
+                        //"things that can be sent to telegram" so we can't be generic here.
+                        if(m.hasImage()) {
+                            telegramClient.execute(m.getSendPhoto());
+                        } else {
+                            telegramClient.execute(m.getSendMessage());
+                        }
                     } catch (TelegramApiException e) {
                         //TODO what is error handling?
                         System.err.println("Some sort of error with telegram:" + e.getMessage());

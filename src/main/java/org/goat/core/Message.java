@@ -1,10 +1,12 @@
 package org.goat.core;
 
+import org.telegram.telegrambots.meta.api.methods.botapimethods.BotApiMethod;
+import org.telegram.telegrambots.meta.api.methods.botapimethods.BotApiMethodMessage;
 import org.telegram.telegrambots.meta.api.methods.botapimethods.PartialBotApiMethod;
+import org.telegram.telegrambots.meta.generics.TelegramClient;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.methods.send.SendPhoto;
 import org.telegram.telegrambots.meta.api.objects.InputFile;
-import org.telegram.telegrambots.meta.generics.TelegramClient;
 import org.goat.Goat;
 import org.goat.util.Pager;
 
@@ -24,6 +26,10 @@ public class Message {
 
     //don't think we need an enum for "type" of message. ie a telegram msg could have text AND various other media
     private boolean hasImage=false;
+
+    public boolean hasImage() {
+        return hasImage;
+    }
 
     public boolean hasText() {
         return hasText;
@@ -157,15 +163,15 @@ public class Message {
         outqueue.add(this);
     }
 
-    public PartialBotApiMethod getSendMessage() {
-        if(!hasImage) {
-            //create an object that contains the information to send back the message
-            SendMessage sm = new SendMessage(this.chatId.toString(), text);
-            sm.setParseMode("html");
-            return sm;
-        } else {
-            return new SendPhoto(this.chatId.toString(), new InputFile(image));
-        }
+    public SendMessage getSendMessage() {
+        //create an object that contains the information to send back the message
+        SendMessage sm = new SendMessage(this.chatId.toString(), text);
+        sm.setParseMode("html");
+        return sm;
+    }
+
+    public SendPhoto getSendPhoto() {
+        return new SendPhoto(this.chatId.toString(), new InputFile(image));
     }
 
     /*
