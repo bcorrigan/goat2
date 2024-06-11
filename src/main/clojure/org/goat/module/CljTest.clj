@@ -125,12 +125,13 @@
       (q/exit))))
 
 (defn get-img
-  "Setup sketch, call drawing fn, get the png, return the bytes"
+  "Setup sketch, call drawing fn, get the png, return File object"
   [chat-key]
   (q/defsketch org.goat.module.CljTest
     :host "host"
     :size [310 370]
-    :setup (partial draw chat-key)))
+    :setup (partial draw chat-key))
+  (io/file (format "/tmp/wordle.%s.png" (str (symbol chat-key)))))
 
 (defn -processChannelMessage
   [_ m]
