@@ -45,6 +45,11 @@
          {:guesses [] :answer answer :size size
           :answerdef answerdef :hits hits}))
 
+(defn won?
+  "Has the user just won the game?"
+  [chat-key]
+  (= (last (get-gameprop :1234 :guesses)) (get-gameprop :1234 :answer)))
+
 (defn contains-char? [string c]
   (boolean (some #(= % c) string)))
 
@@ -134,23 +139,27 @@
   (let [chat-key (keyword (str (.getChatId m)))
         guess (.getModText m)]
     (if (= "wordle" (.getModCommand m))
-      (if (not (playing? chat-key)
+      (if (not (playing? chat-key))
         (let [worddata (words/get-word :easy)
               word (get worddata :word)
               definition (get worddata :definition)
               hits (get worddata :hits)]
           (new-game! chat-key word 5 definition hits)
           (.replyWithImage m (get-img chat-key))
-        (.reply m "We're already playing a game, smart one.")))))
+        (.reply m "We're already playing a game, smart one."))))
     (if (playing? chat-key)
-      (if (= 5 (count (re-matches #"[a-zA-Z]*" guess)))
+      (if (= (get-gameprop chat-key :size)
+             (count (re-matches #"[a-zA-Z]*" guess)))
         (do
           (add-guess! chat-key guess)
           (.replyWithImage m (get-img chat-key))
-          ; TODO check win condiction?
-          )))
-  ;(draw)
-  (.reply m "OK bazz, check image was written now.")))
+          ; TODO store win/lose stats, streaks etc..
+          (if (won? chat-key)
+            (.reply m "Well done! You won!!!!")
+            (if (= 6 (guesses-made chat-key))
+              (do
+                (.reply m "Oh no! You lost the game! Sorry.")
+                (clear-game! chat-key)))))))))
 
 (defn -processPrivateMessage
   [this m]
