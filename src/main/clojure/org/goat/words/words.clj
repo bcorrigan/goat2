@@ -78,13 +78,13 @@
                 (= :normal difficulty) "and r.hits>100000"
                 (= :hard difficulty) "and r.hits<100000"
                 (= :easy difficulty) "and r.hits>2000000")]
-     (query db [(format (str "select d.word,d.definition,r.hits"
+     (first (query db [(format (str "select d.word,d.definition,r.hits"
                              " from defs d, ranks r"
                              " where d.word=r.word"
                              " and d.length=5"
                              " %s"
                              " order by random()"
-                             " limit 1") hits)]))))
+                             " limit 1") hits)])))))
 
 (defn real-word?
   "Check the given word is in the defs dictionary."

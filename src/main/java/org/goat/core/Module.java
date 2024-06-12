@@ -19,6 +19,7 @@ public abstract class Module implements Runnable {
     public String moduleName;
 
     //todo have "other" type always hit processOtherMessage
+    //TODO it is not 2001 anymore, we can use an enumerated type..
     public static final int WANT_ALL_MESSAGES = 0;
     public static final int WANT_UNCLAIMED_MESSAGES = 1;
     public static final int WANT_COMMAND_MESSAGES = 2;

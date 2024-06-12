@@ -171,6 +171,7 @@ public class Message {
     }
 
     public SendPhoto getSendPhoto() {
+        System.out.println("image:" + image.getAbsolutePath());
         return new SendPhoto(this.chatId.toString(), new InputFile(image));
     }
 

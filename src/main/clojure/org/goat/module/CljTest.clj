@@ -1,5 +1,6 @@
 (ns org.goat.module.CljTest (:gen-class
-                             :extends org.goat.core.Module)
+                             :extends org.goat.core.Module
+                             :exposes {WANT_ALL_MESSAGES {:get WANT_ALL_MESSAGES}})
     (:require [quil.core :as q :include-macros true]
               [org.goat.words.words :as words]
               [clojure.java.io :as io]))
@@ -48,10 +49,20 @@
 (defn won?
   "Has the user just won the game?"
   [chat-key]
-  (= (last (get-gameprop :1234 :guesses)) (get-gameprop :1234 :answer)))
+  (= (last (get-gameprop chat-key :guesses)) (get-gameprop chat-key :answer)))
 
 (defn contains-char? [string c]
   (boolean (some #(= % c) string)))
+
+
+(defn mask-answer
+  [guess answer]
+  (vec (for [i (range (count guess))
+             :let [ges_let (get guess i)
+                   ans_let (get answer i)]]
+         (if
+           (= ges_let ans_let) \.
+           ans_let))))
 
 (defn tosyms
   "Compare given guess to answer. For each letter:
@@ -60,13 +71,14 @@
     If letter is NOT in the answer - :wrong
     A vec of these keywords is returned for each letter in the supplied guess."
   [guess answer]
+  (let [masked-ans (mask-answer guess answer)]
   (vec (for [i (range (count guess))
              :let [ges_let (get guess i)
                    ans_let (get answer i)]]
          (cond
            (= ges_let ans_let) :revealed
-           (contains-char? answer ges_let) :semiknown
-           :else :wrong))))
+           (contains-char? masked-ans ges_let) :semiknown
+           :else :wrong)))))
 
 (defn draw-letter
   "Draw the given letter on the board at position x,y.
@@ -131,12 +143,15 @@
     :host "host"
     :size [310 370]
     :setup (partial draw chat-key))
+  ;;seems we need to give some time for sync to disk to happen or else we get errors
+  (Thread/sleep 200)
   (io/file (format "/tmp/wordle.%s.png" (str (symbol chat-key)))))
 
 (defn -processChannelMessage
   [_ m]
+  (println "0000000")
   (let [chat-key (keyword (str (.getChatId m)))
-        guess (.getModText m)]
+        guess (clojure.string/upper-case (.getText m))]
     (if (= "wordle" (.getModCommand m))
       (if (not (playing? chat-key))
         (let [worddata (words/get-word :easy)
@@ -144,21 +159,29 @@
               definition (get worddata :definition)
               hits (get worddata :hits)]
           (new-game! chat-key word 5 definition hits)
-          (.replyWithImage m (get-img chat-key))
-        (.reply m "We're already playing a game, smart one."))))
-    (if (playing? chat-key)
-      (if (= (get-gameprop chat-key :size)
-             (count (re-matches #"[a-zA-Z]*" guess)))
+          (.replyWithImage m (get-img chat-key)))
+
+        (.reply m "We're already playing a game, smart one."))
+      (if (playing? chat-key)
         (do
-          (add-guess! chat-key guess)
-          (.replyWithImage m (get-img chat-key))
-          ; TODO store win/lose stats, streaks etc..
-          (if (won? chat-key)
-            (.reply m "Well done! You won!!!!")
-            (if (= 6 (guesses-made chat-key))
+          (println "guess:" guess ":answer:" (get-gameprop chat-key :answer))
+          (println "real-word?" (words/real-word? guess))
+          (if (= (get-gameprop chat-key :size)
+                 (count (re-matches #"[a-zA-Z]*" guess)))
+            (if (words/real-word? (clojure.string/upper-case guess))
               (do
-                (.reply m "Oh no! You lost the game! Sorry.")
-                (clear-game! chat-key)))))))))
+                (println "Got here 2")
+                (add-guess! chat-key guess)
+                (.replyWithImage m (get-img chat-key))
+          ; TODO store win/lose stats, streaks etc..
+                (if (won? chat-key)
+                  (do
+                    (.reply m "Well done! You won!!!!")
+                    (clear-game! chat-key))
+                  (if (= 6 (guesses-made chat-key))
+                    (do
+                      (.reply m "Oh no! You lost the game! Sorry.")
+                      (clear-game! chat-key))))))))))))
 
 (defn -processPrivateMessage
   [this m]
@@ -169,8 +192,8 @@
   (into-array String '("wordle")))
 
 (defn -messageType
-  [this]
-  (.WANT_ALL_MESSAGES this))
+  [_]
+  0)
 
 (defn test
   [word])
