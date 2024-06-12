@@ -177,10 +177,12 @@
                 (if (won? chat-key)
                   (do
                     (.reply m "Well done! You won!!!!")
+                    (.reply m (str "Definition: " (get-gameprop chat-key :answerdef)))
                     (clear-game! chat-key))
                   (if (= 6 (guesses-made chat-key))
                     (do
                       (.reply m "Oh no! You lost the game! Sorry.")
+                      (.reply m (str "The too-difficult-for-you word means: " (get-gameprop chat-key :answerdef)))
                       (clear-game! chat-key))))))))))))
 
 (defn -processPrivateMessage
