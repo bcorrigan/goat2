@@ -6,6 +6,8 @@
             [clojure.java.io :as io]))
 (use 'clojure.test)
 
+(def max-guesses 6)
+
 (def state
   "key is :game-states->chatid - returning
   {:guesses [\"WRONG HOUSE\"] :answer \"RIGHT\"
@@ -71,6 +73,28 @@
                    ans_let (get answer i)]]
          (if (= ges_let ans_let) \. ans_let))))
 
+(defn mask-first
+  "Mask the first instance of c in answer"
+  [answer c]
+  (clojure.string/replace-first answer c "."))
+
+(defn tosymsl-
+  ([guess answer] (tosymsl- guess answer (mask-answer guess answer)))
+  ([guess answer masked-ans]
+   (if (empty? guess)
+     '()
+     (let [ges_let (first guess)
+           ans_let (first answer)
+           ans_rest (clojure.string/join (rest guess))
+           ges_rest (clojure.string/join (rest answer))]
+       (cond (= ges_let ans_let) (conj (tosymsl- ans_rest ges_rest masked-ans)
+                                       :revealed)
+             (contains-char? masked-ans ges_let)
+               (conj
+                 (tosymsl- ans_rest ges_rest (mask-first masked-ans ges_let))
+                 :semiknown)
+             :else (conj (tosymsl- ans_rest ges_rest masked-ans) :wrong))))))
+
 (defn tosyms
   "Compare given guess to answer. For each letter:
     If letter is correct and in right position - :revealed
@@ -79,27 +103,6 @@
     A vec of these keywords is returned for each letter in the supplied guess."
   [guess answer]
   (vec (tosymsl- guess answer)))
-
-(defn tosymsl-
-  ([guess answer] (tosyms2 guess answer (mask-answer guess answer)))
-  ([guess answer masked-ans]
-   (if (empty? guess)
-     '()
-     (let [ges_let (first guess)
-           ans_let (first answer)
-           ans_rest (clojure.string/join (rest guess))
-           ges_rest (clojure.string/join (rest answer))]
-       (cond (= ges_let ans_let) (conj (tosyms2 ans_rest ges_rest masked-ans)
-                                       :revealed)
-             (contains-char? masked-ans ges_let)
-               (conj (tosyms2 ans_rest ges_rest (mask-first masked-ans ges_let))
-                     :semiknown)
-             :else (conj (tosyms2 ans_rest ges_rest masked-ans) :wrong))))))
-
-(defn mask-first
-  "Mask the first instance of c in answer"
-  [answer c]
-  (clojure.string/replace-first answer c "."))
 
 (deftest test-tosyms
   (is (= [:wrong :semiknown :wrong :semiknown :revealed]
@@ -144,7 +147,6 @@
     (q/with-graphics
       gr
       (q/background 17 17 18)
-      (println (range 10 (+ 10 (* 60 (count guesses))) 60))
       (doseq [i (range (count guesses))
               j (range (count (get guesses i)))]
         (let [guess (get guesses i)
@@ -182,7 +184,6 @@
 
 (defn -processChannelMessage
   [_ m]
-  (println "0000000")
   (let [chat-key (keyword (str (.getChatId m)))
         guess (clojure.string/upper-case (.getText m))]
     (if (= "wordle" (.getModCommand m))
@@ -195,33 +196,54 @@
           (.replyWithImage m (get-img chat-key)))
         (.reply m "We're already playing a game, smart one."))
       (if (playing? chat-key)
-        (do (println "guess:" guess ":answer:" (get-gameprop chat-key :answer))
-            (println "real-word?" (words/real-word? guess))
-            (if (= (get-gameprop chat-key :size)
-                   (count (re-matches #"[a-zA-Z]*" guess)))
-              (if (words/real-word? (clojure.string/upper-case guess))
-                (do (println "Got here 2")
-                    (add-guess! chat-key guess)
-                    (.replyWithImage m (get-img chat-key))
-                    ; TODO store win/lose stats, streaks etc..
-                    (if (won? chat-key)
-                      (do (.reply m "Well done! You won!!!!")
-                          (.reply m
-                                  (str "Definition: "
-                                       (get-gameprop chat-key :answerdef)))
-                          (clear-game! chat-key))
-                      (if (= 6 (guesses-made chat-key))
-                        (do (.reply m "Oh no! You lost the game! Sorry.")
-                            (.reply m
-                                    (str
-                                      "The too-difficult-for-you word means: "
-                                      (get-gameprop chat-key :answerdef)))
-                            (clear-game! chat-key))))))))))))
+        (do
+          (println "guess:" guess ":answer:" (get-gameprop chat-key :answer))
+          (if (= (get-gameprop chat-key :size)
+                 (count (re-matches #"[a-zA-Z]*" guess)))
+            (if (words/real-word? (clojure.string/upper-case guess))
+              (do
+                (add-guess! chat-key guess)
+                (.replyWithImage m (get-img chat-key))
+                (if (and (= (guesses-made chat-key) (- max-guesses 1))
+                         (not (won? chat-key)))
+                  (.reply m "Uh oh!"))
+                ; TODO store win/lose stats, streaks etc..
+                (if (won? chat-key)
+                  (do
+                    (cond
+                      (= 6 (guesses-made chat-key))
+                        (.reply m "Phew! You won - barely.")
+                      (= 5 (guesses-made chat-key))
+                        (.reply
+                          m
+                          "You won, but I think you were phoning it in just a little bit.")
+                      (= 4 (guesses-made chat-key))
+                        (.reply m
+                                "Well done! You won, and you won competently.")
+                      (= 3 (guesses-made chat-key))
+                        (.reply m "WOW!! An excellent performance!! You won!")
+                      (= 2 (guesses-made chat-key))
+                        (.reply
+                          m
+                          "Gasp! How could you possibly win like that? Are you gifted?")
+                      (= 1 (guesses-made chat-key))
+                        (.reply m "HOW!!!!???? You must surely be cheating??"))
+                    (.reply m
+                            (str "Definition: "
+                                 (get-gameprop chat-key :answerdef)))
+                    (clear-game! chat-key))
+                  (if (= 6 (guesses-made chat-key))
+                    (do (.reply
+                          m
+                          (str "Oh no! You lost the game! \n The answer was: "
+                               (get-gameprop chat-key :answer)))
+                        (.reply m
+                                (str "The too-difficult-for-you word means: "
+                                     (get-gameprop chat-key :answerdef)))
+                        (clear-game! chat-key))))))))))))
 
 (defn -processPrivateMessage [this m] (-processChannelMessage this m))
 
 (defn -getCommands [_] (into-array String '("wordle")))
 
 (defn -messageType [_] 0)
-
-(defn test [word])
