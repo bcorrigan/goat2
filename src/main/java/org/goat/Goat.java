@@ -125,7 +125,7 @@ public class Goat {
         try {
             for(int i=0; i<defaultModules.length; i++)
                 modController.loadInAllChannels(defaultModules[i]);
-            modController.loadInAllChannels("CljTest");
+            modController.loadInAllChannels("Wordle");
             /*ModuleCommands moduleCommands = (ModuleCommands) modController.getLoaded("ModuleCommands");
             moduleCommands.modControl = modController;
             moduleCommands.inAllChannels = true;*/
