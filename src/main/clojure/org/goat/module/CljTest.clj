@@ -118,6 +118,14 @@
   [guess answer]
   (vec (tosymsl- guess answer)))
 
+(defn no-progress?
+  "If the last 3 guesses have not resulted in finding new information
+   (other than excluded letters) - returns true"
+  [chat-key]
+  (apply =
+    (mapv #(tosyms % (get-gameprop chat-key :answer))
+      (take-last 3 (get-gameprop chat-key :guesses)))))
+
 ;;TODO make our own string util pkg....
 (defn chop
   [s piece-count]
@@ -139,20 +147,22 @@
     (mapv #(do (cond (= :wrong (first %)) (add-exc-letter! chat-key (second %))
                      (= :revealed (first %)) (add-inc-letter! chat-key
                                                               (second %))))
-          le-syms)
+      le-syms)
     (add-to-col! chat-key :guesses guess)))
 
 (defn letter-help
   "Provides a visual aid in the form of the remaining unguessed letters"
   [chat-key]
-  (let [less-excluded (set/difference A-Z (get-gameprop chat-key :excluded-letters))
+  (let [less-excluded (set/difference A-Z
+                                      (get-gameprop chat-key :excluded-letters))
         included (get-gameprop chat-key :included-letters)
         letter-aid (set/difference less-excluded included)]
     (str (clojure.string/join
-      "\n"
-      (chop (clojure.string/join " " (mapv str letter-aid)) 2))
-         " \n [ " (clojure.string/join " " included) " ]"
-         )))
+           "\n"
+           (chop (clojure.string/join " " (mapv str letter-aid)) 2))
+         " \n [ "
+         (clojure.string/join " " included)
+         " ]")))
 
 
 (deftest test-tosyms
@@ -258,6 +268,10 @@
                 (if (and (= (guesses-made chat-key) (- max-guesses 1))
                          (not (won? chat-key)))
                   (.reply m "Uh oh!"))
+                (if (and (> (guesses-made chat-key) 3)
+                         (no-progress? chat-key)
+                         (not (won? chat-key)))
+                  (.reply m "You seem to be digging yourself into a hole! Do better."))
                 (if (and (> (guesses-made chat-key) 2) (not (won? chat-key)))
                   (.reply m (letter-help chat-key)))
                 ;; TODO store win/lose stats, streaks etc..
