@@ -8,6 +8,8 @@
 (use 'clojure.test)
 
 (def max-guesses 6)
+(def letter-size 60)
+(def letter-border 10)
 (def A-Z (set (map char (concat (range 65 91)))))
 
 (def state
@@ -186,19 +188,22 @@
         (= :semiknown style) (q/fill 180 158 59))
   ;(q/fill "#b49e3b")
   (q/stroke 17 17 18)
-  (q/rect x y 50 50)
+  (q/rect x y (- letter-size letter-border) (- letter-size letter-border))
   (q/fill 248 248 248)
   (q/text-align :center)
-  (q/text-font (q/create-font "Source Code Pro" 40))
+  (q/text-font (q/create-font "Source Code Pro"
+                              (- letter-size (* 2 letter-border))))
   ;(q/text-size 40)
-  (q/text (str c) (+ 25 x) (+ 40 y)))
+  (q/text (str c)
+          (+ (/ (- letter-size letter-border) 2) x)
+          (+ (- letter-size (* 2 letter-border)) y)))
 
 (defn draw-unrevealed
   "Draw an unrevealed letterbox at x,y."
   [x y]
   (q/fill 26 26 28)
   (q/stroke 168 168 168)
-  (q/rect x y 50 50))
+  (q/rect x y (- letter-size letter-border) (- letter-size letter-border)))
 
 (defn draw-board
   "Draws the board letter by letter according to the chat's guesses array"
@@ -213,17 +218,25 @@
         (let [guess (get guesses i)
               letter (nth (seq guess) j)
               sym (get (tosyms guess answer) j)
-              y (+ 10 (* 60 i))
-              x (+ 10 (* 60 j))]
+              y (+ letter-border (* letter-size i))
+              x (+ letter-border (* letter-size j))]
           (draw-letter letter x y sym)))
-      (doseq [y (range (+ 10 (* 60 (count guesses))) (+ 10 (* 60 6)) 60)
-              x (range 10 260 60)]
+      (doseq [y (range (+ letter-border (* letter-size (count guesses)))
+                       (+ letter-border (* letter-size max-guesses))
+                       letter-size)
+              x (range letter-border
+                       (+ (* (get-gameprop chat-key :size) letter-size)
+                          (* 2 letter-border))
+                       letter-size)]
         (draw-unrevealed x y)))))
 
 (defn draw
   "Initites all the drawing and puts the image into /tmp"
   [chat-key]
-  (let [gr (q/create-graphics 310 370 :java2d)]
+  (let [gr (q/create-graphics (+ (* (get-gameprop chat-key :size) letter-size)
+                                 letter-border)
+                              (+ (* max-guesses letter-size) letter-border)
+                              :java2d)]
     (q/with-graphics gr
                      (draw-board gr chat-key)
                      (q/save (format "/tmp/wordle.%s.png"
@@ -236,7 +249,6 @@
   [chat-key]
   (q/defsketch org.goat.module.Wordle
                :host "host"
-               :size [310 370]
                :setup (partial draw chat-key))
   ;;seems we need to give some time for sync to disk to happen or else we
   ;;get errors
@@ -269,16 +281,21 @@
                          (not (won? chat-key)))
                   (.reply m "Uh oh!"))
                 (if (and (> (guesses-made chat-key) 3)
+                         (< (guesses-made chat-key) max-guesses)
                          (no-progress? chat-key)
                          (not (won? chat-key)))
-                  (.reply m "You seem to be digging yourself into a hole! Do better."))
-                (if (and (> (guesses-made chat-key) 2) (not (won? chat-key)))
+                  (.reply
+                    m
+                    "You seem to be digging yourself into a hole! Do better."))
+                (if (and (> (guesses-made chat-key) 2)
+                         (not (won? chat-key))
+                         (< (guesses-made chat-key) max-guesses))
                   (.reply m (letter-help chat-key)))
                 ;; TODO store win/lose stats, streaks etc..
                 (if (won? chat-key)
                   (do
                     (cond
-                      (= 6 (guesses-made chat-key))
+                      (= max-guesses (guesses-made chat-key))
                         (.reply m "Phew! You won - barely.")
                       (= 5 (guesses-made chat-key))
                         (.reply
@@ -301,7 +318,7 @@
                             (str "Definition: "
                                  (get-gameprop chat-key :answerdef)))
                     (clear-game! chat-key))
-                  (if (= 6 (guesses-made chat-key))
+                  (if (= max-guesses (guesses-made chat-key))
                     (do (.reply
                           m
                           (str "Oh no! You lost the game! \n The answer was: "
