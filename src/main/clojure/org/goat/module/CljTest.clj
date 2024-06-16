@@ -3,10 +3,12 @@
               :exposes {WANT_ALL_MESSAGES {:get WANT_ALL_MESSAGES}})
   (:require [quil.core :as q :include-macros true]
             [org.goat.words.words :as words]
-            [clojure.java.io :as io]))
+            [clojure.java.io :as io]
+            [clojure.set :as set]))
 (use 'clojure.test)
 
 (def max-guesses 6)
+(def A-Z (set (map char (concat (range 65 91)))))
 
 (def state
   "key is :game-states->chatid - returning
@@ -24,13 +26,23 @@
   [chat-key]
   (count (get-in @state [:game-states chat-key :guesses])))
 
-(defn add-guess!
-  "Append the given guess to the state map."
-  [chat-key guess]
-  (let [current-guesses (get-in @state [:game-states chat-key :guesses])]
-    (swap! state assoc-in
-      [:game-states chat-key :guesses]
-      (conj current-guesses guess))))
+(defn add-to-col!
+  "Append the given value to the given collection.
+  col is a symbol either :guesses, :excluded-letters, :included-letters"
+  [chat-key col val]
+  (let [current-vals (get-in @state [:game-states chat-key col])]
+    (swap! state assoc-in [:game-states chat-key col] (conj current-vals val))))
+
+(defn add-inc-letter!
+  "Append the given letter to the list of letters the user has
+  seen in the word"
+  [chat-key letter]
+  (add-to-col! chat-key :included-letters letter))
+
+(defn add-exc-letter!
+  "Append the given letter to the list of definitely excluded letters."
+  [chat-key letter]
+  (add-to-col! chat-key :excluded-letters letter))
 
 (defn get-gameprop
   "Get given property for given chatid game"
@@ -50,6 +62,8 @@
   (swap! state assoc-in
     [:game-states chat-key]
     {:guesses [],
+     :excluded-letters #{},
+     :included-letters #{},
      :answer answer,
      :size size,
      :answerdef answerdef,
@@ -103,6 +117,43 @@
     A vec of these keywords is returned for each letter in the supplied guess."
   [guess answer]
   (vec (tosymsl- guess answer)))
+
+;;TODO make our own string util pkg....
+(defn chop
+  [s piece-count]
+  (let [step (/ (count s) piece-count)]
+    (->> (range (inc piece-count)) ;; <-- Enumerated split positions
+         (map #(-> %
+                   (* step)
+                   double
+                   Math/round)) ;; <-- Where to split
+         (partition 2 1) ;; <-- Form slice lower/upper bounds
+         (map (fn [[l u]] (subs s l u)))))) ;; <-- Slice input string
+
+(defn add-guess!
+  "Append the given guess to the state map.
+   This will also update the lists of seen letters"
+  [chat-key guess]
+  (let [syms (tosyms guess (get-gameprop chat-key :answer))
+        le-syms (map vector syms guess)]
+    (mapv #(do (cond (= :wrong (first %)) (add-exc-letter! chat-key (second %))
+                     (= :revealed (first %)) (add-inc-letter! chat-key
+                                                              (second %))))
+          le-syms)
+    (add-to-col! chat-key :guesses guess)))
+
+(defn letter-help
+  "Provides a visual aid in the form of the remaining unguessed letters"
+  [chat-key]
+  (let [less-excluded (set/difference A-Z (get-gameprop chat-key :excluded-letters))
+        included (get-gameprop chat-key :included-letters)
+        letter-aid (set/difference less-excluded included)]
+    (str (clojure.string/join
+      "\n"
+      (chop (clojure.string/join " " (mapv str letter-aid)) 2))
+         " \n [ " (clojure.string/join " " included) " ]"
+         )))
+
 
 (deftest test-tosyms
   (is (= [:wrong :semiknown :wrong :semiknown :revealed]
@@ -207,7 +258,9 @@
                 (if (and (= (guesses-made chat-key) (- max-guesses 1))
                          (not (won? chat-key)))
                   (.reply m "Uh oh!"))
-                ; TODO store win/lose stats, streaks etc..
+                (if (and (> (guesses-made chat-key) 2) (not (won? chat-key)))
+                  (.reply m (letter-help chat-key)))
+                ;; TODO store win/lose stats, streaks etc..
                 (if (won? chat-key)
                   (do
                     (cond
@@ -216,7 +269,7 @@
                       (= 5 (guesses-made chat-key))
                         (.reply
                           m
-                          "You won, but I think you were phoning it in just a little bit.")
+                          "You won, but I think your performance could be improved, don't you?")
                       (= 4 (guesses-made chat-key))
                         (.reply m
                                 "Well done! You won, and you won competently.")
@@ -227,7 +280,9 @@
                           m
                           "Gasp! How could you possibly win like that? Are you gifted?")
                       (= 1 (guesses-made chat-key))
-                        (.reply m "HOW!!!!???? You must surely be cheating??"))
+                        (.reply
+                          m
+                          "You won. I prostrate myself before you, for clearly I am in the presence of a wordle deity. Let this day live forever in our memories."))
                     (.reply m
                             (str "Definition: "
                                  (get-gameprop chat-key :answerdef)))
