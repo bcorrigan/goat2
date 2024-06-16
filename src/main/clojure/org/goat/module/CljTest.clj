@@ -1,4 +1,4 @@
-(ns org.goat.module.CljTest
+(ns org.goat.module.Wordle
   (:gen-class :extends org.goat.core.Module
               :exposes {WANT_ALL_MESSAGES {:get WANT_ALL_MESSAGES}})
   (:require [quil.core :as q :include-macros true]
@@ -234,7 +234,7 @@
 (defn get-img
   "Setup sketch, call drawing fn, get the png, return File object"
   [chat-key]
-  (q/defsketch org.goat.module.CljTest
+  (q/defsketch org.goat.module.Wordle
                :host "host"
                :size [310 370]
                :setup (partial draw chat-key))
@@ -247,7 +247,7 @@
   [_ m]
   (let [chat-key (keyword (str (.getChatId m)))
         guess (clojure.string/upper-case (.getText m))]
-    (if (= "wordle" (.getModCommand m))
+    (if (= "wordle" (clojure.string/lower-case (.getModCommand m)))
       (if (not (playing? chat-key))
         (let [worddata (words/get-word :easy)
               word (get worddata :word)
