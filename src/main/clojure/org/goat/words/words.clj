@@ -72,7 +72,7 @@
 (defn get-word
   "Get a random word. Provide argument :hard to get a hard word,
    :easy to get an easy word."
-  ([size] (get-word :normal))
+  ([size] (get-word :normal size))
   ([difficulty size]
    (let [hits (cond
                 (= :normal difficulty) "and r.hits>100000"
