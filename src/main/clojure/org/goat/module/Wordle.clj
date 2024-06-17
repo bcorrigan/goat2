@@ -4,7 +4,8 @@
   (:require [quil.core :as q :include-macros true]
             [org.goat.words.words :as words]
             [clojure.java.io :as io]
-            [clojure.set :as set]))
+            [clojure.set :as set]
+            [clojure.edn :as edn]))
 (use 'clojure.test)
 
 (def max-guesses 6)
@@ -80,7 +81,6 @@
   "Does the string contain the char c?"
   [string c]
   (boolean (some #(= % c) string)))
-
 
 (defn mask-answer
   [guess answer]
@@ -255,17 +255,37 @@
   (Thread/sleep 200)
   (io/file (format "/tmp/wordle.%s.png" (str (symbol chat-key)))))
 
+(defn get-size
+  "If size is present, set it, otherwise just return 5."
+  [s]
+  (let [number (re-find #"\d+" s)]
+    (if (nil? number)
+      5
+      (edn/read-string number))))
+
+(defn get-difficulty
+  "If hard difficulty is present, set it, otherwise just return :normal"
+  [s]
+  (let [difficulty (re-find #"hard" s)]
+    (if (nil? difficulty)
+      :easy
+      :hard)))
+
 (defn -processChannelMessage
   [_ m]
   (let [chat-key (keyword (str (.getChatId m)))
-        guess (clojure.string/upper-case (.getText m))]
-    (if (= "wordle" (clojure.string/lower-case (.getModCommand m)))
+        guess (clojure.string/upper-case (.getText m))
+        command (clojure.string/lower-case (.getModCommand m))
+        trailing (clojure.string/lower-case (.getText m))]
+    (if (= "wordle" command)
       (if (not (playing? chat-key))
-        (let [worddata (words/get-word :easy)
+        (let [size (get-size trailing)
+              difficulty (get-difficulty trailing)
+              worddata (words/get-word difficulty size)
               word (get worddata :word)
               definition (get worddata :definition)
               hits (get worddata :hits)]
-          (new-game! chat-key word 5 definition hits)
+          (new-game! chat-key word size definition hits)
           (.replyWithImage m (get-img chat-key)))
         (.reply m "We're already playing a game, smart one."))
       (if (playing? chat-key)
@@ -300,7 +320,7 @@
                       (= 5 (guesses-made chat-key))
                         (.reply
                           m
-                          "You won, but I think your performance could be improved, don't you?")
+                          "You won, but I'm sure you feel a little bit dissapointed.")
                       (= 4 (guesses-made chat-key))
                         (.reply m
                                 "Well done! You won, and you won competently.")

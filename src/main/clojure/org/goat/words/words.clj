@@ -72,8 +72,8 @@
 (defn get-word
   "Get a random word. Provide argument :hard to get a hard word,
    :easy to get an easy word."
-  ([] (get-word :normal))
-  ([difficulty]
+  ([size] (get-word :normal))
+  ([difficulty size]
    (let [hits (cond
                 (= :normal difficulty) "and r.hits>100000"
                 (= :hard difficulty) "and r.hits<100000"
@@ -81,10 +81,10 @@
      (first (query db [(format (str "select d.word,d.definition,r.hits"
                              " from defs d, ranks r"
                              " where d.word=r.word"
-                             " and d.length=5"
+                             " and d.length=%s"
                              " %s"
                              " order by random()"
-                             " limit 1") hits)])))))
+                             " limit 1") size hits)])))))
 
 (defn real-word?
   "Check the given word is in the defs dictionary."
