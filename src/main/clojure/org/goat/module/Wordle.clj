@@ -285,8 +285,13 @@
               word (get worddata :word)
               definition (get worddata :definition)
               hits (get worddata :hits)]
-          (new-game! chat-key word size definition hits)
-          (.replyWithImage m (get-img chat-key)))
+          (if (or (> size 10) (< size 2))
+            (.reply m "Don't be an eejit. I won't do more than 10 or less than 2.")
+            (do
+              (new-game! chat-key word size definition hits)
+              (if (= difficulty :hard)
+                (.reply m "Ohh, feeling cocky, are we? Ok:"))
+              (.replyWithImage m (get-img chat-key)))))
         (.reply m "We're already playing a game, smart one."))
       (if (playing? chat-key)
         (do
