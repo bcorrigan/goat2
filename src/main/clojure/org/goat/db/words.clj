@@ -1,5 +1,6 @@
-(ns org.goat.words.words
-  (:require [clojure.java.jdbc :refer :all])
+(ns org.goat.db.words
+  (:require [clojure.java.jdbc :refer :all]
+            [org.goat.db.util])
   (:gen-class))
 
 (def db
@@ -60,14 +61,6 @@
   (with-db-transaction [transaction db]
     (process-file-by-lines "resources/words-googlehits-rank"
                            (partial insert-rank-line! transaction))))
-
-(defn tbl-exists?
-  "Check the given table exists"
-  [tbl]
-  (not (empty? (query db [(format (str "select name"
-                                       " from sqlite_master"
-                                       " where type='table'"
-                                       " AND name='%s'") tbl)]))))
 
 (defn get-word
   "Get a random word. Provide argument :hard to get a hard word,

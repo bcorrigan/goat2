@@ -2,7 +2,8 @@
   (:gen-class :extends org.goat.core.Module
               :exposes {WANT_ALL_MESSAGES {:get WANT_ALL_MESSAGES}})
   (:require [quil.core :as q :include-macros true]
-            [org.goat.words.words :as words]
+            [org.goat.db.words :as words]
+            [org.goat.db.users :as users ]
             [clojure.java.io :as io]
             [clojure.set :as set]
             [clojure.edn :as edn]))
@@ -52,6 +53,11 @@
   [chat-key property]
   (get-in @state [:game-states chat-key property]))
 
+(defn set-gameprop
+  "Set given value for given chatid game"
+  [chat-key property value]
+  (swap! state assoc-in [:game-states chat-key property] value))
+
 (defn clear-game!
   "For a given chatid, remove all the game state entirely"
   [chat-key]
@@ -61,7 +67,8 @@
 
 (defn new-game!
   "Add state for a new game of wordle."
-  [chat-key answer size answerdef hits]
+  [chat-key answer size answerdef hits user difficulty]
+  (let [starttime (System/currentTimeMillis)]
   (swap! state assoc-in
     [:game-states chat-key]
     {:guesses [],
@@ -69,8 +76,12 @@
      :included-letters #{},
      :answer answer,
      :size size,
+     :type :single, ;;can be :single (if one player) or :multi
+     :starttime starttime,
+     :user user,
+     :difficulty difficulty,
      :answerdef answerdef,
-     :hits hits}))
+     :hits hits})))
 
 (defn won?
   "Has the user just won the game?"
@@ -143,14 +154,18 @@
 (defn add-guess!
   "Append the given guess to the state map.
    This will also update the lists of seen letters"
-  [chat-key guess]
+  [chat-key guess user]
   (let [syms (tosyms guess (get-gameprop chat-key :answer))
         le-syms (map vector syms guess)]
     (mapv #(do (cond (= :wrong (first %)) (add-exc-letter! chat-key (second %))
                      (= :revealed (first %)) (add-inc-letter! chat-key
                                                               (second %))))
       le-syms)
-    (add-to-col! chat-key :guesses guess)))
+    (add-to-col! chat-key :guesses guess)
+    (if (not (= (get-gameprop chat-key :user)
+                user))
+      ;; multiple users have played this game
+      (set-gameprop chat-key :type :group))))
 
 (defn letter-help
   "Provides a visual aid in the form of the remaining unguessed letters"
@@ -271,12 +286,21 @@
       :easy
       :hard)))
 
+(defn audit-game
+  "Get all related game data and audit it into DB"
+  [chat-key]
+  (let [m (get-in @state [:game-states])
+        endtime (System/currentTimeMillis)]
+    (users/record-wordle-game chat-key (conj m [:endtime endtime :won (won? chat-key) ])
+    )))
+
 (defn -processChannelMessage
   [_ m]
   (let [chat-key (keyword (str (.getChatId m)))
         guess (clojure.string/upper-case (.getText m))
         command (clojure.string/lower-case (.getModCommand m))
-        trailing (clojure.string/lower-case (.getText m))]
+        trailing (clojure.string/lower-case (.getText m))
+        user (.getSender m)]
     (if (= "wordle" command)
       (if (not (playing? chat-key))
         (let [size (get-size trailing)
@@ -288,9 +312,9 @@
           (if (or (> size 10) (< size 2))
             (.reply m "Don't be an eejit. I won't do more than 10 or less than 2.")
             (do
-              (new-game! chat-key word size definition hits)
+              (new-game! chat-key word size definition hits user difficulty)
               (if (= difficulty :hard)
-                (.reply m "Ohh, feeling cocky, are we? Ok:"))
+                (.reply m (str "Ohh, feeling cocky, are we, " user  "?"))
               (.replyWithImage m (get-img chat-key)))))
         (.reply m "We're already playing a game, smart one."))
       (if (playing? chat-key)
@@ -300,7 +324,7 @@
                  (count (re-matches #"[a-zA-Z]*" guess)))
             (if (words/real-word? (clojure.string/upper-case guess))
               (do
-                (add-guess! chat-key guess)
+                (add-guess! chat-key guess user)
                 (.replyWithImage m (get-img chat-key))
                 (if (and (= (guesses-made chat-key) (- max-guesses 1))
                          (not (won? chat-key)))
@@ -316,6 +340,8 @@
                          (not (won? chat-key))
                          (< (guesses-made chat-key) max-guesses))
                   (.reply m (letter-help chat-key)))
+                (if (= max-guesses (guesses-made chat-key))
+                  (audit-game chat-key))
                 ;; TODO store win/lose stats, streaks etc..
                 (if (won? chat-key)
                   (do
@@ -351,7 +377,7 @@
                         (.reply m
                                 (str "The too-difficult-for-you word means: "
                                      (get-gameprop chat-key :answerdef)))
-                        (clear-game! chat-key))))))))))))
+                        (clear-game! chat-key)))))))))))))
 
 (defn -processPrivateMessage [this m] (-processChannelMessage this m))
 
