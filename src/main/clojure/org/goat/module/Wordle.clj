@@ -3,7 +3,7 @@
               :exposes {WANT_ALL_MESSAGES {:get WANT_ALL_MESSAGES}})
   (:require [quil.core :as q :include-macros true]
             [org.goat.db.words :as words]
-            [org.goat.db.users :as users ]
+            [org.goat.db.users :as users]
             [clojure.java.io :as io]
             [clojure.set :as set]
             [clojure.edn :as edn]))
@@ -58,30 +58,23 @@
   [chat-key property value]
   (swap! state assoc-in [:game-states chat-key property] value))
 
-(defn clear-game!
-  "For a given chatid, remove all the game state entirely"
-  [chat-key]
-  (swap! state assoc-in
-    [:game-states]
-    (dissoc (get-in @state [:game-states]) chat-key)))
-
 (defn new-game!
   "Add state for a new game of wordle."
   [chat-key answer size answerdef hits user difficulty]
   (let [starttime (System/currentTimeMillis)]
-  (swap! state assoc-in
-    [:game-states chat-key]
-    {:guesses [],
-     :excluded-letters #{},
-     :included-letters #{},
-     :answer answer,
-     :size size,
-     :type :single, ;;can be :single (if one player) or :multi
-     :starttime starttime,
-     :user user,
-     :difficulty difficulty,
-     :answerdef answerdef,
-     :hits hits})))
+    (swap! state assoc-in
+      [:game-states chat-key]
+      {:guesses [],
+       :excluded-letters #{},
+       :included-letters #{},
+       :answer answer,
+       :size size,
+       :type :single, ;;can be :single (if one player) or :multi
+       :starttime starttime,
+       :user user,
+       :difficulty difficulty,
+       :answerdef answerdef,
+       :hits hits})))
 
 (defn won?
   "Has the user just won the game?"
@@ -162,8 +155,7 @@
                                                               (second %))))
       le-syms)
     (add-to-col! chat-key :guesses guess)
-    (if (not (= (get-gameprop chat-key :user)
-                user))
+    (if (not (= (get-gameprop chat-key :user) user))
       ;; multiple users have played this game
       (set-gameprop chat-key :type :group))))
 
@@ -274,25 +266,29 @@
   "If size is present, set it, otherwise just return 5."
   [s]
   (let [number (re-find #"\d+" s)]
-    (if (nil? number)
-      5
-      (edn/read-string number))))
+    (if (nil? number) 5 (edn/read-string number))))
 
 (defn get-difficulty
   "If hard difficulty is present, set it, otherwise just return :normal"
   [s]
-  (let [difficulty (re-find #"hard" s)]
-    (if (nil? difficulty)
-      :easy
-      :hard)))
+  (let [difficulty (re-find #"hard" s)] (if (nil? difficulty) :easy :hard)))
 
 (defn audit-game
   "Get all related game data and audit it into DB"
   [chat-key]
-  (let [m (get-in @state [:game-states])
+  (let [m (get-in @state [:game-states chat-key])
         endtime (System/currentTimeMillis)]
-    (users/record-wordle-game chat-key (conj m [:endtime endtime :won (won? chat-key) ])
-    )))
+    (users/record-wordle-game chat-key
+                              (conj m
+                                    [:endtime endtime] [:won (won? chat-key)]))))
+
+(defn clear-game!
+  "For a given chatid, remove all the game state entirely"
+  [chat-key]
+  (audit-game chat-key)
+  (swap! state assoc-in
+         [:game-states]
+         (dissoc (get-in @state [:game-states]) chat-key)))
 
 (defn -processChannelMessage
   [_ m]
@@ -310,12 +306,14 @@
               definition (get worddata :definition)
               hits (get worddata :hits)]
           (if (or (> size 10) (< size 2))
-            (.reply m "Don't be an eejit. I won't do more than 10 or less than 2.")
+            (.reply
+              m
+              "Don't be an eejit. I won't do more than 10 or less than 2.")
             (do
-              (new-game! chat-key word size definition hits user difficulty)
-              (if (= difficulty :hard)
-                (.reply m (str "Ohh, feeling cocky, are we, " user  "?"))
-              (.replyWithImage m (get-img chat-key)))))
+                (new-game! chat-key word size definition hits user difficulty)
+                (if (= difficulty :hard)
+                  (.reply m (str "Ohh, feeling cocky, are we, " user "?"))
+                  (.replyWithImage m (get-img chat-key))))))
         (.reply m "We're already playing a game, smart one."))
       (if (playing? chat-key)
         (do
@@ -340,8 +338,6 @@
                          (not (won? chat-key))
                          (< (guesses-made chat-key) max-guesses))
                   (.reply m (letter-help chat-key)))
-                (if (= max-guesses (guesses-made chat-key))
-                  (audit-game chat-key))
                 ;; TODO store win/lose stats, streaks etc..
                 (if (won? chat-key)
                   (do
@@ -377,7 +373,7 @@
                         (.reply m
                                 (str "The too-difficult-for-you word means: "
                                      (get-gameprop chat-key :answerdef)))
-                        (clear-game! chat-key)))))))))))))
+                        (clear-game! chat-key))))))))))))
 
 (defn -processPrivateMessage [this m] (-processChannelMessage this m))
 
