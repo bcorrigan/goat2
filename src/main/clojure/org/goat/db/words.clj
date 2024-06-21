@@ -70,7 +70,8 @@
    (let [hits (cond
                 (= :normal difficulty) "and r.hits>100000"
                 (= :hard difficulty) "and r.hits<100000"
-                (= :easy difficulty) "and r.hits>2000000")]
+                (= :easy difficulty) "and r.hits>2000000"
+                (= :veasy difficulty) "and r.hits>100000000")]
      (first (query db [(format (str "select d.word,d.definition,r.hits"
                              " from defs d, ranks r"
                              " where d.word=r.word"

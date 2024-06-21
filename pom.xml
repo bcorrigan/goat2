@@ -16,7 +16,7 @@
         <maven.compiler.source>${java.version}</maven.compiler.source>
         <maven.compiler.target>${java.version}</maven.compiler.target>
         <httpcompontents.version>4.5.3</httpcompontents.version>
-        <telegrambots.version>7.2.0</telegrambots.version>
+        <telegrambots.version>7.4.2</telegrambots.version>
         <json.version>20240303</json.version>
    </properties>
 
@@ -90,7 +90,7 @@
         <dependency>
             <groupId>org.clojure</groupId>
             <artifactId>java.jdbc</artifactId>
-            <version>0.7.9</version>
+            <version>0.7.12</version>
         </dependency>
         <dependency>
             <groupId>org.xerial</groupId>
@@ -101,12 +101,14 @@
   <groupId>cider</groupId>
   <artifactId>cider-nrepl</artifactId>
   <version>0.49.0</version>
+    <scope>test</scope>
 </dependency>
        <dependency>
             <groupId>nrepl</groupId>
             <artifactId>nrepl</artifactId>
-            <version>1.1.1</version>
-        </dependency>
+            <version>1.2.0</version>
+              <scope>test</scope>
+       </dependency>
     </dependencies>
 
     <build>
@@ -117,6 +119,12 @@
         <sourceDirectory>${project.basedir}/src/main/java</sourceDirectory>
 
         <plugins>
+                   <plugin>
+  <groupId>org.codehaus.mojo</groupId>
+  <artifactId>versions-maven-plugin</artifactId>
+  <version>2.5</version>
+</plugin>
+
             <plugin>
                 <artifactId>maven-clean-plugin</artifactId>
                 <version>3.3.2</version>

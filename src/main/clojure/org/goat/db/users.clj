@@ -51,3 +51,14 @@
                             :starttime (get match :starttime)
                             :endtime (get match :endtime)
                             }))
+
+(print "hey")
+
+(defn best-wordle-player
+  "Who is the best at standard wordle?"
+  []
+  (query db [(format (str "select distinct username
+                                              from wordlegames
+                                              where type='single'
+                                              and size=5
+                                              and difficulty='easy'"))]))

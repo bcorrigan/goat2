@@ -271,7 +271,12 @@
 (defn get-difficulty
   "If hard difficulty is present, set it, otherwise just return :normal"
   [s]
-  (let [difficulty (re-find #"hard" s)] (if (nil? difficulty) :easy :hard)))
+
+  (let [elspeth (re-find #"elspeth" s)
+        difficulty (re-find #"hard" s)]
+    (if (nil? elspeth)
+      (if (nil? difficulty) :easy :hard)
+      :veasy)))
 
 (defn audit-game
   "Get all related game data and audit it into DB"
@@ -290,13 +295,28 @@
          [:game-states]
          (dissoc (get-in @state [:game-states]) chat-key)))
 
+(defn get-user
+  "Get the sender of the message. If the message contains 'elspeth' then
+  set user to elspeth. If the game in progress is an elspeth game, then
+  it always continues as an elspeth game."
+  [m chat-key]
+  (let [has-elspeth (clojure.string/includes? (clojure.string/lower-case (.getText m)) "elspeth")
+        sender (.getSender m)]
+    (if (playing? chat-key)
+      (if (= "Elspeth" (get-gameprop chat-key :user))
+        "Elspeth"
+        sender)
+      (if has-elspeth
+        "Elspeth"
+        sender))))
+
 (defn -processChannelMessage
   [_ m]
   (let [chat-key (keyword (str (.getChatId m)))
         guess (clojure.string/upper-case (.getText m))
         command (clojure.string/lower-case (.getModCommand m))
         trailing (clojure.string/lower-case (.getText m))
-        user (.getSender m)]
+        user (get-user m chat-key)]
     (if (= "wordle" command)
       (if (not (playing? chat-key))
         (let [size (get-size trailing)
@@ -310,7 +330,9 @@
               m
               "Don't be an eejit. I won't do more than 10 or less than 2.")
             (do
-                (new-game! chat-key word size definition hits user difficulty)
+              (new-game! chat-key word size definition hits user difficulty)
+              (if (= "Elspeth" user)
+                (.reply m "I hope you enjoy the game Elspeth!"))
                 (if (= difficulty :hard)
                   (.reply m (str "Ohh, feeling cocky, are we, " user "?"))
                   (.replyWithImage m (get-img chat-key))))))
