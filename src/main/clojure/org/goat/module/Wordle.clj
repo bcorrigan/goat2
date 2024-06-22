@@ -237,12 +237,21 @@
                        letter-size)]
         (draw-unrevealed x y)))))
 
+(defn get-no-cols
+  "Calculate the number of columns to draw.
+  This is the number of guesses +1, or 6, whichever is smallest"
+  [chat-key]
+  (let [guesses (guesses-made chat-key)]
+    (if (> guesses 5)
+      6
+      (+ 1 guesses))))
+
 (defn draw
   "Initites all the drawing and puts the image into /tmp"
   [chat-key]
   (let [gr (q/create-graphics (+ (* (get-gameprop chat-key :size) letter-size)
                                  letter-border)
-                              (+ (* max-guesses letter-size) letter-border)
+                              (+ (* (get-no-cols chat-key) letter-size) letter-border)
                               :java2d)]
     (q/with-graphics gr
                      (draw-board gr chat-key)
