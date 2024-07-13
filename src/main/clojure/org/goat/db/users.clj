@@ -62,3 +62,34 @@
                                               where type='single'
                                               and size=5
                                               and difficulty='easy'"))]))
+
+;; Some handy queries:
+;; LAST time user lost a game:
+;; select max(endtime) from wordlegames where won=false and type='single' and size=5 and difficulty='easy' and user=USER;
+;; HOW MANY games won since given timestamp:
+;; select count(1) from wordlegames where won=true and type='single' and size='5' and difficulty='easy' and endtime>TIME;
+
+(defn get-losttime
+  "Return timestamp at which given user last lost a normal game"
+  [user]
+  (get (first (query db [(format (str "select max(endtime) as losttime"
+                                      " from wordlegames"
+                                      " where won=false"
+                                      " and type='single'"
+                                      " and size=5"
+                                      " and difficulty='easy'"
+                                      " and username='%s'") user)])) :losttime))
+
+
+(defn get-streak
+  "Return the current streak for the given user."
+  [user]
+  (let [losttime (get-losttime user) ]
+    (get (first (query db [(format (str "select count(*) as streak "
+                                   " from wordlegames"
+                                   " where won=true"
+                                   " and type='single'"
+                                   " and size=5"
+                                   " and difficulty='easy' "
+                                   " and endtime>%d"
+                                   " and username='%s'") losttime user)])) :streak)))
