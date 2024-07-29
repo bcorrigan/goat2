@@ -8,8 +8,7 @@
 
 (def std-game-sql
   ( str " from wordlegames"
-  " where won=true"
-  " and type='single'"
+  " where type='single'"
   " and size=5"
   " and difficulty='easy' "))
 
@@ -51,6 +50,7 @@
   [user]
   (get (first (sql/query db [(format (str "select max(endtime) as losttime"
                                           std-game-sql
+                                          " and won=false"
                                           " and username='%s'") user)])) :losttime))
 
 (defn get-streak
@@ -163,10 +163,23 @@
   [user n]
   (count-where-limit "won=false" user n))
 
+(defn results-n
+  "Get results of last N games"
+  [user n]
+  (sql/query db [(format (str "select won,guesses "
+                                          std-game-sql
+                                          " and username='%s'"
+                                          " order by endtime"
+                                          " limit %s "
+                                          ) user n)]))
 
 (defn get-stats
   "Stats for the given user: games won, games played, win ratio,
   win ratio last 10, avg guesses-to-win, avg guesses-to-win last 10,
   current streak, best ever streak."
   [user]
-  (let [games-won (games-won user)]))
+  { :games-won (games-won user)
+     :games-won-10 (games-won-n user 10)
+     :games-lost (games-lost user)
+     :games-lost-10 (games-lost-n user 10)
+     :results-100 (results-n user 100)})
