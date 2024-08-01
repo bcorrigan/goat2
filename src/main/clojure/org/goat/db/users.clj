@@ -166,12 +166,13 @@
 (defn results-n
   "Get results of last N games"
   [user n]
-  (sql/query db [(format (str "select won,guesses "
+  (map (fn [x] (update x :won #(if (= 1 %) true false)))
+       (sql/query db [(format (str "select won,guesses "
                                           std-game-sql
                                           " and username='%s'"
                                           " order by endtime"
                                           " limit %s "
-                                          ) user n)]))
+                                          ) user n)])))
 
 (defn get-stats
   "Stats for the given user: games won, games played, win ratio,
