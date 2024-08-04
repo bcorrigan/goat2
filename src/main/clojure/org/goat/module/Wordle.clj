@@ -265,18 +265,18 @@
   [won guesses]
   (if won
     (cond (= 6 guesses)
-            '(24 34 22)
+            '(232 88 40)    ;; dark orange
           (= 5 guesses)
-            '(44 63 41)
+            '(235 149 10)    ;; orange
           (= 4 guesses)
-            '(59 85 55)
+            '(235 227 0)    ;;yellow
           (= 3 guesses)
-            '(92 132 85)
+            '(150 203 0)    ;; green-yellow
           (= 2 guesses)
-            '(123 177 114)
+            '(0 255 0)      ;; green
           (= 1 guesses)
-            '(152 218 240))
-    '(255 167 255) ;; pink
+            '(255 255 255)) ;;white
+    '(120 0 0) ;; red
     ))
 
 (def small-font-pt 30)
@@ -311,14 +311,14 @@
                   (- stats-square-px 4))
           ))
       ;; Text
-      (let [games-played (+ (get stats :games-won) (get stats :games-lost))
-            games-played-150 (+ (get stats :games-won-150) (get stats :games-lost-150) )
-            win-ratio (* 100 (double (/ (get stats :games-won-150) games-played-150)))
+      (let [games-played (+ (or (get stats :games-won) 0) (or (get stats :games-lost) 0))
+            games-played-150 (+ (or (get stats :games-won-150) 0) (or (get stats :games-lost-150) 0) )
+            win-ratio (* 100 (double (/ (or (get stats :games-won-150) 0) games-played-150)))
             win-ratio-fmt (format "%.3f" win-ratio)
-            guess-rate-150 (format "%.3f" (get stats :guess-rate-150))
-            guess-rate-20 (format "%.3f" (get stats :guess-rate-20))
-            games-played-20 (+ (get stats :games-won-20) (get stats :games-lost-20) )
-            win-ratio-20 (* 100 (double (/ (get stats :games-won-20) games-played-20)))
+            guess-rate-150 (format "%.3f" (or (get stats :guess-rate-150) 0))
+            guess-rate-20 (format "%.3f" (or (get stats :guess-rate-20) 0))
+            games-played-20 (+ (or (get stats :games-won-20) 0) (or (get stats :games-lost-20) 0))
+            win-ratio-20 (* 100 (double (/ (or (get stats :games-won-20) 0) games-played-20)))
             win-ratio-20-fmt (format "%.3f" win-ratio-20)
             big-font  (q/create-font "Noto Sans" big-font-pt )
             small-font (q/create-font "Noto Sans" small-font-pt  )]
@@ -343,7 +343,7 @@
           (q/fill 123 177 114)  ;; green
           (q/fill 255 167 255)) ;; pink
         (q/text (str "Win ratio: " win-ratio-20-fmt "%" ) text-indent (text-row-px 8)  )
-        (if (<= (get stats :guess-rate-20) (get stats :guess-rate-150))
+        (if (<= ( or (get stats :guess-rate-20) 0) (or (get stats :guess-rate-150) 0))
           (q/fill 123 177 114)  ;; green
           (q/fill 255 167 255)) ;; pink
         (q/text (str "Guess rate: " guess-rate-20  ) text-indent (text-row-px 9)   )
@@ -352,9 +352,9 @@
         (q/text (str "        ---PERSONAL BESTS---") text-indent (text-row-px 10)  )
         (q/fill 248 248 248) ;; white
         (q/text-font big-font)
-        (q/text (str "Streak: " (users/get-record user :streak)  ) text-indent (text-row-px 11)  )
-        (q/text (str "/150 Win ratio: " (format "%.3f" (* 100 (users/get-record user :won-rate-150)))) text-indent (text-row-px 12))
-        (q/text (str "/20 Guess ratio: " (format "%.3f" (users/get-record user :guess-rate-20))) text-indent (text-row-px 13))))))
+        (q/text (str "Streak: " (or (users/get-record user :streak) 0)  ) text-indent (text-row-px 11)  )
+        (q/text (str "/150 Win ratio: " (format "%.3f" (* 100 (or (users/get-record user :won-rate-150) 0.0)))) text-indent (text-row-px 12))
+        (q/text (str "/20 Guess ratio: " (format "%.3f" (or (users/get-record user :guess-rate-20) 0.0))) text-indent (text-row-px 13))))))
 
 (defn draw-stats
   "Draw the *stats* window"
