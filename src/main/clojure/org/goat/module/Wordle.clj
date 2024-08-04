@@ -279,13 +279,23 @@
     '(255 167 255) ;; pink
     ))
 
+(def small-font-pt 30)
+(def big-font-pt 50)
+(def stats-square-px 40)
+(def text-height-px 70)
+(def text-indent (* 6 stats-square-px))
+(defn text-row-px
+  "Calculate offset for given row"
+  [row]
+  (+ 10 (* text-height-px row)))
+
 (defn draw-stats-gr
   "Draw onto the given graphics our stats"
   [gr chat-key user]
   (let [stats (users/get-stats user)
         games (get stats :results-150)]
     (q/with-graphics gr
-      (q/background 17 17 18)
+      (q/background 17 17 18) ;;black
       (doseq [i (range (count games))]
         (let [ col (mod i 5)
               row (int (math/floor (/ i 5)))
@@ -295,10 +305,10 @@
               boxcol (get-wonbox-col won guesses)]
           (q/fill (first boxcol) (second boxcol) (nth boxcol 2))
           (q/stroke (first boxcol) (second boxcol) (nth boxcol 2))
-          (q/rect (* col 40)
-                  (* row 40)
-                  36
-                  36)
+          (q/rect (* col stats-square-px)
+                  (* row stats-square-px)
+                  (- stats-square-px 4)
+                  (- stats-square-px 4))
           ))
       ;; Text
       (let [games-played (+ (get stats :games-won) (get stats :games-lost))
@@ -310,43 +320,41 @@
             games-played-20 (+ (get stats :games-won-20) (get stats :games-lost-20) )
             win-ratio-20 (* 100 (double (/ (get stats :games-won-20) games-played-20)))
             win-ratio-20-fmt (format "%.3f" win-ratio-20)
-            win-ratio-better (> win-ratio-20 win-ratio)
-            guess-rate-better (> (get stats :guess-rate-20) (get stats :guess-rate-150))]
-        (q/text-font (q/create-font "Noto Sans" 50  ))
-        (q/fill 248 248 248)
-        (q/text (str user "'s records:") (* 40 6) 80 )
-        (q/text (str "Games played: " games-played) (* 40 6) 150)
-        (q/text (str "Streak: " (users/get-streak user)) (* 40 6) 220   )
-        (q/text-font (q/create-font "Noto Sans" 30  ))
-        (q/fill 148 148 148)
-        (q/text (str "        ---LAST 150---") (* 40 6) 290  )
-        (q/fill 248 248 248)
-        (q/text-font (q/create-font "Noto Sans" 50  ))
-        (q/text (str "Win ratio: " win-ratio-fmt "%" ) (* 40 6) 360  )
-        (q/text (str "Guess rate: " guess-rate-150  ) (* 40 6) 430   )
-        (q/fill 148 148 148)
-        (q/text-font (q/create-font "Noto Sans" 30  ))
-        (q/text (str "        ---LAST 20---") (* 40 6) 500  )
-        (q/fill 248 248 248)
-        (q/text-font (q/create-font "Noto Sans" 50  ))
+            big-font  (q/create-font "Noto Sans" big-font-pt )
+            small-font (q/create-font "Noto Sans" small-font-pt  )]
+        (q/text-font big-font)
+        (q/fill 248 248 248) ;; white
+        (q/text (str user "'s records:") text-indent (text-row-px 1))
+        (q/text (str "Games played: " games-played) text-indent (text-row-px 2))
+        (q/text (str "Streak: " (users/get-streak user)) text-indent (text-row-px 3)   )
+        (q/text-font small-font)
+        (q/fill 148 148 148) ;; grey
+        (q/text (str "        ---LAST 150---") text-indent (text-row-px 4)  )
+        (q/fill 248 248 248) ;; white
+        (q/text-font big-font)
+        (q/text (str "Win ratio: " win-ratio-fmt "%" ) text-indent (text-row-px 5)  )
+        (q/text (str "Guess rate: " guess-rate-150  ) text-indent (text-row-px 6)   )
+        (q/fill 148 148 148) ;; grey
+        (q/text-font small-font)
+        (q/text (str "        ---LAST 20---") text-indent (text-row-px 7)  )
+        (q/fill 248 248 248) ;; white
+        (q/text-font big-font)
         (if (>= win-ratio-20 win-ratio)
-          (q/fill 123 177 114)
-          (q/fill 255 167 255))
-        (q/text (str "Win ratio: " win-ratio-20-fmt "%" ) (* 40 6) 570  )
+          (q/fill 123 177 114)  ;; green
+          (q/fill 255 167 255)) ;; pink
+        (q/text (str "Win ratio: " win-ratio-20-fmt "%" ) text-indent (text-row-px 8)  )
         (if (<= (get stats :guess-rate-20) (get stats :guess-rate-150))
-          (q/fill 123 177 114)
-          (q/fill 255 167 255))
-        (q/text (str "Guess rate: " guess-rate-20  ) (* 40 6) 640   )
-        (q/fill 148 148 148)
-        (q/text-font (q/create-font "Noto Sans" 30  ))
-        (q/text (str "        ---PERSONAL BESTS---") (* 40 6) 710  )
-        (q/fill 248 248 248)
-        (q/text-font (q/create-font "Noto Sans" 50  ))
-        (q/text (str "Streak: " (users/get-record user :streak)  ) (* 40 6) 780  )
-        (q/text (str "/150 Win ratio: " (format "%.3f" (* 100 (users/get-record user :won-rate-150)))) (* 40 6) 850)
-        (q/text (str "/20 Guess ratio: " (format "%.3f" (users/get-record user :guess-rate-20))) (* 40 6) 920)
-        )
-      )))
+          (q/fill 123 177 114)  ;; green
+          (q/fill 255 167 255)) ;; pink
+        (q/text (str "Guess rate: " guess-rate-20  ) text-indent (text-row-px 9)   )
+        (q/fill 148 148 148) ;; grey
+        (q/text-font small-font)
+        (q/text (str "        ---PERSONAL BESTS---") text-indent (text-row-px 10)  )
+        (q/fill 248 248 248) ;; white
+        (q/text-font big-font)
+        (q/text (str "Streak: " (users/get-record user :streak)  ) text-indent (text-row-px 11)  )
+        (q/text (str "/150 Win ratio: " (format "%.3f" (* 100 (users/get-record user :won-rate-150)))) text-indent (text-row-px 12))
+        (q/text (str "/20 Guess ratio: " (format "%.3f" (users/get-record user :guess-rate-20))) text-indent (text-row-px 13))))))
 
 (defn draw-stats
   "Draw the *stats* window"
