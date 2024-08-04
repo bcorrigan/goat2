@@ -6,7 +6,8 @@
             [org.goat.db.users :as users]
             [clojure.java.io :as io]
             [clojure.set :as set]
-            [clojure.edn :as edn]))
+            [clojure.edn :as edn]
+            [clojure.math :as math]))
 (use 'clojure.test)
 
 (def max-guesses 6)
@@ -259,15 +260,110 @@
       (.dispose gr)
       (q/exit))))
 
+(defn get-wonbox-col
+  "Get the colour of the box needed for stats image"
+  [won guesses]
+  (if won
+    (cond (= 6 guesses)
+            '(24 34 22)
+          (= 5 guesses)
+            '(44 63 41)
+          (= 4 guesses)
+            '(59 85 55)
+          (= 3 guesses)
+            '(92 132 85)
+          (= 2 guesses)
+            '(123 177 114)
+          (= 1 guesses)
+            '(152 218 240))
+    '(255 167 255) ;; pink
+    ))
+
+(defn draw-stats-gr
+  "Draw onto the given graphics our stats"
+  [gr chat-key user]
+  (let [stats (users/get-stats user)
+        games (get stats :results-150)]
+    (q/with-graphics gr
+      (q/background 17 17 18)
+      (doseq [i (range (count games))]
+        (let [ col (mod i 5)
+              row (int (math/floor (/ i 5)))
+              game (nth games i)
+              won (get game :won)
+              guesses (get game :guesses)
+              boxcol (get-wonbox-col won guesses)]
+          (q/fill (first boxcol) (second boxcol) (nth boxcol 2))
+          (q/stroke (first boxcol) (second boxcol) (nth boxcol 2))
+          (q/rect (* col 40)
+                  (* row 40)
+                  36
+                  36)
+          ))
+      ;; Text
+      (let [games-played (+ (get stats :games-won) (get stats :games-lost))
+            games-played-150 (+ (get stats :games-won-150) (get stats :games-lost-150) )
+            win-ratio (* 100 (double (/ (get stats :games-won-150) games-played-150)))
+            win-ratio-fmt (format "%.3f" win-ratio)
+            guess-rate-150 (format "%.3f" (get stats :guess-rate-150))
+            guess-rate-20 (format "%.3f" (get stats :guess-rate-20))
+            games-played-20 (+ (get stats :games-won-20) (get stats :games-lost-20) )
+            win-ratio-20 (* 100 (double (/ (get stats :games-won-20) games-played-20)))
+            win-ratio-20-fmt (format "%.3f" win-ratio-20)
+            win-ratio-better (> win-ratio-20 win-ratio)
+            guess-rate-better (> (get stats :guess-rate-20) (get stats :guess-rate-150))]
+        (q/text-font (q/create-font "Noto Sans" 50  ))
+        (q/fill 248 248 248)
+        (q/text (str user "'s records:") (* 40 6) 80 )
+        (q/text (str "Games played: " games-played) (* 40 6) 150)
+        (q/text (str "Streak: " (users/get-streak user)) (* 40 6) 220   )
+        (q/text-font (q/create-font "Noto Sans" 30  ))
+        (q/fill 148 148 148)
+        (q/text (str "        ---LAST 150---") (* 40 6) 290  )
+        (q/fill 248 248 248)
+        (q/text-font (q/create-font "Noto Sans" 50  ))
+        (q/text (str "Win ratio: " win-ratio-fmt "%" ) (* 40 6) 360  )
+        (q/text (str "Guess rate: " guess-rate-150  ) (* 40 6) 430   )
+        (q/fill 148 148 148)
+        (q/text-font (q/create-font "Noto Sans" 30  ))
+        (q/text (str "        ---LAST 20---") (* 40 6) 500  )
+        (q/fill 248 248 248)
+        (q/text-font (q/create-font "Noto Sans" 50  ))
+        (if (>= win-ratio-20 win-ratio)
+          (q/fill 123 177 114)
+          (q/fill 255 167 255))
+        (q/text (str "Win ratio: " win-ratio-20-fmt "%" ) (* 40 6) 570  )
+        (if (<= (get stats :guess-rate-20) (get stats :guess-rate-150))
+          (q/fill 123 177 114)
+          (q/fill 255 167 255))
+        (q/text (str "Guess rate: " guess-rate-20  ) (* 40 6) 640   )
+        (q/fill 148 148 148)
+        (q/text-font (q/create-font "Noto Sans" 30  ))
+        (q/text (str "        ---PERSONAL BESTS---") (* 40 6) 710  )
+        (q/fill 248 248 248)
+        (q/text-font (q/create-font "Noto Sans" 50  ))
+        (q/text (str "Streak: " (users/get-record user :streak)  ) (* 40 6) 780  )
+        (q/text (str "/150 Win ratio: " (format "%.3f" (* 100 (users/get-record user :won-rate-150)))) (* 40 6) 850)
+        (q/text (str "/20 Guess ratio: " (format "%.3f" (users/get-record user :guess-rate-20))) (* 40 6) 920)
+        )
+      )))
+
+(defn draw-stats
+  "Draw the *stats* window"
+  [user chat-key]
+  (let [gr (q/create-graphics 800 1200 :java2d)]
+    (q/with-graphics gr
+      (draw-stats-gr gr chat-key user)
+      (q/save (format "/tmp/wordle.%s.png" (str (symbol chat-key))))
+      (q/exit))))
+
 (defn get-img
-  "Setup sketch, call drawing fn, get the png, return File object"
-  [chat-key]
-  (q/defsketch org.goat.module.Wordle
+  "Setup sketch for given underlying draw fn"
+  [chat-key drawfn]
+  (q/defsketch org.goat.moduke.Wordle
     :host "host"
-    :setup (partial draw chat-key))
-  ;;seems we need to give some time for sync to disk to happen or else we
-  ;;get errors
-  (Thread/sleep 200)
+    :setup (partial drawfn chat-key))
+  (Thread/sleep 400)
   (io/file (format "/tmp/wordle.%s.png" (str (symbol chat-key)))))
 
 (defn get-size
@@ -287,7 +383,8 @@
       :veasy)))
 
 (defn audit-game
-  "Get all related game data and audit it into DB"
+  "Get all related game data and audit it into DB.
+    Returns any new PBs"
   [chat-key]
   (let [m (get-in @state [:game-states chat-key])
         endtime (System/currentTimeMillis)]
@@ -296,12 +393,14 @@
                                     [:endtime endtime] [:won (won? chat-key)]))))
 
 (defn clear-game!
-  "For a given chatid, remove all the game state entirely"
+  "For a given chatid, remove all the game state entirely.
+  Returns any PBs that have been set in the concluded game."
   [chat-key]
-  (audit-game chat-key)
-  (swap! state assoc-in
-         [:game-states]
-         (dissoc (get-in @state [:game-states]) chat-key)))
+  (let [pbs (audit-game chat-key)]
+    (swap! state assoc-in
+           [:game-states]
+           (dissoc (get-in @state [:game-states]) chat-key))
+    pbs))
 
 (defn get-user
   "Get the sender of the message. If the message contains 'elspeth' then
@@ -343,6 +442,8 @@
         command (clojure.string/lower-case (.getModCommand m))
         trailing (clojure.string/lower-case (.getText m))
         user (get-user m chat-key)]
+    (if (= "stats" command)
+      (.replyWithImage m (get-img chat-key (partial draw-stats user)))
     (if (= "streak" command)
       (let [streak (users/get-streak user)
             streak-msg (get-streak-msg streak user)]
@@ -365,7 +466,7 @@
                   (.reply m "I hope you enjoy the game Elspeth!"))
                 (if (= difficulty :hard)
                   (.reply m (str "Ohh, feeling cocky, are we, " user "?"))
-                  (.replyWithImage m (get-img chat-key))))))
+                  (.replyWithImage m (get-img chat-key draw))))))
           (.reply m "We're already playing a game, smart one."))
         (if (playing? chat-key)
           (do
@@ -375,7 +476,7 @@
               (if (words/real-word? (clojure.string/upper-case guess))
                 (do
                   (add-guess! chat-key guess user)
-                  (.replyWithImage m (get-img chat-key))
+                  (.replyWithImage m (get-img chat-key draw))
                   (if (and (= (guesses-made chat-key) (- max-guesses 1))
                            (not (won? chat-key)))
                     (.reply m "Uh oh!"))
@@ -416,7 +517,18 @@
                       (.reply m
                               (str "Definition: "
                                    (get-gameprop chat-key :answerdef)))
-                      (clear-game! chat-key))
+                      (let [pbs (clear-game! chat-key)
+                            streak (get pbs :streak)
+                            won-rate-150 (get pbs :won-rate-150)
+                            guess-rate-20 (get pbs :guess-rate-20)]
+                        (if (not (nil? streak))
+                          (if (= 0 (mod streak 5))
+                            (.reply m (format "Well done %s!! Your PB streak is now %s." user streak))
+                            ))
+                        (if (not (nil? won-rate-150))
+                          (.reply m (format "NEW PB!!! Well done %s!! Your PB win rate is now %s." user won-rate-150)))
+                        (if (not (nil? guess-rate-20))
+                          (.reply m (format "NEW PB!!! Well done %s!! Your PB guess rate is now %s." user guess-rate-20))))
                     (if (= max-guesses (guesses-made chat-key))
                       (do (.reply
                            m
@@ -425,10 +537,10 @@
                           (.reply m
                                   (str "The too-difficult-for-you word means: "
                                        (get-gameprop chat-key :answerdef)))
-                          (clear-game! chat-key)))))))))))))
+                          (clear-game! chat-key)))))))))))))))
 
 (defn -processPrivateMessage [this m] (-processChannelMessage this m))
 
-(defn -getCommands [_] (into-array String '("wordle" "streak")))
+(defn -getCommands [_] (into-array String '("wordle" "streak", "stats")))
 
 (defn -messageType [_] 0)

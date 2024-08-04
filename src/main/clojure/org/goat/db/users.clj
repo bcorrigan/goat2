@@ -80,44 +80,16 @@
                      " values(?,?,?,?)"
                      " on conflict(username, record)"
                      " do update set recordval=excluded.recordval,"
-                     " recordtime=excluded.recordtime") user record recordval time  ])
+                     " recordtime=excluded.recordtime") user (symbol record) recordval time  ]))
 
-  (defn record-wordle-game
-    "Save all interesting facts about a game of wordle."
-    [chat-key match]
-    (sql/insert! db :wordlegames {
-                              :type (str (symbol (get match :type)))
-                              :chatid (str (symbol chat-key))
-                              :username (get match :user)
-                              :won (get match :won)
-                              :guesses (count (get match :guesses))
-                              :size (get match :size)
-                              :difficulty (str (symbol (get match :difficulty)))
-                              :answer (get match :answer)
-                              :g1 (get (get match :guesses) 0)
-                              :g2 (get (get match :guesses) 1)
-                              :g3 (get (get match :guesses) 2)
-                              :g4 (get (get match :guesses) 3)
-                              :g5 (get (get match :guesses) 4)
-                              :g6 (get (get match :guesses) 5)
-                              :starttime (get match :starttime)
-                              :endtime (get match :endtime)
-                              })
-    (let [user (get match :user)
-          streak (get-streak user)
-          max-streak (or (get-record user :streak) 0)]
-      (if (> streak max-streak)
-        (save-record user :streak streak (get match :endtime))
-        ))))
-
-(defn best-wordle-player
-  "Who is the best at standard wordle?"
-  []
-  (sql/query db [(format (str "select distinct username
-                                              from wordlegames
-                                              where type='single'
-                                              and size=5
-                                              and difficulty='easy'"))]))
+(defn get-records-set-at
+  "Get all records set at time t for user"
+  [user t]
+  (map #(hash-map (keyword (get %1 :record)) (get %1 :recordval))
+         (sql/query db [(format (str "select record,recordval
+                                   from records
+                                   where username='%s'
+                                   and recordtime=%s;") user t)])))
 
 (defn count-where
   "How many records for given user match given condition?"
@@ -147,11 +119,11 @@
   (get (first (sql/query db [(format (str "select count(*) as count"
                                           " from (select *"
                                           std-game-sql
-                                          " order by endtime"
+                                          " and username='%s'"
+                                          " order by endtime desc"
                                           " limit %s)"
-                                          " where username='%s'"
-                                          " and %s "
-                                          ) n user cond)])) :count))
+                                          " where %s "
+                                          ) user n cond)])) :count))
 
 (defn games-won-n
   "How many games won out of last N"
@@ -170,9 +142,70 @@
        (sql/query db [(format (str "select won,guesses "
                                           std-game-sql
                                           " and username='%s'"
-                                          " order by endtime"
+                                          " order by endtime desc"
                                           " limit %s "
                                           ) user n)])))
+(defn get-guess-rate
+  "Calculate the avg. guesses-to-win for last n games"
+  [user n]
+  (let [results-n (results-n user n)
+        results-won (filter #(= true (get % :won)) results-n)
+        num-results (count results-won)
+        total-guesses (reduce #(+ %1 (get %2 :guesses)) 0 results-won )]
+      (double (/ total-guesses num-results ))
+    ))
+
+
+  (defn record-wordle-game
+    "Save all interesting facts about a game of wordle.
+      Set any new records, streaks etc.
+     Return a map indicating any new PBs."
+    [chat-key match]
+    (sql/insert! db :wordlegames {
+                              :type (str (symbol (get match :type)))
+                              :chatid (str (symbol chat-key))
+                              :username (get match :user)
+                              :won (get match :won)
+                              :guesses (count (get match :guesses))
+                              :size (get match :size)
+                              :difficulty (str (symbol (get match :difficulty)))
+                              :answer (get match :answer)
+                              :g1 (get (get match :guesses) 0)
+                              :g2 (get (get match :guesses) 1)
+                              :g3 (get (get match :guesses) 2)
+                              :g4 (get (get match :guesses) 3)
+                              :g5 (get (get match :guesses) 4)
+                              :g6 (get (get match :guesses) 5)
+                              :starttime (get match :starttime)
+                              :endtime (get match :endtime)
+                              })
+    (let [user (get match :user)
+          streak (get-streak user)
+          max-streak (or (get-record user :streak) 0)
+          games-won-150 (games-won-n user 150)
+          games-lost-150 (games-lost-n user 150)
+          games-played-150 (+ games-won-150 games-lost-150)
+          won-rate-150 (double (/ games-won-150 games-played-150))
+          guess-rate-20 (get-guess-rate user 20)
+          max-won-rate-150 (or (get-record user :won-rate-150 ) 0 )
+          max-guess-rate-20 (or (get-record user :guess-rate-20) 6 ) ]
+      (if (> streak max-streak)
+        (save-record user :streak streak (get match :endtime)))
+      (if (> won-rate-150 max-won-rate-150)
+        (save-record user :won-rate-150 won-rate-150 (get match :endtime)))
+      (if (< guess-rate-20 max-guess-rate-20)
+        (save-record user :guess-rate-20 guess-rate-20 (get match :endtime))))
+    (get-records-set-at (get match :user) (get match :endtime)))
+
+(defn best-wordle-player
+  "Who is the best at standard wordle?"
+  []
+  (sql/query db [(format (str "select distinct username
+                                              from wordlegames
+                                              where type='single'
+                                              and size=5
+                                              and difficulty='easy'"))]))
+
 
 (defn get-stats
   "Stats for the given user: games won, games played, win ratio,
@@ -180,7 +213,11 @@
   current streak, best ever streak."
   [user]
   { :games-won (games-won user)
-     :games-won-10 (games-won-n user 10)
+     :games-won-20 (games-won-n user 20)
      :games-lost (games-lost user)
-     :games-lost-10 (games-lost-n user 10)
-     :results-100 (results-n user 100)})
+   :games-lost-20 (games-lost-n user 20)
+   :games-won-150 (games-won-n user 150)
+   :games-lost-150 (games-lost-n user 150)
+   :guess-rate-150 (get-guess-rate user 150)
+   :guess-rate-20 (get-guess-rate user 20)
+     :results-150 (reverse (results-n user 150))})
