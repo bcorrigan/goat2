@@ -255,7 +255,7 @@
                               :java2d)]
     (q/with-graphics gr
       (draw-board gr chat-key)
-      (q/save (format "/tmp/wordle.%s.png"
+      (q/save (format "/run/user/1000/wordle.%s.png"
                       (str (symbol chat-key))))
       (.dispose gr)
       (q/exit))))
@@ -361,7 +361,7 @@
   (let [gr (q/create-graphics 800 1200 :java2d)]
     (q/with-graphics gr
       (draw-stats-gr gr chat-key user)
-      (q/save (format "/tmp/wordle.%s.png" (str (symbol chat-key))))
+      (q/save (format "/run/user/1000/wordle.%s.png" (str (symbol chat-key))))
       (q/exit))))
 
 (defn get-img
@@ -371,7 +371,7 @@
     :host "host"
     :setup (partial drawfn chat-key))
   (Thread/sleep 400)
-  (io/file (format "/tmp/wordle.%s.png" (str (symbol chat-key)))))
+  (io/file (format "/run/user/1000/wordle.%s.png" (str (symbol chat-key)))))
 
 (defn get-size
   "If size is present, set it, otherwise just return 5."
