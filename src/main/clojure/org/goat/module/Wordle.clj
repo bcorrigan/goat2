@@ -379,16 +379,17 @@
   ;; that means you can't get file descriptor, to know when OS has flushed to disk
   ;; looping on "creation" of file then syncing it is unreliable for some reason
   ;; Calling /usr/bin/sync works, but only if you sleep for a tiny period first?
-  ;;(io/delete-file (file-name chat-key))
-  ;;(while (.exists (io/file (file-name chat-key)) )
-  ;;  (Thread/sleep 20)
-  ;;  )
+  (io/delete-file (file-name chat-key))
+  (while (.exists (io/file (file-name chat-key)) )
+    (Thread/sleep 20)
+    )
+  (shell/sh "/usr/bin/sync")
   (q/defsketch org.goat.module.Wordle
     :host "host"
     :setup (partial drawfn chat-key))
-  ;(while (not (.exists (io/file (file-name chat-key)) ))
+  (while (not (.exists (io/file (file-name chat-key)) ))
   (Thread/sleep 20)
-  ;;  )
+    )
   ;; force sync to file system
   ;; (.sync (.getFD (java.io.FileOutputStream. (file-name chat-key))))
   (shell/sh "/usr/bin/sync")
