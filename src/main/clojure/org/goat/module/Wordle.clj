@@ -379,7 +379,7 @@
     :host "host"
     :setup (partial drawfn chat-key))
   (Thread/sleep 400)
-  (shell/sh "/usr/bin/sync")
+  (shell/sh "/usr/bin/sync" "-f" (file-name chat-key) )
   (io/file (file-name chat-key)))
 
 (defn get-size
