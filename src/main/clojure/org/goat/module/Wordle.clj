@@ -6,6 +6,7 @@
             [org.goat.db.users :as users]
             [clojure.java.io :as io]
             [clojure.set :as set]
+            [clojure.java.shell :as shell :only [sh]]
             [clojure.edn :as edn]
             [clojure.math :as math]))
 (use 'clojure.test)
@@ -14,6 +15,12 @@
 (def letter-size 60)
 (def letter-border 10)
 (def A-Z (set (map char (concat (range 65 91)))))
+
+(defn file-name
+  "Get the wordle file name."
+  [chat-key]
+  (format "/run/user/1000/wordle.%s.png"
+          (str (symbol chat-key))))
 
 (def state
   "key is :game-states->chatid - returning
@@ -255,8 +262,7 @@
                               :java2d)]
     (q/with-graphics gr
       (draw-board gr chat-key)
-      (q/save (format "/run/user/1000/wordle.%s.png"
-                      (str (symbol chat-key))))
+      (q/save (file-name chat-key) )
       (.dispose gr)
       (q/exit))))
 
@@ -361,17 +367,31 @@
   (let [gr (q/create-graphics 800 1200 :java2d)]
     (q/with-graphics gr
       (draw-stats-gr gr chat-key user)
-      (q/save (format "/run/user/1000/wordle.%s.png" (str (symbol chat-key))))
+      (q/save (file-name chat-key))
       (q/exit))))
 
 (defn get-img
   "Setup sketch for given underlying draw fn"
   [chat-key drawfn]
-  (q/defsketch org.goat.moduke.Wordle
+  ;; quil has a terrible API for non-interactive use
+  ;; it writes to a file, supplied as a string.
+  ;; that means you can't get file descriptor, to know when OS has flushed to disk
+  ;; looping on "creation" of file then syncing it is unreliable for some reason
+  ;; Calling /usr/bin/sync works, but only if you sleep for a tiny period first?
+  ;;(io/delete-file (file-name chat-key))
+  ;;(while (.exists (io/file (file-name chat-key)) )
+  ;;  (Thread/sleep 20)
+  ;;  )
+  (q/defsketch org.goat.module.Wordle
     :host "host"
     :setup (partial drawfn chat-key))
-  (Thread/sleep 400)
-  (io/file (format "/run/user/1000/wordle.%s.png" (str (symbol chat-key)))))
+  ;(while (not (.exists (io/file (file-name chat-key)) ))
+  (Thread/sleep 20)
+  ;;  )
+  ;; force sync to file system
+  ;; (.sync (.getFD (java.io.FileOutputStream. (file-name chat-key))))
+  (shell/sh "/usr/bin/sync")
+  (io/file (file-name chat-key)))
 
 (defn get-size
   "If size is present, set it, otherwise just return 5."
