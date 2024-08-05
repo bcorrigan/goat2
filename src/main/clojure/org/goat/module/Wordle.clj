@@ -310,7 +310,6 @@
               won (get game :won)
               guesses (get game :guesses)
               boxcol (get-wonbox-col won guesses)]
-          (println (str boxcol ":" ))
           (q/fill (first boxcol) (second boxcol) (nth boxcol 2))
           (q/stroke (first boxcol) (second boxcol) (nth boxcol 2))
           (q/rect (* col stats-square-px)
