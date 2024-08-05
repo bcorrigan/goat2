@@ -310,6 +310,7 @@
               won (get game :won)
               guesses (get game :guesses)
               boxcol (get-wonbox-col won guesses)]
+          (println (str boxcol ":" ))
           (q/fill (first boxcol) (second boxcol) (nth boxcol 2))
           (q/stroke (first boxcol) (second boxcol) (nth boxcol 2))
           (q/rect (* col stats-square-px)
@@ -374,24 +375,10 @@
 (defn get-img
   "Setup sketch for given underlying draw fn"
   [chat-key drawfn]
-  ;; quil has a terrible API for non-interactive use
-  ;; it writes to a file, supplied as a string.
-  ;; that means you can't get file descriptor, to know when OS has flushed to disk
-  ;; looping on "creation" of file then syncing it is unreliable for some reason
-  ;; Calling /usr/bin/sync works, but only if you sleep for a tiny period first?
-  (if (.exists (io/file (file-name chat-key)) )
-    (do
-      (io/delete-file (file-name chat-key))
-      (while (.exists (io/file (file-name chat-key)) )
-        (Thread/sleep 20))
-      (shell/sh "/usr/bin/sync")))
   (q/defsketch org.goat.module.Wordle
     :host "host"
     :setup (partial drawfn chat-key))
-  (while (not (.exists (io/file (file-name chat-key)) ))
-    (Thread/sleep 20))
-  ;; force sync to file system
-  ;; (.sync (.getFD (java.io.FileOutputStream. (file-name chat-key))))
+  (Thread/sleep 400)
   (shell/sh "/usr/bin/sync")
   (io/file (file-name chat-key)))
 
