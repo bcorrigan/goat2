@@ -265,18 +265,18 @@
   [won guesses]
   (if won
     (cond (= 6 guesses)
-            '(232 88 40)    ;; dark orange
+          '(168 64 29)    ;; dark orange
           (= 5 guesses)
-            '(235 149 10)    ;; orange
+          '(235 149 10)    ;; orange
           (= 4 guesses)
-            '(235 227 0)    ;;yellow
+          '(235 227 0)    ;;yellow
           (= 3 guesses)
-            '(150 203 0)    ;; green-yellow
+          '(150 203 0)    ;; green-yellow
           (= 2 guesses)
-            '(0 255 0)      ;; green
+          '(0 255 0)      ;; green
           (= 1 guesses)
-            '(255 255 255)) ;;white
-    '(120 0 0) ;; red
+          '(255 255 255)) ;;white
+    '(60 0 0) ;; red
     ))
 
 (def small-font-pt 30)
@@ -297,7 +297,7 @@
     (q/with-graphics gr
       (q/background 17 17 18) ;;black
       (doseq [i (range (count games))]
-        (let [ col (mod i 5)
+        (let [col (mod i 5)
               row (int (math/floor (/ i 5)))
               game (nth games i)
               won (get game :won)
@@ -308,11 +308,10 @@
           (q/rect (* col stats-square-px)
                   (* row stats-square-px)
                   (- stats-square-px 4)
-                  (- stats-square-px 4))
-          ))
+                  (- stats-square-px 4))))
       ;; Text
       (let [games-played (+ (or (get stats :games-won) 0) (or (get stats :games-lost) 0))
-            games-played-150 (+ (or (get stats :games-won-150) 0) (or (get stats :games-lost-150) 0) )
+            games-played-150 (+ (or (get stats :games-won-150) 0) (or (get stats :games-lost-150) 0))
             win-ratio (* 100 (double (/ (or (get stats :games-won-150) 0) games-played-150)))
             win-ratio-fmt (format "%.3f" win-ratio)
             guess-rate-150 (format "%.3f" (or (get stats :guess-rate-150) 0))
@@ -320,39 +319,39 @@
             games-played-20 (+ (or (get stats :games-won-20) 0) (or (get stats :games-lost-20) 0))
             win-ratio-20 (* 100 (double (/ (or (get stats :games-won-20) 0) games-played-20)))
             win-ratio-20-fmt (format "%.3f" win-ratio-20)
-            big-font  (q/create-font "Noto Sans" big-font-pt )
-            small-font (q/create-font "Noto Sans" small-font-pt  )]
+            big-font  (q/create-font "Noto Sans" big-font-pt)
+            small-font (q/create-font "Noto Sans" small-font-pt)]
         (q/text-font big-font)
         (q/fill 248 248 248) ;; white
         (q/text (str user "'s records:") text-indent (text-row-px 1))
         (q/text (str "Games played: " games-played) text-indent (text-row-px 2))
-        (q/text (str "Streak: " (users/get-streak user)) text-indent (text-row-px 3)   )
+        (q/text (str "Streak: " (users/get-streak user)) text-indent (text-row-px 3))
         (q/text-font small-font)
         (q/fill 148 148 148) ;; grey
-        (q/text (str "        ---LAST 150---") text-indent (text-row-px 4)  )
+        (q/text (str "        ---LAST 150---") text-indent (text-row-px 4))
         (q/fill 248 248 248) ;; white
         (q/text-font big-font)
-        (q/text (str "Win ratio: " win-ratio-fmt "%" ) text-indent (text-row-px 5)  )
-        (q/text (str "Guess rate: " guess-rate-150  ) text-indent (text-row-px 6)   )
+        (q/text (str "Win ratio: " win-ratio-fmt "%") text-indent (text-row-px 5))
+        (q/text (str "Guess rate: " guess-rate-150) text-indent (text-row-px 6))
         (q/fill 148 148 148) ;; grey
         (q/text-font small-font)
-        (q/text (str "        ---LAST 20---") text-indent (text-row-px 7)  )
+        (q/text (str "        ---LAST 20---") text-indent (text-row-px 7))
         (q/fill 248 248 248) ;; white
         (q/text-font big-font)
         (if (>= win-ratio-20 win-ratio)
           (q/fill 123 177 114)  ;; green
           (q/fill 255 167 255)) ;; pink
-        (q/text (str "Win ratio: " win-ratio-20-fmt "%" ) text-indent (text-row-px 8)  )
-        (if (<= ( or (get stats :guess-rate-20) 0) (or (get stats :guess-rate-150) 0))
+        (q/text (str "Win ratio: " win-ratio-20-fmt "%") text-indent (text-row-px 8))
+        (if (<= (or (get stats :guess-rate-20) 0) (or (get stats :guess-rate-150) 0))
           (q/fill 123 177 114)  ;; green
           (q/fill 255 167 255)) ;; pink
-        (q/text (str "Guess rate: " guess-rate-20  ) text-indent (text-row-px 9)   )
+        (q/text (str "Guess rate: " guess-rate-20) text-indent (text-row-px 9))
         (q/fill 148 148 148) ;; grey
         (q/text-font small-font)
-        (q/text (str "        ---PERSONAL BESTS---") text-indent (text-row-px 10)  )
+        (q/text (str "        ---PERSONAL BESTS---") text-indent (text-row-px 10))
         (q/fill 248 248 248) ;; white
         (q/text-font big-font)
-        (q/text (str "Streak: " (or (users/get-record user :streak) 0)  ) text-indent (text-row-px 11)  )
+        (q/text (str "Streak: " (or (users/get-record user :streak) 0)) text-indent (text-row-px 11))
         (q/text (str "/150 Win ratio: " (format "%.3f" (* 100 (or (users/get-record user :won-rate-150) 0.0)))) text-indent (text-row-px 12))
         (q/text (str "/20 Guess ratio: " (format "%.3f" (or (users/get-record user :guess-rate-20) 0.0))) text-indent (text-row-px 13))))))
 
@@ -452,100 +451,99 @@
         user (get-user m chat-key)]
     (if (= "stats" command)
       (.replyWithImage m (get-img chat-key (partial draw-stats user)))
-    (if (= "streak" command)
-      (let [streak (users/get-streak user)
-            streak-msg (get-streak-msg streak user)]
-        (.reply m streak-msg))
-      (if (= "wordle" command)
-        (if (not (playing? chat-key))
-          (let [size (get-size trailing)
-                difficulty (get-difficulty trailing)
-                worddata (words/get-word difficulty size)
-                word (get worddata :word)
-                definition (get worddata :definition)
-                hits (get worddata :hits)]
-            (if (or (> size 10) (< size 2))
-              (.reply
-               m
-               "Don't be an eejit. I won't do more than 10 or less than 2.")
-              (do
-                (new-game! chat-key word size definition hits user difficulty)
-                (if (= "Elspeth" user)
-                  (.reply m "I hope you enjoy the game Elspeth!"))
-                (if (= difficulty :hard)
-                  (.reply m (str "Ohh, feeling cocky, are we, " user "?"))
-                  (.replyWithImage m (get-img chat-key draw))))))
-          (.reply m "We're already playing a game, smart one."))
-        (if (playing? chat-key)
-          (do
-            (println "guess:" guess ":answer:" (get-gameprop chat-key :answer))
-            (if (= (get-gameprop chat-key :size)
-                   (count (re-matches #"[a-zA-Z]*" guess)))
-              (if (words/real-word? (clojure.string/upper-case guess))
+      (if (= "streak" command)
+        (let [streak (users/get-streak user)
+              streak-msg (get-streak-msg streak user)]
+          (.reply m streak-msg))
+        (if (= "wordle" command)
+          (if (not (playing? chat-key))
+            (let [size (get-size trailing)
+                  difficulty (get-difficulty trailing)
+                  worddata (words/get-word difficulty size)
+                  word (get worddata :word)
+                  definition (get worddata :definition)
+                  hits (get worddata :hits)]
+              (if (or (> size 10) (< size 2))
+                (.reply
+                 m
+                 "Don't be an eejit. I won't do more than 10 or less than 2.")
                 (do
-                  (add-guess! chat-key guess user)
-                  (.replyWithImage m (get-img chat-key draw))
-                  (if (and (= (guesses-made chat-key) (- max-guesses 1))
-                           (not (won? chat-key)))
-                    (.reply m "Uh oh!"))
-                  (if (and (> (guesses-made chat-key) 3)
-                           (< (guesses-made chat-key) max-guesses)
-                           (no-progress? chat-key)
-                           (not (won? chat-key)))
-                    (.reply
-                     m
-                     "You seem to be digging yourself into a hole! Do better."))
-                  (if (and (> (guesses-made chat-key) 2)
-                           (not (won? chat-key))
-                           (< (guesses-made chat-key) max-guesses))
-                    (.reply m (letter-help chat-key)))
+                  (new-game! chat-key word size definition hits user difficulty)
+                  (if (= "Elspeth" user)
+                    (.reply m "I hope you enjoy the game Elspeth!"))
+                  (if (= difficulty :hard)
+                    (.reply m (str "Ohh, feeling cocky, are we, " user "?"))
+                    (.replyWithImage m (get-img chat-key draw))))))
+            (.reply m "We're already playing a game, smart one."))
+          (if (playing? chat-key)
+            (do
+              (println "guess:" guess ":answer:" (get-gameprop chat-key :answer))
+              (if (= (get-gameprop chat-key :size)
+                     (count (re-matches #"[a-zA-Z]*" guess)))
+                (if (words/real-word? (clojure.string/upper-case guess))
+                  (do
+                    (add-guess! chat-key guess user)
+                    (.replyWithImage m (get-img chat-key draw))
+                    (if (and (= (guesses-made chat-key) (- max-guesses 1))
+                             (not (won? chat-key)))
+                      (.reply m "Uh oh!"))
+                    (if (and (> (guesses-made chat-key) 3)
+                             (< (guesses-made chat-key) max-guesses)
+                             (no-progress? chat-key)
+                             (not (won? chat-key)))
+                      (.reply
+                       m
+                       "You seem to be digging yourself into a hole! Do better."))
+                    (if (and (> (guesses-made chat-key) 2)
+                             (not (won? chat-key))
+                             (< (guesses-made chat-key) max-guesses))
+                      (.reply m (letter-help chat-key)))
                 ;; TODO store win/lose stats, streaks etc..
-                  (if (won? chat-key)
-                    (do
-                      (cond
-                        (= max-guesses (guesses-made chat-key))
-                        (.reply m "Phew! You won - barely.")
-                        (= 5 (guesses-made chat-key))
-                        (.reply
-                         m
-                         "You won, but I'm sure you feel a little bit dissapointed.")
-                        (= 4 (guesses-made chat-key))
-                        (.reply m
-                                "Well done! You won, and you won competently.")
-                        (= 3 (guesses-made chat-key))
-                        (.reply m "WOW!! An excellent performance!! You won!")
-                        (= 2 (guesses-made chat-key))
-                        (.reply
-                         m
-                         "Gasp! How could you possibly win like that? Are you gifted?")
-                        (= 1 (guesses-made chat-key))
-                        (.reply
-                         m
-                         "You won. I prostrate myself before you, for clearly I am in the presence of a wordle deity. Let this day live forever in our memories."))
-                      (.reply m
-                              (str "Definition: "
-                                   (get-gameprop chat-key :answerdef)))
-                      (let [pbs (clear-game! chat-key)
-                            streak (get pbs :streak)
-                            won-rate-150 (get pbs :won-rate-150)
-                            guess-rate-20 (get pbs :guess-rate-20)]
-                        (if (not (nil? streak))
-                          (if (= 0 (mod streak 5))
-                            (.reply m (format "Well done %s!! Your PB streak is now %s." user streak))
-                            ))
-                        (if (not (nil? won-rate-150))
-                          (.reply m (format "NEW PB!!! Well done %s!! Your PB win rate is now %s." user won-rate-150)))
-                        (if (not (nil? guess-rate-20))
-                          (.reply m (format "NEW PB!!! Well done %s!! Your PB guess rate is now %s." user guess-rate-20))))
-                    (if (= max-guesses (guesses-made chat-key))
-                      (do (.reply
+                    (if (won? chat-key)
+                      (do
+                        (cond
+                          (= max-guesses (guesses-made chat-key))
+                          (.reply m "Phew! You won - barely.")
+                          (= 5 (guesses-made chat-key))
+                          (.reply
                            m
-                           (str "Oh no! You lost the game! \n The answer was: "
-                                (get-gameprop chat-key :answer)))
+                           "You won, but I'm sure you feel a little bit dissapointed.")
+                          (= 4 (guesses-made chat-key))
                           (.reply m
-                                  (str "The too-difficult-for-you word means: "
-                                       (get-gameprop chat-key :answerdef)))
-                          (clear-game! chat-key)))))))))))))))
+                                  "Well done! You won, and you won competently.")
+                          (= 3 (guesses-made chat-key))
+                          (.reply m "WOW!! An excellent performance!! You won!")
+                          (= 2 (guesses-made chat-key))
+                          (.reply
+                           m
+                           "Gasp! How could you possibly win like that? Are you gifted?")
+                          (= 1 (guesses-made chat-key))
+                          (.reply
+                           m
+                           "You won. I prostrate myself before you, for clearly I am in the presence of a wordle deity. Let this day live forever in our memories."))
+                        (.reply m
+                                (str "Definition: "
+                                     (get-gameprop chat-key :answerdef)))
+                        (let [pbs (clear-game! chat-key)
+                              streak (get pbs :streak)
+                              won-rate-150 (get pbs :won-rate-150)
+                              guess-rate-20 (get pbs :guess-rate-20)]
+                          (if (not (nil? streak))
+                            (if (= 0 (mod streak 5))
+                              (.reply m (format "Well done %s!! Your PB streak is now %s." user streak))))
+                          (if (not (nil? won-rate-150))
+                            (.reply m (format "NEW PB!!! Well done %s!! Your PB win rate is now %s." user won-rate-150)))
+                          (if (not (nil? guess-rate-20))
+                            (.reply m (format "NEW PB!!! Well done %s!! Your PB guess rate is now %s." user guess-rate-20)))))
+                      (if (= max-guesses (guesses-made chat-key))
+                        (do (.reply
+                             m
+                             (str "Oh no! You lost the game! \n The answer was: "
+                                  (get-gameprop chat-key :answer)))
+                            (.reply m
+                                    (str "The too-difficult-for-you word means: "
+                                         (get-gameprop chat-key :answerdef)))
+                            (clear-game! chat-key))))))))))))))
 
 (defn -processPrivateMessage [this m] (-processChannelMessage this m))
 
