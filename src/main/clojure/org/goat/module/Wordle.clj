@@ -6,9 +6,10 @@
             [org.goat.db.users :as users]
             [clojure.java.io :as io]
             [clojure.set :as set]
-            [clojure.java.shell :as shell :only [sh]]
+            [clojure.java.shell :as shell]
             [clojure.edn :as edn]
             [clojure.math :as math]))
+
 (use 'clojure.test)
 
 (def max-guesses 6)
