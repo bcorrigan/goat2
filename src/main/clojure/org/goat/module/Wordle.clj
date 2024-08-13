@@ -377,7 +377,7 @@
   (q/defsketch org.goat.module.Wordle
     :host "host"
     :setup (partial drawfn chat-key))
-  (Thread/sleep 400)
+  ;; (Thread/sleep 400)
   (shell/sh "/usr/bin/sync" "-f" (file-name chat-key) )
   (io/file (file-name chat-key)))
 
@@ -396,6 +396,13 @@
     (if (nil? elspeth)
       (if (nil? difficulty) :easy :hard)
       :veasy)))
+
+(defn get-challenge
+  "If this game is in challenge mode, return challenge user"
+  [s]
+  (if (clojure.string/includes? s "challenge" )
+    (let [user  ]  )
+    ))
 
 (defn audit-game
   "Get all related game data and audit it into DB.
@@ -466,6 +473,7 @@
         (if (= "wordle" command)
           (if (not (playing? chat-key))
             (let [size (get-size trailing)
+                  challenge (get-challenge trailing)
                   difficulty (get-difficulty trailing)
                   worddata (words/get-word difficulty size)
                   word (get worddata :word)
