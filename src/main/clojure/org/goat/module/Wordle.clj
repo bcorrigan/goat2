@@ -8,7 +8,8 @@
             [clojure.set :as set]
             [clojure.java.shell :as shell]
             [clojure.edn :as edn]
-            [clojure.math :as math]))
+            [clojure.math :as math]
+            [clojure.string :as str]))
 
 (use 'clojure.test)
 
@@ -69,8 +70,9 @@
 
 (defn new-game!
   "Add state for a new game of wordle."
-  [chat-key answer size answerdef hits user difficulty]
-  (let [starttime (System/currentTimeMillis)]
+  [chat-key answer size answerdef hits user difficulty challenge-user]
+  (let [starttime (System/currentTimeMillis)
+        challenge (not (nil? challenge-user))]
     (swap! state assoc-in
            [:game-states chat-key]
            {:guesses [],
@@ -83,6 +85,8 @@
             :user user,
             :difficulty difficulty,
             :answerdef answerdef,
+            :challenge challenge,
+            :challenge-user challenge-user,
             :hits hits})))
 
 (defn won?
@@ -398,11 +402,12 @@
       :veasy)))
 
 (defn get-challenge
-  "If this game is in challenge mode, return challenge user"
+  "Parse out who is being challenged."
   [s]
-  (if (clojure.string/includes? s "challenge" )
-    (let [user  ]  )
-    ))
+  (if (str/includes? s "challenge")
+    (let [mr (re-matcher  #"\W*\w+\W+(\w+)\W*" s)]
+      (.matches mr)
+      (.group mr 1))))
 
 (defn audit-game
   "Get all related game data and audit it into DB.
@@ -473,7 +478,7 @@
         (if (= "wordle" command)
           (if (not (playing? chat-key))
             (let [size (get-size trailing)
-                  challenge (get-challenge trailing)
+                  challenge-user (get-challenge trailing)
                   difficulty (get-difficulty trailing)
                   worddata (words/get-word difficulty size)
                   word (get worddata :word)
@@ -483,14 +488,33 @@
                 (.reply
                  m
                  "Don't be an eejit. I won't do more than 10 or less than 2.")
-                (do
-                  (new-game! chat-key word size definition hits user difficulty)
-                  (if (= "Elspeth" user)
-                    (.reply m "I hope you enjoy the game Elspeth!"))
-                  (if (= difficulty :hard)
-                    (.reply m (str "Ohh, feeling cocky, are we, " user "?"))
-                    (.replyWithImage m (get-img chat-key draw))))))
-            (.reply m "We're already playing a game, smart one."))
+                (if challenge-user
+                  (if ((users/user-known? challenge-user))
+                    (if ((users/user-known? user))
+                      (let [user1-chat-key (users/user-chat challenge-user)
+                            user2-chat-key (users/user-chat user)
+                            user1-msg (new org.goat.core.Message user1-chat-key "" true "goat")
+                            user2-msg (new org.goat.core.Message user2-chat-key "" true "goat")]
+                        (if (not (or (playing? user1-chat-key) (playing? user2-chat-key)))
+                          (do
+                            ;; Init game for each user and message for each seperately.
+                            (.reply m "Starting a challenge match!! Let's go!")
+                            (new-game! user1-chat-key word size definition hits user difficulty challenge-user)
+                            (.replyWithImage user1-msg (get-img user1-chat-key draw))
+                            (new-game! user2-chat-key word size definition hits challenge-user difficulty user)
+                            (.replyWithImage user2-msg (get-img user2-chat-key draw)))
+                          (.reply m "There's already a challenge match being played! Can't have too much challenge.")))
+                      (.reply m (str "I can't message your privately, " user
+                                     ", please message me privately and try again.")))
+                    (.reply m "Er, who???"))
+                  (do
+                    (new-game! chat-key word size definition hits user difficulty challenge-user)
+                    (if (= "Elspeth" user)
+                      (.reply m "I hope you enjoy the game Elspeth!"))
+                    (if (= difficulty :hard)
+                      (.reply m (str "Ohh, feeling cocky, are we, " user "?"))
+                      (.replyWithImage m (get-img chat-key draw))))))
+            (.reply m "We're already playing a game, smart one.")))
           (if (playing? chat-key)
             (do
               (println "guess:" guess ":answer:" (get-gameprop chat-key :answer))

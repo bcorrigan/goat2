@@ -1,5 +1,6 @@
 (ns org.goat.db.users (:require [clojure.java.jdbc :refer :all :as sql ]
-                                [clojure.edn :as edn]))
+                                [clojure.edn :as edn]
+                                [org.goat.db.util :as util]))
 
 (def db
   {:classname "org.sqlite.JDBC"
@@ -16,6 +17,7 @@
   "If no DB file found, create the user db and table"
   []
   (try (sql/db-do-commands db
+           (if (not (util/tbl-exists? db :wordlegames))
                        (sql/create-table-ddl :wordlegames
                                          [[:type :text]
                                           [:chatid :int]
@@ -33,17 +35,46 @@
                                           [:g6 :text]
                                           [:starttime :datetime]
                                           [:endtime :datetime]
-                                          ]))
-       (sql/db-do-commands db
-                       (sql/create-table-ddl :records
-                                         [[:username :text]
-                                          [:record :text]
-                                          [:recordval :text]
-                                          [:recordtime :datetime]]))
+                                          ])))
+       (if (not (util/tbl-exists? db :wordlegames))
+         (sql/db-do-commands db
+                             (sql/create-table-ddl :records
+                                                   [[:username :text]
+                                                    [:record :text]
+                                                    [:recordval :text]
+                                                    [:recordtime :datetime]]))
 
-       (sql/execute! db "create unique index recidx on records(username, record)" )
+         (sql/execute! db "create unique index recidx on records(username, record)" ))
+       (if (not (util/tbl-exists? db :users))
+         (sql/db-do-commands db (sql/create-table-ddl :users
+                                                      [[:username :text]
+                                                       [:chatid :int]
+                                                       ]))
+         (sql/execute! db "create unique index usridx on users(username)" ))
        (catch Exception e
          (println "Fatal error" (.getMessage e)))))
+
+(defn user-known?
+  "True if the user is already known to us."
+  [username]
+  (not (empty? (query db [(format (str "select username"
+                               " from users"
+                               " where username='%s'") username)]))))
+
+(defn user-add
+  "Add a new user - just their string name and chatid"
+  [username chatid]
+  (sql/insert! db :users {
+                          :username username
+                          :chatid chatid
+                          }))
+
+(defn user-chat
+  "Get a given user chat-key"
+  [username]
+  (keyword (str (get (first (query db [(format (str "select chatid"
+                          " from users"
+                          " where username='%s'") username)])) :chatid))))
 
 (defn get-losttime
   "Return timestamp at which given user last lost a normal game"
