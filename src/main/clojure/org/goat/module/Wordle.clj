@@ -70,7 +70,7 @@
 
 (defn new-game!
   "Add state for a new game of wordle."
-  [chat-key answer size answerdef hits user difficulty challenge-user]
+  [chat-key answer size answerdef hits user difficulty challenge-user challenge-chat]
   (let [starttime (System/currentTimeMillis)
         challenge (not (nil? challenge-user))]
     (swap! state assoc-in
@@ -87,6 +87,7 @@
             :answerdef answerdef,
             :challenge challenge,
             :challenge-user challenge-user,
+            :challenge-chat challenge-chat,
             :hits hits})))
 
 (defn won?
@@ -421,9 +422,23 @@
 
 (defn clear-game!
   "For a given chatid, remove all the game state entirely.
-  Returns any PBs that have been set in the concluded game."
-  [chat-key]
+  Returns any PBs that have been set in the concluded game.
+  Audits the game in the stats table, records new records, and
+  if a challenge game we conclude the challege and record challenge stats."
+  [chat-key m]
   (let [pbs (audit-game chat-key)]
+    (if (get-gameprop chat-key :challenge)
+      (let [other-user (get-gameprop chat-key :challenge-user)
+            this-user (get-gameprop chat-key :user)
+            other-chatkey (users/user-chat other-user)
+            other-msg (new org.goat.core.Message other-chatkey "" true "goat")]
+        (if (playing? other-chatkey)
+          (do
+            (.reply m (str "I'm afraid that " other-user " is not as speedy as you, but I will keep you posted in the main chat."))
+            (.reply other-msg (str this-user " just finished, " other-user ", better get your skates on!")))
+          (do ;;wrap up the challenge now
+            ;;TODO race conditions??
+            ))))
     (swap! state assoc-in
            [:game-states]
            (dissoc (get-in @state [:game-states]) chat-key))
@@ -499,16 +514,16 @@
                           (do
                             ;; Init game for each user and message for each seperately.
                             (.reply m "Starting a challenge match!! Let's go!")
-                            (new-game! user1-chat-key word size definition hits user difficulty challenge-user)
+                            (new-game! user1-chat-key word size definition hits user difficulty challenge-user chat-key)
                             (.replyWithImage user1-msg (get-img user1-chat-key draw))
-                            (new-game! user2-chat-key word size definition hits challenge-user difficulty user)
+                            (new-game! user2-chat-key word size definition hits challenge-user difficulty user chat-key)
                             (.replyWithImage user2-msg (get-img user2-chat-key draw)))
                           (.reply m "There's already a challenge match being played! Can't have too much challenge.")))
                       (.reply m (str "I can't message your privately, " user
                                      ", please message me privately and try again.")))
                     (.reply m "Er, who???"))
                   (do
-                    (new-game! chat-key word size definition hits user difficulty challenge-user)
+                    (new-game! chat-key word size definition hits user difficulty challenge-user nil)
                     (if (= "Elspeth" user)
                       (.reply m "I hope you enjoy the game Elspeth!"))
                     (if (= difficulty :hard)

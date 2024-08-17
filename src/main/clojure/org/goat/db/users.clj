@@ -51,8 +51,31 @@
                                                        [:chatid :int]
                                                        ]))
          (sql/execute! db "create unique index usridx on users(username)" ))
+
+       (if (not (util/tbl-exists? db :challenges))
+         (sql/db-do-commands db (sql/create-table-ddl :challenges
+                                                      [[:user1 :text]
+                                                       [:user2 :text]
+                                                       [:user1_won :boolean]
+                                                       [:user2_won :boolean]
+                                                       [:user1_guesses :int]
+                                                       [:user2_guesses :int]
+                                                       [:endtime :datetime]])))
+
        (catch Exception e
          (println "Fatal error" (.getMessage e)))))
+
+(defn record-challenge-game
+  "Record a challenge match outcome."
+  [stats]
+  (sql/insert! db :challenges {
+                               :user1 (get stats :user1)
+                               :user2 (get stats :user2)
+                               :user1_won (get stats :user1-won)
+                               :user2_won (get stats :user2-won)
+                               :user1_guesses (get stats :user1-guesses)
+                               :user2_guesses (get stats :user2-guesses)
+                               :endtime (get stats :endtime)}))
 
 (defn user-known?
   "True if the user is already known to us."
