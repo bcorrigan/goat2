@@ -1,0 +1,49 @@
+* Challenge game [5/7]
+
+- [X] Parse "wordle challenge Bob" as a challenge against user Bob
+- [X] Have notion of "user" and private chat ID for that user
+- [X] Handle errors - user doesn't exist OR user exists but no known private chat
+- [X] Initiate two games for each user with initial messages
+- [X] Have additional status in games, db, indicating they are challenge games
+- [ ] At conclusion of challenge game, indicate status of other user and to other user
+- [ ] At conclusion of both challenge games, report side-by-side image and declare victor in main chat
+
+** processMessage changes
+
+1) Get the chat-keys for each user
+2) Init game for each user/chat-key
+3) Send start messages for each user/chat-key
+4) Store image somehow? Just append the images side by side?
+
+** Challenge Game conclusion race conditions
+
+How to solve this?
+
+Unique key for a "challenge" match? => the two chat-keys ordered and appended?
+
+With this, we can have some atom/shared state which must be locked.
+
+First game to "complete status" locks?
+
+Not sure if an issue or how much of an issue really.
+
+Something like this should work:
+#+BEGIN_SRC clojure
+(def work-in-progress (atom false))
+
+(defn start-work []
+  (locking work-in-progress
+    (if @work-in-progress
+      (do
+        (println "Work is already in progress.")
+        )
+      (do
+        (reset! work-in-progress true)
+        ;; Perform the work here
+        (println "Work completed.")
+        (reset! work-in-progress false)))))
+
+(defn main []
+  (future (start-work)) ; Start work in a separate thread
+  (start-work)) ; Try to start work again in the main thread
+#+END_SRC
