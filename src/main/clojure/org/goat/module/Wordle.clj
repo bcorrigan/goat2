@@ -99,8 +99,28 @@
           :group-chat-key group-chat-key,
           :user1 user1,
           :user2 user2,
-          :playing true
+          :playing (atom true)
           }))
+
+(defn other-user
+  "Get the other user in a challenge."
+  [chat-key]
+  (let [challenge-key (get-gameprop chat-key :challenge-key)
+        user (get-gameprop chat-key :user)
+        user1 (get-gameprop challenge-key :user1)]
+    (if (= user user1)
+      (get-gameprop challenge-key :user2)
+      user1)))
+
+(defn other-chat-key
+  "Get the other chat-key in a challenge."
+  [chat-key]
+  (let [challenge-key (get-gameprop chat-key :challenge-key)
+        chat-key1 (get-gameprop challenge-key :chat-key1)]
+    (if (= chat-key chat-key1)
+      (get-gameprop challenge-key :chat-key2)
+      chat-key1)))
+
 
 (defn won?
   "Has the user just won the game?"
@@ -440,17 +460,29 @@
   [chat-key m]
   (let [pbs (audit-game chat-key)]
     (if (get-gameprop chat-key :challenge)
-      (let [other-user (get-gameprop chat-key :challenge-user)
+      (let [challenge-key (get-gameprop chat-key :challenge-key)
+            other-user (other-user chat-key)
             this-user (get-gameprop chat-key :user)
-            other-chatkey (users/user-chat other-user)
-            other-msg (new org.goat.core.Message other-chatkey "" true "goat")]
+            other-chatkey (other-chat-key chat-key)
+            other-msg (new org.goat.core.Message other-chatkey "" true "goat")
+            playing (get-gameprop challenge-key :playing)]
         (if (playing? other-chatkey)
           (do
             (.reply m (str "I'm afraid that " other-user " is not as speedy as you, but I will keep you posted in the main chat."))
             (.reply other-msg (str this-user " just finished, " other-user ", better get your skates on!")))
           (do ;;wrap up the challenge now
             ;;TODO race conditions??
-            ))))
+            (locking playing
+              (if (not @playing)
+                (do
+                  (reset! playing false)
+                  ;;TODO Do the double image sending back to main chat and auditing here
+                  ;;tidy up the challenge data
+                  (swap! state assoc-in
+                         [:game-states]
+                         (dissoc (get-in @state [:game-states]) challenge-key))
+                  ))
+            )))))
     (swap! state assoc-in
            [:game-states]
            (dissoc (get-in @state [:game-states]) chat-key))
@@ -534,7 +566,8 @@
                             challenge-key (combine-keys user1-chat-key user2-chat-key)]
                         (if (not (or (playing? user1-chat-key) (playing? user2-chat-key)))
                           (do
-                            ;; Init game for each user and message for each seperately.
+                            ;; Init game for each user and message for each seperately
+                            (new-challenge! challenge-key user1-chat-key user2-chat-key chat-key user challenge-user)
                             (.reply m "Starting a challenge match!! Let's go!")
                             (new-game! user1-chat-key word size definition hits user difficulty challenge-key)
                             (.replyWithImage user1-msg (get-img user1-chat-key draw))
