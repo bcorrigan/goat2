@@ -70,9 +70,9 @@
 
 (defn new-game!
   "Add state for a new game of wordle."
-  [chat-key answer size answerdef hits user difficulty challenge-user challenge-chat]
+  [chat-key answer size answerdef hits user difficulty challenge-key]
   (let [starttime (System/currentTimeMillis)
-        challenge (not (nil? challenge-user))]
+        challenge (not (nil? challenge-key))]
     (swap! state assoc-in
            [:game-states chat-key]
            {:guesses [],
@@ -86,9 +86,21 @@
             :difficulty difficulty,
             :answerdef answerdef,
             :challenge challenge,
-            :challenge-user challenge-user,
-            :challenge-chat challenge-chat,
+            :challenge-key challenge-key,
             :hits hits})))
+
+(defn new-challenge!
+  "Add state for a new challenge"
+  [challenge-key chat-key1 chat-key2 group-chat-key user1 user2]
+  (swap! state assoc-in
+         [:game-states challenge-key]
+         {:chat-key1 chat-key1,
+          :chat-key2 chat-key2,
+          :group-chat-key group-chat-key,
+          :user1 user1,
+          :user2 user2,
+          :playing true
+          }))
 
 (defn won?
   "Has the user just won the game?"
@@ -459,6 +471,15 @@
         "Elspeth"
         sender))))
 
+(defn combine-keys
+  "Concatenate supplied chat-key symbols, to obtain a combined identifier."
+  [chat-key1 chat-key2]
+  (symbol
+   (str ":"
+        (symbol chat-key1)
+        (symbol chat-key2)))
+  )
+
 (defn get-streak-msg
   "Get a congratulatory (or critical) message depending on user's streak"
   [streak user]
@@ -509,21 +530,22 @@
                       (let [user1-chat-key (users/user-chat challenge-user)
                             user2-chat-key (users/user-chat user)
                             user1-msg (new org.goat.core.Message user1-chat-key "" true "goat")
-                            user2-msg (new org.goat.core.Message user2-chat-key "" true "goat")]
+                            user2-msg (new org.goat.core.Message user2-chat-key "" true "goat")
+                            challenge-key (combine-keys user1-chat-key user2-chat-key)]
                         (if (not (or (playing? user1-chat-key) (playing? user2-chat-key)))
                           (do
                             ;; Init game for each user and message for each seperately.
                             (.reply m "Starting a challenge match!! Let's go!")
-                            (new-game! user1-chat-key word size definition hits user difficulty challenge-user chat-key)
+                            (new-game! user1-chat-key word size definition hits user difficulty challenge-key)
                             (.replyWithImage user1-msg (get-img user1-chat-key draw))
-                            (new-game! user2-chat-key word size definition hits challenge-user difficulty user chat-key)
+                            (new-game! user2-chat-key word size definition hits challenge-user difficulty challenge-key)
                             (.replyWithImage user2-msg (get-img user2-chat-key draw)))
                           (.reply m "There's already a challenge match being played! Can't have too much challenge.")))
                       (.reply m (str "I can't message your privately, " user
                                      ", please message me privately and try again.")))
                     (.reply m "Er, who???"))
                   (do
-                    (new-game! chat-key word size definition hits user difficulty challenge-user nil)
+                    (new-game! chat-key word size definition hits user difficulty nil)
                     (if (= "Elspeth" user)
                       (.reply m "I hope you enjoy the game Elspeth!"))
                     (if (= difficulty :hard)
