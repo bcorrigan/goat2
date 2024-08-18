@@ -30,10 +30,6 @@
   :size 5 :answerdef \"definition\" :hits 1000 }"
   (atom {}))
 
-(defn playing?
-  "true if we're playing a game on the given chatid"
-  [chat-key]
-  (not (nil? (get-in @state [:game-states chat-key]))))
 
 (defn guesses-made
   "How many guesses have been made for the given chatid game?"
@@ -68,6 +64,13 @@
   [chat-key property value]
   (swap! state assoc-in [:game-states chat-key property] value))
 
+(defn playing?
+  "true if we're playing a game on the given chatid and it isn't in process of concluding"
+  [chat-key]
+  (and
+   (not (nil? (get-in @state [:game-states chat-key])))
+   (get-gameprop chat-key :playing)))
+
 (defn new-game!
   "Add state for a new game of wordle."
   [chat-key answer size answerdef hits user difficulty challenge-key]
@@ -87,6 +90,7 @@
             :answerdef answerdef,
             :challenge challenge,
             :challenge-key challenge-key,
+            :playing true,
             :hits hits})))
 
 (defn new-challenge!
@@ -99,7 +103,7 @@
           :group-chat-key group-chat-key,
           :user1 user1,
           :user2 user2,
-          :playing (atom true)
+          :playing (atom true) ;;not sure if it needs to be an atom seeing as it is within an atom
           }))
 
 (defn other-user
@@ -125,7 +129,12 @@
 (defn won?
   "Has the user just won the game?"
   [chat-key]
-  (= (last (get-gameprop chat-key :guesses)) (get-gameprop chat-key :answer)))
+  (let [won (= (last (get-gameprop chat-key :guesses)) (get-gameprop chat-key :answer))]
+    (if (and won (get-gameprop chat-key :playing))
+      (set-gameprop chat-key :playing false))
+    (if (and (not won) (= max-guesses (guesses-made chat-key)))
+      (set-gameprop chat-key :playing false))
+    won))
 
 (defn contains-char?
   "Does the string contain the char c?"
@@ -466,6 +475,8 @@
             other-chatkey (other-chat-key chat-key)
             other-msg (new org.goat.core.Message other-chatkey "" true "goat")
             playing (get-gameprop challenge-key :playing)]
+        ;; If both players press enter simultaneously, they could end up entering this code at the same moment?
+        ;; playing? could look at a boolean to minimise this?
         (if (playing? other-chatkey)
           (do
             (.reply m (str "I'm afraid that " other-user " is not as speedy as you, but I will keep you posted in the main chat."))
@@ -473,7 +484,7 @@
           (do ;;wrap up the challenge now
             ;;TODO race conditions??
             (locking playing
-              (if (not @playing)
+              (if @playing
                 (do
                   (reset! playing false)
                   ;;TODO Do the double image sending back to main chat and auditing here
@@ -653,7 +664,7 @@
                             (.reply m
                                     (str "The too-difficult-for-you word means: "
                                          (get-gameprop chat-key :answerdef)))
-                            (clear-game! chat-key))))))))))))))
+                            (clear-game! chat-key m))))))))))))))
 
 (defn -processPrivateMessage [this m] (-processChannelMessage this m))
 
