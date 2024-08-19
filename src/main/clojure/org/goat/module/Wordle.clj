@@ -67,9 +67,7 @@
 (defn playing?
   "true if we're playing a game on the given chatid and it isn't in process of concluding"
   [chat-key]
-  (and
-   (not (nil? (get-in @state [:game-states chat-key])))
-   (get-gameprop chat-key :playing)))
+  (not (nil? (get-in @state [:game-states chat-key]))))
 
 (defn new-game!
   "Add state for a new game of wordle."
@@ -90,7 +88,6 @@
             :answerdef answerdef,
             :challenge challenge,
             :challenge-key challenge-key,
-            :playing true,
             :hits hits})))
 
 (defn new-challenge!
@@ -103,7 +100,7 @@
           :group-chat-key group-chat-key,
           :user1 user1,
           :user2 user2,
-          :playing (atom true) ;;not sure if it needs to be an atom seeing as it is within an atom
+          :playing (atom 2)
           }))
 
 (defn other-user
@@ -129,12 +126,7 @@
 (defn won?
   "Has the user just won the game?"
   [chat-key]
-  (let [won (= (last (get-gameprop chat-key :guesses)) (get-gameprop chat-key :answer))]
-    (if (and won (get-gameprop chat-key :playing))
-      (set-gameprop chat-key :playing false))
-    (if (and (not won) (= max-guesses (guesses-made chat-key)))
-      (set-gameprop chat-key :playing false))
-    won))
+  (= (last (get-gameprop chat-key :guesses)) (get-gameprop chat-key :answer)))
 
 (defn contains-char?
   "Does the string contain the char c?"
@@ -467,33 +459,30 @@
   Audits the game in the stats table, records new records, and
   if a challenge game we conclude the challege and record challenge stats."
   [chat-key m]
-  (let [pbs (audit-game chat-key)]
-    (if (get-gameprop chat-key :challenge)
-      (let [challenge-key (get-gameprop chat-key :challenge-key)
-            other-user (other-user chat-key)
-            this-user (get-gameprop chat-key :user)
-            other-chatkey (other-chat-key chat-key)
-            other-msg (new org.goat.core.Message other-chatkey "" true "goat")
-            playing (get-gameprop challenge-key :playing)]
-        ;; If both players press enter simultaneously, they could end up entering this code at the same moment?
-        ;; playing? could look at a boolean to minimise this?
-        (if (playing? other-chatkey)
+
+  (if (get-gameprop chat-key :challenge)
+    (let [challenge-key (get-gameprop chat-key :challenge-key)
+          other-user (other-user chat-key)
+          this-user (get-gameprop chat-key :user)
+          other-chatkey (other-chat-key chat-key)
+          other-msg (new org.goat.core.Message other-chatkey "" true "goat")
+          playing (get-gameprop challenge-key :playing)]
+      ;; If both players press enter simultaneously, they could end up entering this code at the same moment?
+      (locking playing
+        (if (= @playing 2)
           (do
             (.reply m (str "I'm afraid that " other-user " is not as speedy as you, but I will keep you posted in the main chat."))
-            (.reply other-msg (str this-user " just finished, " other-user ", better get your skates on!")))
-          (do ;;wrap up the challenge now
-            ;;TODO race conditions??
-            (locking playing
-              (if @playing
-                (do
-                  (reset! playing false)
-                  ;;TODO Do the double image sending back to main chat and auditing here
-                  ;;tidy up the challenge data
-                  (swap! state assoc-in
-                         [:game-states]
-                         (dissoc (get-in @state [:game-states]) challenge-key))
-                  ))
-            )))))
+            (.reply other-msg (str this-user " just finished, " other-user ", better get your skates on!"))
+            (reset! playing 1))
+          (if (= @playing 1)
+            (do ;;wrap up the challenge now
+              (reset! playing 0)
+              ;;TODO Do the double image sending back to main chat and auditing here
+              ;;then tidy up the challenge data
+              (swap! state assoc-in
+                     [:game-states]
+                     (dissoc (get-in @state [:game-states]) challenge-key))))))))
+  (let [pbs (audit-game chat-key)]
     (swap! state assoc-in
            [:game-states]
            (dissoc (get-in @state [:game-states]) chat-key))
