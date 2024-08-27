@@ -9,7 +9,8 @@
             [clojure.java.shell :as shell]
             [clojure.edn :as edn]
             [clojure.math :as math]
-            [clojure.string :as str]))
+            [clojure.string :as str])
+  (:import  [java.awt.image BufferedImage]))
 
 (use 'clojure.test)
 
@@ -171,6 +172,18 @@
   [guess answer]
   (vec (tosymsl- guess answer)))
 
+(deftest test-tosyms
+  (is (= [:wrong :semiknown :wrong :semiknown :revealed]
+         (tosyms "FEELS" "PALES")))
+  (is (= [:wrong :semiknown :wrong :revealed :revealed]
+         (tosyms "FLEES" "PALES")))
+  (is (= [:wrong :revealed :revealed :revealed :wrong]
+         (tosyms "GLEES" "FLEET")))
+  (is (= [:semiknown :semiknown :revealed :wrong :wrong]
+         (tosyms "EELSY" "AGLEE")))
+  (is (= [:semiknown :semiknown :wrong :wrong :wrong]
+         (tosyms "EEESY" "AGLEE"))))
+
 (defn no-progress?
   "If the last 3 guesses have not resulted in finding new information
    (other than excluded letters) - returns true"
@@ -219,18 +232,6 @@
          " \n [ "
          (clojure.string/join " " included)
          " ]")))
-
-(deftest test-tosyms
-  (is (= [:wrong :semiknown :wrong :semiknown :revealed]
-         (tosyms "FEELS" "PALES")))
-  (is (= [:wrong :semiknown :wrong :revealed :revealed]
-         (tosyms "FLEES" "PALES")))
-  (is (= [:wrong :revealed :revealed :revealed :wrong]
-         (tosyms "GLEES" "FLEET")))
-  (is (= [:semiknown :semiknown :revealed :wrong :wrong]
-         (tosyms "EELSY" "AGLEE")))
-  (is (= [:semiknown :semiknown :wrong :wrong :wrong]
-         (tosyms "EEESY" "AGLEE"))))
 
 (defn draw-letter
   "Draw the given letter on the board at position x,y.
@@ -409,6 +410,16 @@
       (q/save (file-name chat-key))
       (q/exit))))
 
+(defn pgraphics-to-bufferedimage
+  [pg]
+  (let [w (.width pg)
+        h (.height pg)
+        bi (BufferedImage. w h BufferedImage/TYPE_INT_ARGB)
+        g2d (.createGraphics bi)]
+    (.drawImage g2d (.getImage pg) 0 0 nil)
+    (.dispose g2d)
+    bi))
+
 (defn get-img
   "Setup sketch for given underlying draw fn"
   [chat-key drawfn]
@@ -416,6 +427,7 @@
     :host "host"
     :setup (partial drawfn chat-key))
   ;; (Thread/sleep 400)
+  (set-gameprop chat-key :img (pgraphics-to-bufferedimage (q/current-graphics)))
   (shell/sh "/usr/bin/sync" "-f" (file-name chat-key) )
   (io/file (file-name chat-key)))
 
@@ -453,6 +465,22 @@
                               (conj m
                                     [:endtime endtime] [:won (won? chat-key)]))))
 
+(defn append-images
+  "Append two images side by side as one new image."
+  [img1 img2]
+  (let [width1          (.getWidth img1)
+        width2          (.getWidth img2)
+        height1         (.getHeight img1)
+        height2         (.getHeight img2)
+        combined-width  (+ width1 width2)
+        combined-height (max height1 height2)
+        combined-img    (BufferedImage. combined-width combined-height BufferedImage/TYPE_INT_ARGB)
+        g2d             (.createGraphics combined-img)]
+    (.drawimage g2d img1 0 0 nil)
+    (.drawimage g2d img2 width1 0 nil)
+    (.dispose g2d)
+    combined-img))
+
 (defn clear-game!
   "For a given chatid, remove all the game state entirely.
   Returns any PBs that have been set in the concluded game.
@@ -473,11 +501,16 @@
           (do
             (.reply m (str "I'm afraid that " other-user " is not as speedy as you, but I will keep you posted in the main chat."))
             (.reply other-msg (str this-user " just finished, " other-user ", better get your skates on!"))
+            (set-gameprop challenge-key :other-img (get-gameprop chat-key :img))
             (reset! playing 1))
           (if (= @playing 1)
-            (do ;;wrap up the challenge now
+            ;;wrap up the challenge now
+            (let [other-img (get-gameprop challenge-key :other-img)
+                  this-img (get-gameprop chat-key :img)
+                  combined-image (append-images this-img other-img)]
               (reset! playing 0)
-              ;;TODO Do the double image sending back to main chat and auditing here
+              ;;TODO FINALLY send the combined image to telegram!
+
               ;;then tidy up the challenge data
               (swap! state assoc-in
                      [:game-states]
@@ -608,7 +641,6 @@
                              (not (won? chat-key))
                              (< (guesses-made chat-key) max-guesses))
                       (.reply m (letter-help chat-key)))
-                ;; TODO store win/lose stats, streaks etc..
                     (if (won? chat-key)
                       (do
                         (cond
@@ -634,7 +666,7 @@
                         (.reply m
                                 (str "Definition: "
                                      (get-gameprop chat-key :answerdef)))
-                        (let [pbs (clear-game! chat-key)
+                        (let [pbs (clear-game! chat-key m)
                               streak (get pbs :streak)
                               won-rate-150 (get pbs :won-rate-150)
                               guess-rate-20 (get pbs :guess-rate-20)]

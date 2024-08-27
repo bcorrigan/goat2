@@ -47,3 +47,20 @@ Something like this should work:
   (future (start-work)) ; Start work in a separate thread
   (start-work)) ; Try to start work again in the main thread
 #+END_SRC
+
+* Challenge game append images
+
+COnsider using JAI as below to append some images instead of the quil BS
+
+#+BEGIN_SRC clojure
+(ns image-append-example
+  (:import (javax.media.jai.JAI)
+           (com.sun.media.imageio.plugins.jpeg JPEGImageReader)))
+
+(defn append-images [img1 img2]
+  (let [reader (JPEGImageReader.)
+        input-streams [(java.io.ByteArrayInputStream. (.getStream img1))
+                       (java.io.ByteArrayInputStream. (.getStream img2))]
+        result-image (JAI/createCompositeImage input-streams)]
+    (.write result-image "output.jpg")))
+#+END_SRC

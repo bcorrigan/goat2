@@ -41,3 +41,10 @@ copyright/
 # Idea
 *.ipr
 *.iws
+
+# clojure
+.clj-kondo/
+.settings/
+.lsp/
+resources/
+config/
