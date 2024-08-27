@@ -10,7 +10,9 @@
             [clojure.edn :as edn]
             [clojure.math :as math]
             [clojure.string :as str])
-  (:import  [java.awt.image BufferedImage]))
+  (:import  [java.awt.image BufferedImage]
+            [javax.imageio ImageIO]
+            [java.io File]))
 
 (use 'clojure.test)
 
@@ -507,10 +509,14 @@
             ;;wrap up the challenge now
             (let [other-img (get-gameprop challenge-key :other-img)
                   this-img (get-gameprop chat-key :img)
-                  combined-image (append-images this-img other-img)]
+                  combined-image (append-images this-img other-img)
+                  fname (file-name challenge-key)]
               (reset! playing 0)
-              ;;TODO FINALLY send the combined image to telegram!
-
+              (ImageIO/write combined-image "png" (File. fname))
+              (shell/sh "/usr/bin/sync" "-f" fname)
+              (.reply m "The challenge has concluded!")
+              (.replyWithImage m fname)
+              ;;TODO who was the winner, who was the loser, or was it a draw? And audit the challenge as well
               ;;then tidy up the challenge data
               (swap! state assoc-in
                      [:game-states]
