@@ -62,6 +62,16 @@
   [chat-key property]
   (get-in @state [:game-states chat-key property]))
 
+(defn get-game
+  "Get all the state for given game"
+  [chat-key]
+  (get-in @state [:game-states chat-key]))
+
+(defn get-fgameprop
+  "Get property from given property in cached first game in challenge."
+  [challenge-key property]
+  (get-in @state [:game-states challenge-key :first-game property]))
+
 (defn set-gameprop
   "Set given value for given chatid game"
   [chat-key property value]
@@ -104,6 +114,7 @@
           :user1 user1,
           :user2 user2,
           :playing (atom 2)
+          ;; :first-game (all the details of the other game)
           }))
 
 (defn other-user
@@ -503,13 +514,13 @@
           (do
             (.reply m (str "I'm afraid that " other-user " is not as speedy as you, but I will keep you posted in the main chat."))
             (.reply other-msg (str this-user " just finished, " other-user ", better get your skates on!"))
-            (set-gameprop challenge-key :other-img (get-gameprop chat-key :img))
+            (set-gameprop challenge-key :first-game (get-game chat-key))
             (reset! playing 1))
           (if (= @playing 1)
             ;;wrap up the challenge now
-            (let [other-img (get-gameprop challenge-key :other-img)
-                  this-img (get-gameprop chat-key :img)
-                  combined-image (append-images this-img other-img)
+            (let [first-img (get-fgameprop challenge-key :img)
+                  second-img (get-gameprop chat-key :img)
+                  combined-image (append-images second-img first-img)
                   fname (file-name challenge-key)]
               (reset! playing 0)
               (ImageIO/write combined-image "png" (File. fname))
@@ -518,6 +529,30 @@
               (.replyWithImage m fname)
               ;;TODO who was the winner, who was the loser, or was it a draw? And audit the challenge as well
               ;;then tidy up the challenge data
+              (let [p1 (get-fgameprop challenge-key :user)
+                    p2 (get-gameprop chat-key :user)
+                    p1-guesses (count (get-fgameprop challenge-key :guesses))
+                    p2-guesses (count (get-gameprop chat-key :guesses))
+                    p1-won (get-fgameprop challenge-key :won)
+                    p2-won (get-gameprop chat-key :won)]
+                (cond
+                  (and p1-won p2-won
+                       (= p1-guesses p2-guesses))
+                      (.reply m "The scorekeeper hereby declares this match a score draw.")
+                  (and p1-won (not p2-won))
+                      (.reply m (str "Well done " p1 ", you won! Commiserations " p2 "."))
+                  (and (not p1-won) p2-won)
+                      (.reply m (str "Good job " p2 ", you were victorious! Hard luck to you, " p1 "."))
+                  (and p1-won p2-won
+                       (< p1-guesses p2-guesses))
+                      (.reply m (str "A valiant attempt by " p2 ", but " p1 " was just too strong and got there faster. Well done " p1 "!"))
+                  (and p1-won p2-won
+                       (< p2-guesses p1-guesses))
+                      (.reply m (str "Nae luck " p1 ". " p2 " was just that little bit better. Nice work, " p2 "!"))
+                  (and (not p1-won) (not p2-won))
+                      (.reply m "Wow, that must have been really hard, or, you are both really bad at wordle. You both lost!"))
+                (users/audit-challenge-game p1 p2 p1-guesses p2-guesses p1-won p2-won))
+
               (swap! state assoc-in
                      [:game-states]
                      (dissoc (get-in @state [:game-states]) challenge-key))))))))
@@ -649,6 +684,7 @@
                       (.reply m (letter-help chat-key)))
                     (if (won? chat-key)
                       (do
+                        (set-gameprop chat-key :won true)
                         (cond
                           (= max-guesses (guesses-made chat-key))
                           (.reply m "Phew! You won - barely.")
@@ -672,6 +708,7 @@
                         (.reply m
                                 (str "Definition: "
                                      (get-gameprop chat-key :answerdef)))
+                        ;;FIXME this doesn't seem to work
                         (let [pbs (clear-game! chat-key m)
                               streak (get pbs :streak)
                               won-rate-150 (get pbs :won-rate-150)
@@ -684,7 +721,9 @@
                           (if (not (nil? guess-rate-20))
                             (.reply m (format "NEW PB!!! Well done %s!! Your PB guess rate is now %s." user guess-rate-20)))))
                       (if (= max-guesses (guesses-made chat-key))
-                        (do (.reply
+                        (do
+                          (set-gameprop chat-key :won false)
+                          (.reply
                              m
                              (str "Oh no! You lost the game! \n The answer was: "
                                   (get-gameprop chat-key :answer)))

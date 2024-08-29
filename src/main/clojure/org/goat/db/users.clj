@@ -65,17 +65,17 @@
        (catch Exception e
          (println "Fatal error" (.getMessage e)))))
 
-(defn record-challenge-game
+(defn audit-challenge-game
   "Record a challenge match outcome."
-  [stats]
+  [p1 p2 p1-guesses p2-guesses p1-won p2-won]
   (sql/insert! db :challenges {
-                               :user1 (get stats :user1)
-                               :user2 (get stats :user2)
-                               :user1_won (get stats :user1-won)
-                               :user2_won (get stats :user2-won)
-                               :user1_guesses (get stats :user1-guesses)
-                               :user2_guesses (get stats :user2-guesses)
-                               :endtime (get stats :endtime)}))
+                               :user1 p1
+                               :user2 p2
+                               :user1_won p1-won
+                               :user2_won p2-won
+                               :user1_guesses p1-guesses
+                               :user2_guesses p2-guesses
+                               :endtime (System/currentTimeMillis)}))
 
 (defn user-known?
   "True if the user is already known to us."
