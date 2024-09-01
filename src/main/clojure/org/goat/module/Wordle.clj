@@ -527,8 +527,6 @@
               (shell/sh "/usr/bin/sync" "-f" fname)
               (.reply m "The challenge has concluded!")
               (.replyWithImage m fname)
-              ;;TODO who was the winner, who was the loser, or was it a draw? And audit the challenge as well
-              ;;then tidy up the challenge data
               (let [p1 (get-fgameprop challenge-key :user)
                     p2 (get-gameprop chat-key :user)
                     p1-guesses (count (get-fgameprop challenge-key :guesses))
