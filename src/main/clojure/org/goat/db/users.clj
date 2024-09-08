@@ -37,6 +37,7 @@
                                           [:endtime :datetime]
                                           ])))
        (if (not (util/tbl-exists? db :wordlegames))
+         (do
          (sql/db-do-commands db
                              (sql/create-table-ddl :records
                                                    [[:username :text]
@@ -44,13 +45,14 @@
                                                     [:recordval :text]
                                                     [:recordtime :datetime]]))
 
-         (sql/execute! db "create unique index recidx on records(username, record)" ))
+         (sql/execute! db "create unique index recidx on records(username, record)" )))
        (if (not (util/tbl-exists? db :users))
+         (do
          (sql/db-do-commands db (sql/create-table-ddl :users
                                                       [[:username :text]
                                                        [:chatid :int]
                                                        ]))
-         (sql/execute! db "create unique index usridx on users(username)" ))
+         (sql/execute! db "create unique index usridx on users(username)" )))
 
        (if (not (util/tbl-exists? db :challenges))
          (sql/db-do-commands db (sql/create-table-ddl :challenges
@@ -80,24 +82,24 @@
 (defn user-known?
   "True if the user is already known to us."
   [username]
-  (not (empty? (query db [(format (str "select username"
+  (not (empty? (sql/query db [(format (str "select username"
                                " from users"
-                               " where username='%s'") username)]))))
+                               " where username='%s' collate NOCASE") username)]))))
 
 (defn user-add
-  "Add a new user - just their string name and chatid"
+  "Upsert the given user in users table"
   [username chatid]
-  (sql/insert! db :users {
-                          :username username
-                          :chatid chatid
-                          }))
+  (sql/execute! db [(str "insert into users (username, chatid) "
+                         " values(?,?)"
+                         " on conflict(username)"
+                         " do update set chatid=excluded.chatid") username chatid]))
 
 (defn user-chat
   "Get a given user chat-key"
   [username]
-  (keyword (str (get (first (query db [(format (str "select chatid"
+  (long (get (first (query db [(format (str "select chatid"
                           " from users"
-                          " where username='%s'") username)])) :chatid))))
+                          " where username='%s' collate NOCASE") username)])) :chatid)))
 
 (defn get-losttime
   "Return timestamp at which given user last lost a normal game"
@@ -126,7 +128,6 @@
                           " where username='%s'"
                           " and record='%s'") user (symbol record))])) :record)))
 
-;; needs to be an upsert really
 (defn save-record
   "Update the given record in records table"
   [user record recordval time]

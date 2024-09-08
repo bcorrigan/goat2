@@ -6,4 +6,4 @@
   (not (empty? (query db [(format (str "select name"
                                        " from sqlite_master"
                                        " where type='table'"
-                                       " AND name='%s'") tbl)]))))
+                                       " AND name='%s'") (name tbl))]))))

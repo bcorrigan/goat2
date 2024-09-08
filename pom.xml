@@ -73,7 +73,7 @@ xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xs
     <dependency>
       <groupId>org.clojure</groupId>
       <artifactId>clojure</artifactId>
-      <version>1.12.0-rc2</version>
+      <version>1.12.0</version>
     </dependency>
     <!-- For REPL support - "mvn clojure:repl" to get a repl -->
     <dependency>
@@ -99,7 +99,7 @@ xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xs
     <dependency>
       <groupId>cider</groupId>
       <artifactId>cider-nrepl</artifactId>
-      <version>0.50.1</version>
+      <version>0.50.2</version>
       <scope>test</scope>
     </dependency>
     <dependency>

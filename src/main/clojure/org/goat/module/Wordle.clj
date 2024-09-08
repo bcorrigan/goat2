@@ -12,7 +12,8 @@
             [clojure.string :as str])
   (:import  [java.awt.image BufferedImage]
             [javax.imageio ImageIO]
-            [java.io File]))
+            [java.io File]
+            [org.goat.core Module]))
 
 (use 'clojure.test)
 
@@ -466,7 +467,8 @@
   (if (str/includes? s "challenge")
     (let [mr (re-matcher  #"\W*\w+\W+(\w+)\W*" s)]
       (.matches mr)
-      (.group mr 1))))
+      (if (.hasMatch  mr)
+        (.group mr 1)))))
 
 (defn audit-game
   "Get all related game data and audit it into DB.
@@ -580,9 +582,8 @@
   [chat-key1 chat-key2]
   (symbol
    (str ":"
-        (symbol chat-key1)
-        (symbol chat-key2)))
-  )
+        (symbol (str chat-key1))
+        (symbol (str chat-key2)))))
 
 (defn get-streak-msg
   "Get a congratulatory (or critical) message depending on user's streak"
@@ -618,7 +619,7 @@
         (if (= "wordle" command)
           (if (not (playing? chat-key))
             (let [size (get-size trailing)
-                  challenge-user (get-challenge trailing)
+                  challenge-user (get-challenge (.getModText m))
                   difficulty (get-difficulty trailing)
                   worddata (words/get-word difficulty size)
                   word (get worddata :word)
@@ -629,8 +630,8 @@
                  m
                  "Don't be an eejit. I won't do more than 10 or less than 2.")
                 (if challenge-user
-                  (if ((users/user-known? challenge-user))
-                    (if ((users/user-known? user))
+                  (if (users/user-known? challenge-user)
+                    (if (users/user-known? user)
                       (let [user1-chat-key (users/user-chat challenge-user)
                             user2-chat-key (users/user-chat user)
                             user1-msg (new org.goat.core.Message user1-chat-key "" true "goat")
@@ -646,8 +647,8 @@
                             (new-game! user2-chat-key word size definition hits challenge-user difficulty challenge-key)
                             (.replyWithImage user2-msg (get-img user2-chat-key draw)))
                           (.reply m "There's already a challenge match being played! Can't have too much challenge.")))
-                      (.reply m (str "I can't message your privately, " user
-                                     ", please message me privately and try again.")))
+                      (.reply m (str "I can't message you privately, " user
+                                     ", please message me privately the word \"setchat\" and try again.")))
                     (.reply m "Er, who???"))
                   (do
                     (new-game! chat-key word size definition hits user difficulty nil)
@@ -655,8 +656,8 @@
                       (.reply m "I hope you enjoy the game Elspeth!"))
                     (if (= difficulty :hard)
                       (.reply m (str "Ohh, feeling cocky, are we, " user "?"))
-                      (.replyWithImage m (get-img chat-key draw))))))
-            (.reply m "We're already playing a game, smart one.")))
+                      (.replyWithImage m (get-img chat-key draw)))))))
+            (.reply m "We're already playing a game, smart one."))
           (if (playing? chat-key)
             (do
               (println "guess:" guess ":answer:" (get-gameprop chat-key :answer))
@@ -734,4 +735,5 @@
 
 (defn -getCommands [_] (into-array String '("wordle" "streak", "stats")))
 
-(defn -messageType [_] 0)
+(defn -messageType [_]
+  (Module/WANT_ALL_MESSAGES))
