@@ -104,34 +104,34 @@ public class Goat {
 
     private void loadDefaultModules(ModuleController modController) {
         Class<?>[] defaultModules = {
-                org.goat.module.GoatSay.class,
-                org.goat.module.WordGame.class,
-                org.goat.module.Remind.class,
-                org.goat.module.CountDown.class,
-                org.goat.module.Calc.class,
-                org.goat.module.More.class,
-                org.goat.module.DiceRoll.class,
-                org.goat.module.Define.class,
-                org.goat.module.Weather.class
-                //CljTest.class
-                /*goat.module.ModuleCommands.class,
-                goat.module.NickServ.class,
-                goat.module.Help.class,
-                goat.module.Auth.class,
-                goat.module.Core.class,
-                goat.module.UserManagement.class,
-                goat.module.ServerCommands.class*/
+            org.goat.module.WordGame.class,
+            org.goat.module.Remind.class,
+            org.goat.module.CountDown.class,
+            org.goat.module.Calc.class,
+            org.goat.module.More.class,
+            org.goat.module.DiceRoll.class,
+            org.goat.module.Define.class,
+            org.goat.module.Weather.class
+            //CljTest.class
+            /*goat.module.ModuleCommands.class,
+              goat.module.NickServ.class,
+              goat.module.Help.class,
+              goat.module.Auth.class,
+              goat.module.Core.class,
+              goat.module.UserManagement.class,
+              goat.module.ServerCommands.class*/
         } ;
         try {
             for(int i=0; i<defaultModules.length; i++)
                 modController.loadInAllChannels(defaultModules[i]);
             modController.loadInAllChannels("Wordle");
+            modController.loadInAllChannels("CoreCommands");
             /*ModuleCommands moduleCommands = (ModuleCommands) modController.getLoaded("ModuleCommands");
             moduleCommands.modControl = modController;
             moduleCommands.inAllChannels = true;*/
         } catch (Exception e) {
             e.printStackTrace();
-        }     
+        }
     }
 
     private void setDefaultStats() {

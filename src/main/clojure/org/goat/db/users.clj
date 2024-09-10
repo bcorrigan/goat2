@@ -95,7 +95,7 @@
                          " do update set chatid=excluded.chatid") username chatid]))
 
 (defn user-chat
-  "Get a given user chat-key"
+  "Get a given user chat"
   [username]
   (long (get (first (query db [(format (str "select chatid"
                           " from users"

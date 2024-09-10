@@ -5,6 +5,7 @@
             [org.goat.db.words :as words]
             [org.goat.db.users :as users]
             [clojure.java.io :as io]
+            [clojure.java.process :as process]
             [clojure.set :as set]
             [clojure.java.shell :as shell]
             [clojure.edn :as edn]
@@ -13,7 +14,8 @@
   (:import  [java.awt.image BufferedImage]
             [javax.imageio ImageIO]
             [java.io File]
-            [org.goat.core Module]))
+            [org.goat.core Module]
+            [org.goat.core BotStats]))
 
 (use 'clojure.test)
 
@@ -21,12 +23,13 @@
 (def letter-size 60)
 (def letter-border 10)
 (def A-Z (set (map char (concat (range 65 91)))))
+(def bot (BotStats/getInstance))
 
-(defn file-name
-  "Get the wordle file name."
-  [chat-key]
-  (format "/run/user/1000/wordle.%s.png"
-          (str (symbol chat-key))))
+;(defn file-name
+;  "Get the wordle file name."
+;  [chat-key]
+;  (format "/run/user/1000/wordle.%s.png"
+;          (str (symbol chat-key))))
 
 (def state
   "key is :game-states->chatid - returning
@@ -102,6 +105,7 @@
             :answerdef answerdef,
             :challenge challenge,
             :challenge-key challenge-key,
+            :drawing (atom false)
             :hits hits})))
 
 (defn new-challenge!
@@ -218,6 +222,16 @@
          (partition 2 1) ;; <-- Form slice lower/upper bounds
          (map (fn [[l u]] (subs s l u)))))) ;; <-- Slice input string
 
+(defn pgraphics-to-bufferedimage
+  [pg]
+  (let [w   (.width pg)
+        h   (.height pg)
+        bi  (BufferedImage. w h BufferedImage/TYPE_INT_ARGB)
+        g2d (.createGraphics bi)]
+    (.drawImage g2d (.getImage pg) 0 0 nil)
+    (.dispose g2d)
+    bi))
+
 (defn add-guess!
   "Append the given guess to the state map.
    This will also update the lists of seen letters"
@@ -307,16 +321,30 @@
       6
       (+ 1 guesses))))
 
+(defn board-width
+  "get the width of the board for the given chat-key"
+  [chat-key]
+  (+ (* (get-gameprop chat-key :size) letter-size)
+     letter-border))
+
+(defn board-height
+  "get the width of the board for the given chat-key"
+  [chat-key]
+  (+ (* (get-no-cols chat-key) letter-size) letter-border))
+
+(def stats-width "Width of the statistics graphic" 800)
+(def stats-height "height of the statistics graphic"1200)
+
 (defn draw
   "Initites all the drawing and puts the image into /tmp"
   [chat-key]
-  (let [gr (q/create-graphics (+ (* (get-gameprop chat-key :size) letter-size)
-                                 letter-border)
-                              (+ (* (get-no-cols chat-key) letter-size) letter-border)
-                              :java2d)]
+  (println (str "height:" (board-height chat-key)))
+  (let [gr (q/create-graphics (board-width chat-key)
+                              (board-height chat-key)
+                              :p2d)]
     (q/with-graphics gr
       (draw-board gr chat-key)
-      (q/save (file-name chat-key) )
+      (set-gameprop chat-key :img (pgraphics-to-bufferedimage (q/current-graphics)))
       (.dispose gr)
       (q/exit))))
 
@@ -418,32 +446,26 @@
 (defn draw-stats
   "Draw the *stats* window"
   [user chat-key]
-  (let [gr (q/create-graphics 800 1200 :java2d)]
+  (let [gr (q/create-graphics 800 1200 :p2d)]
     (q/with-graphics gr
       (draw-stats-gr gr chat-key user)
-      (q/save (file-name chat-key))
+      (set-gameprop chat-key :img (pgraphics-to-bufferedimage (q/current-graphics)))
       (q/exit))))
-
-(defn pgraphics-to-bufferedimage
-  [pg]
-  (let [w (.width pg)
-        h (.height pg)
-        bi (BufferedImage. w h BufferedImage/TYPE_INT_ARGB)
-        g2d (.createGraphics bi)]
-    (.drawImage g2d (.getImage pg) 0 0 nil)
-    (.dispose g2d)
-    bi))
 
 (defn get-img
   "Setup sketch for given underlying draw fn"
-  [chat-key drawfn]
+  [chat-key drawfn width height]
+  (set-gameprop chat-key :img nil)
   (q/defsketch org.goat.module.Wordle
     :host "host"
+    :renderer :p2d
+    :size [width height]
     :setup (partial drawfn chat-key))
-  ;; (Thread/sleep 400)
-  (set-gameprop chat-key :img (pgraphics-to-bufferedimage (q/current-graphics)))
-  (shell/sh "/usr/bin/sync" "-f" (file-name chat-key) )
-  (io/file (file-name chat-key)))
+  ;; defsketch spawns an applet under the hood which has its own thread
+  ;; so we wait till it completes by checking if img is ready
+  (while (nil? (get-gameprop chat-key :img))
+    (Thread/sleep 50))
+  (get-gameprop chat-key :img))
 
 (defn get-size
   "If size is present, set it, otherwise just return 5."
@@ -507,8 +529,8 @@
     (let [challenge-key (get-gameprop chat-key :challenge-key)
           other-user (other-user chat-key)
           this-user (get-gameprop chat-key :user)
-          other-chatkey (other-chat-key chat-key)
-          other-msg (new org.goat.core.Message other-chatkey "" true "goat")
+          other-chatid (users/user-chat other-user)
+          other-msg (new org.goat.core.Message other-chatid "" true "goat")
           playing (get-gameprop challenge-key :playing)]
       ;; If both players press enter simultaneously, they could end up entering this code at the same moment?
       (locking playing
@@ -522,13 +544,10 @@
             ;;wrap up the challenge now
             (let [first-img (get-fgameprop challenge-key :img)
                   second-img (get-gameprop chat-key :img)
-                  combined-image (append-images second-img first-img)
-                  fname (file-name challenge-key)]
+                  combined-image (append-images second-img first-img)]
               (reset! playing 0)
-              (ImageIO/write combined-image "png" (File. fname))
-              (shell/sh "/usr/bin/sync" "-f" fname)
               (.reply m "The challenge has concluded!")
-              (.replyWithImage m fname)
+              (.replyWithImage m combined-image)
               (let [p1 (get-fgameprop challenge-key :user)
                     p2 (get-gameprop chat-key :user)
                     p1-guesses (count (get-fgameprop challenge-key :guesses))
@@ -611,7 +630,7 @@
         trailing (clojure.string/lower-case (.getText m))
         user (get-user m chat-key)]
     (if (= "stats" command)
-      (.replyWithImage m (get-img chat-key (partial draw-stats user)))
+      (.replyWithImage m (get-img chat-key (partial draw-stats user) stats-width stats-height ))
       (if (= "streak" command)
         (let [streak (users/get-streak user)
               streak-msg (get-streak-msg streak user)]
@@ -632,31 +651,41 @@
                 (if challenge-user
                   (if (users/user-known? challenge-user)
                     (if (users/user-known? user)
-                      (let [user1-chat-key (users/user-chat challenge-user)
-                            user2-chat-key (users/user-chat user)
-                            user1-msg (new org.goat.core.Message user1-chat-key "" true "goat")
-                            user2-msg (new org.goat.core.Message user2-chat-key "" true "goat")
-                            challenge-key (combine-keys user1-chat-key user2-chat-key)]
-                        (if (not (or (playing? user1-chat-key) (playing? user2-chat-key)))
-                          (do
-                            ;; Init game for each user and message for each seperately
-                            (new-challenge! challenge-key user1-chat-key user2-chat-key chat-key user challenge-user)
-                            (.reply m "Starting a challenge match!! Let's go!")
-                            (new-game! user1-chat-key word size definition hits user difficulty challenge-key)
-                            (.replyWithImage user1-msg (get-img user1-chat-key draw))
-                            (new-game! user2-chat-key word size definition hits challenge-user difficulty challenge-key)
-                            (.replyWithImage user2-msg (get-img user2-chat-key draw)))
-                          (.reply m "There's already a challenge match being played! Can't have too much challenge.")))
+                      (if (= (clojure.string/lower-case challenge-user) (clojure.string/lower-case user))
+                        (.reply m "You can't challenge yourself, silly.")
+                        (let [user1-chatid   (users/user-chat challenge-user)
+                              user2-chatid   (users/user-chat user)
+                              user1-chat-key (keyword (str user1-chatid))
+                              user2-chat-key (keyword (str user2-chatid))
+                              user1-msg      (new org.goat.core.Message user1-chatid "" true "goat")
+                              user2-msg      (new org.goat.core.Message user2-chatid "" true "goat")
+                              challenge-key  (combine-keys user1-chat-key user2-chat-key)]
+                          (if (not (or (playing? user1-chat-key) (playing? user2-chat-key)))
+                            (do
+                              ;; Init game for each user and message for each seperately
+                              (new-challenge! challenge-key user1-chat-key user2-chat-key chat-key user challenge-user)
+                              (.reply m "Starting a challenge match!! Let's go!")
+                              (new-game! user1-chat-key word size definition hits user difficulty challenge-key)
+                              (.replyWithImage user1-msg (get-img user1-chat-key draw
+                                                                  (board-width user1-chat-key)
+                                                                  (board-height user1-chat-key)))
+                              (new-game! user2-chat-key word size definition hits challenge-user difficulty challenge-key)
+                              (.replyWithImage user2-msg (get-img user2-chat-key draw
+                                                                  (board-width user2-chat-key)
+                                                                  (board-height user2-chat-key))))
+                            (.reply m "There's already a challenge match being played! Can't have too much challenge."))))
                       (.reply m (str "I can't message you privately, " user
                                      ", please message me privately the word \"setchat\" and try again.")))
-                    (.reply m "Er, who???"))
-                  (do
+                    (.reply m "Er, who???")) ;; user not known
+                  (do  ;;if not a challenge, it is a normal game
                     (new-game! chat-key word size definition hits user difficulty nil)
                     (if (= "Elspeth" user)
                       (.reply m "I hope you enjoy the game Elspeth!"))
                     (if (= difficulty :hard)
-                      (.reply m (str "Ohh, feeling cocky, are we, " user "?"))
-                      (.replyWithImage m (get-img chat-key draw)))))))
+                      (.reply m (str "Ohh, feeling cocky, are we, " user "?")))
+                    (.replyWithImage m (get-img chat-key draw
+                                                (board-width chat-key)
+                                                (board-height chat-key)))))))
             (.reply m "We're already playing a game, smart one."))
           (if (playing? chat-key)
             (do
@@ -666,7 +695,7 @@
                 (if (words/real-word? (clojure.string/upper-case guess))
                   (do
                     (add-guess! chat-key guess user)
-                    (.replyWithImage m (get-img chat-key draw))
+                    (.replyWithImage m (get-img chat-key draw (board-width chat-key) (board-height chat-key)))
                     (if (and (= (guesses-made chat-key) (- max-guesses 1))
                              (not (won? chat-key)))
                       (.reply m "Uh oh!"))

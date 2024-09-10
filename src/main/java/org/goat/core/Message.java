@@ -1,8 +1,5 @@
 package org.goat.core;
 
-import org.telegram.telegrambots.meta.api.methods.botapimethods.BotApiMethod;
-import org.telegram.telegrambots.meta.api.methods.botapimethods.BotApiMethodMessage;
-import org.telegram.telegrambots.meta.api.methods.botapimethods.PartialBotApiMethod;
 import org.telegram.telegrambots.meta.generics.TelegramClient;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.methods.send.SendPhoto;
@@ -10,8 +7,12 @@ import org.telegram.telegrambots.meta.api.objects.InputFile;
 import org.goat.Goat;
 import org.goat.util.Pager;
 
-import java.io.File;
+import javax.imageio.ImageIO;
+import java.awt.image.RenderedImage;
+import java.io.*;
+import java.nio.file.Path;
 import java.util.StringTokenizer;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingQueue;
 
@@ -75,7 +76,9 @@ public class Message {
 
     private Long chatId;
 
-    private File image;
+    private RenderedImage image;
+
+    private byte[] imageBytes;
 
     //who sent this message?
     private String sender;
@@ -98,7 +101,7 @@ public class Message {
     }
 
     //private - only used to construct outgoing messages for now
-    private Message(Long chatId, File image, Boolean isPrivate, String sender) {
+    private Message(Long chatId, RenderedImage image, Boolean isPrivate, String sender) {
         this.chatId = chatId;
         this.image = image;
         this.isPrivate = isPrivate;
@@ -157,7 +160,7 @@ public class Message {
         outqueue.add(createPagedReply(msg));
     }
 
-    public void replyWithImage(File image) {
+    public void replyWithImage(RenderedImage image) {
         outqueue.add(new Message(chatId, image, isPrivate, sender));
     }
 
@@ -173,8 +176,18 @@ public class Message {
     }
 
     public SendPhoto getSendPhoto() {
-        System.out.println("image:" + image.getAbsolutePath());
-        return new SendPhoto(this.chatId.toString(), new InputFile(image));
+        //convert RenderedImage to "in memory file" & return as SendPhoto
+        var baos = new ByteArrayOutputStream();
+
+        try {
+            ImageIO.write(image, "png", baos);
+            //imageFile = BotStats.getInstance().memoryFile("/" + chatId.toString() + "-" + UUID.randomUUID() + ".png", baos.toByteArray());
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        InputStream istr = new ByteArrayInputStream(baos.toByteArray());
+        //System.out.println("image:" + imageFile.getFileName());
+        return new SendPhoto(this.chatId.toString(), new InputFile(istr, "image.png"));
     }
 
     /*
@@ -261,17 +274,12 @@ public class Message {
 
     public String nextPage(Long key) {
         String ret = "";
-        if (hasNextPage(key) ) {
+        if (hasNextPage(key)) {
             Pager pager = pagerCache.get(key);
             ret = pager.getNext();
-            if(pager.isEmpty())
+            if (pager.isEmpty())
                 pagerCache.remove(key);
         }
         return ret;
     }
-
-
-
-
-
 }
