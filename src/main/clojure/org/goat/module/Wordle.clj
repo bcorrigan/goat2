@@ -110,7 +110,7 @@
 
 (defn new-challenge!
   "Add state for a new challenge"
-  [challenge-key chat-key1 chat-key2 group-chat-key user1 user2]
+  [challenge-key chat-key1 chat-key2 group-chat-key user1 user2 m]
   (swap! state assoc-in
          [:game-states challenge-key]
          {:chat-key1 chat-key1,
@@ -118,7 +118,8 @@
           :group-chat-key group-chat-key,
           :user1 user1,
           :user2 user2,
-          :playing (atom 2)
+          :playing (atom 2),
+          :m m
           ;; :first-game (all the details of the other game)
           }))
 
@@ -128,6 +129,7 @@
   (let [challenge-key (get-gameprop chat-key :challenge-key)
         user (get-gameprop chat-key :user)
         user1 (get-gameprop challenge-key :user1)]
+    (println (str "user:" user "user1:" user1))
     (if (= user user1)
       (get-gameprop challenge-key :user2)
       user1)))
@@ -513,8 +515,8 @@
         combined-height (max height1 height2)
         combined-img    (BufferedImage. combined-width combined-height BufferedImage/TYPE_INT_ARGB)
         g2d             (.createGraphics combined-img)]
-    (.drawimage g2d img1 0 0 nil)
-    (.drawimage g2d img2 width1 0 nil)
+    (.drawImage g2d img1 0 0 nil)
+    (.drawImage g2d img2 width1 0 nil)
     (.dispose g2d)
     combined-img))
 
@@ -544,10 +546,11 @@
             ;;wrap up the challenge now
             (let [first-img (get-fgameprop challenge-key :img)
                   second-img (get-gameprop chat-key :img)
-                  combined-image (append-images second-img first-img)]
+                  combined-image (append-images second-img first-img)
+                  m-main (get-gameprop challenge-key :m)]
               (reset! playing 0)
-              (.reply m "The challenge has concluded!")
-              (.replyWithImage m combined-image)
+              (.reply m-main "The challenge has concluded!")
+              (.replyWithImage m-main combined-image)
               (let [p1 (get-fgameprop challenge-key :user)
                     p2 (get-gameprop chat-key :user)
                     p1-guesses (count (get-fgameprop challenge-key :guesses))
@@ -557,29 +560,29 @@
                 (cond
                   (and p1-won p2-won
                        (= p1-guesses p2-guesses))
-                      (.reply m "The scorekeeper hereby declares this match a score draw.")
+                      (.reply m-main "The scorekeeper hereby declares this match a score draw.")
                   (and p1-won (not p2-won))
-                      (.reply m (str "Well done " p1 ", you won! Commiserations " p2 "."))
+                      (.reply m-main (str "Well done " p1 ", you won! Commiserations " p2 "."))
                   (and (not p1-won) p2-won)
-                      (.reply m (str "Good job " p2 ", you were victorious! Hard luck to you, " p1 "."))
+                      (.reply m-main (str "Good job " p2 ", you were victorious! Hard luck to you, " p1 "."))
                   (and p1-won p2-won
                        (< p1-guesses p2-guesses))
-                      (.reply m (str "A valiant attempt by " p2 ", but " p1 " was just too strong and got there faster. Well done " p1 "!"))
+                      (.reply m-main (str "A valiant attempt by " p2 ", but " p1 " was just too strong and got there faster. Well done " p1 "!"))
                   (and p1-won p2-won
                        (< p2-guesses p1-guesses))
-                      (.reply m (str "Nae luck " p1 ". " p2 " was just that little bit better. Nice work, " p2 "!"))
+                      (.reply m-main (str "Nae luck " p1 ". " p2 " was just that little bit better. Nice work, " p2 "!"))
                   (and (not p1-won) (not p2-won))
-                      (.reply m "Wow, that must have been really hard, or, you are both really bad at wordle. You both lost!"))
+                      (.reply m-main "Wow, that must have been really hard, or, you are both really bad at wordle. You both lost!"))
                 (users/audit-challenge-game p1 p2 p1-guesses p2-guesses p1-won p2-won))
 
               (swap! state assoc-in
                      [:game-states]
-                     (dissoc (get-in @state [:game-states]) challenge-key))))))))
+                     (dissoc (get-in @state [:game-states]) challenge-key)))))))
   (let [pbs (audit-game chat-key)]
     (swap! state assoc-in
            [:game-states]
            (dissoc (get-in @state [:game-states]) chat-key))
-    pbs))
+    pbs)))
 
 (defn get-user
   "Get the sender of the message. If the message contains 'elspeth' then
@@ -663,13 +666,13 @@
                           (if (not (or (playing? user1-chat-key) (playing? user2-chat-key)))
                             (do
                               ;; Init game for each user and message for each seperately
-                              (new-challenge! challenge-key user1-chat-key user2-chat-key chat-key user challenge-user)
+                              (new-challenge! challenge-key user1-chat-key user2-chat-key (.getChatId m) user challenge-user m)
                               (.reply m "Starting a challenge match!! Let's go!")
-                              (new-game! user1-chat-key word size definition hits user difficulty challenge-key)
+                              (new-game! user1-chat-key word size definition hits challenge-user difficulty challenge-key)
                               (.replyWithImage user1-msg (get-img user1-chat-key draw
                                                                   (board-width user1-chat-key)
                                                                   (board-height user1-chat-key)))
-                              (new-game! user2-chat-key word size definition hits challenge-user difficulty challenge-key)
+                              (new-game! user2-chat-key word size definition hits user difficulty challenge-key)
                               (.replyWithImage user2-msg (get-img user2-chat-key draw
                                                                   (board-width user2-chat-key)
                                                                   (board-height user2-chat-key))))
