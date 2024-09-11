@@ -648,6 +648,7 @@
                   word (get worddata :word)
                   definition (get worddata :definition)
                   hits (get worddata :hits)]
+              (println (str "Challenge user:" challenge-user  ))
               (if (or (> size 10) (< size 2))
                 (.reply
                  m

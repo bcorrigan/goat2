@@ -86,7 +86,6 @@
                                            " from users"
                                            " where username='%s' collate NOCASE") username)] )) :username ))
 
-
 (defn user-add
   "Upsert the given user in users table"
   [username chatid]
