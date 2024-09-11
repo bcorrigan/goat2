@@ -648,7 +648,7 @@
                   word (get worddata :word)
                   definition (get worddata :definition)
                   hits (get worddata :hits)]
-              (println (str "Challenge user:" challenge-user  ))
+              (println (str "challenge user:" challenge-user) )
               (if (or (> size 10) (< size 2))
                 (.reply
                  m
@@ -690,7 +690,7 @@
                       (.reply m (str "Ohh, feeling cocky, are we, " user "?")))
                     (.replyWithImage m (get-img chat-key draw
                                                 (board-width chat-key)
-                                                (board-height chat-key))))))
+                                                (board-height chat-key)))))))
             (.reply m "We're already playing a game, smart one."))
           (if (playing? chat-key)
             (do
