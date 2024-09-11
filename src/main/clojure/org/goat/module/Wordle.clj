@@ -577,12 +577,12 @@
 
               (swap! state assoc-in
                      [:game-states]
-                     (dissoc (get-in @state [:game-states]) challenge-key)))))))
+                     (dissoc (get-in @state [:game-states]) challenge-key))))))))
   (let [pbs (audit-game chat-key)]
     (swap! state assoc-in
            [:game-states]
            (dissoc (get-in @state [:game-states]) chat-key))
-    pbs)))
+    pbs))
 
 (defn get-user
   "Get the sender of the message. If the message contains 'elspeth' then
