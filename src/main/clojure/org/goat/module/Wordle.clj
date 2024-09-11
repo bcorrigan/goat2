@@ -583,7 +583,7 @@
     (swap! state assoc-in
            [:game-states]
            (dissoc (get-in @state [:game-states]) chat-key))
-    pbs)
+    pbs))
 
   (defn get-user
     "Get the sender of the message. If the message contains 'elspeth' then
@@ -598,7 +598,7 @@
           sender)
         (if has-elspeth
           "Elspeth"
-          sender)))))
+          sender))))
 
 (defn combine-keys
   "Concatenate supplied chat-key symbols, to obtain a combined identifier."
