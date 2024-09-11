@@ -529,11 +529,11 @@
 
   (if (get-gameprop chat-key :challenge)
     (let [challenge-key (get-gameprop chat-key :challenge-key)
-          other-user (other-user chat-key)
-          this-user (get-gameprop chat-key :user)
-          other-chatid (users/user-chat other-user)
-          other-msg (new org.goat.core.Message other-chatid "" true "goat")
-          playing (get-gameprop challenge-key :playing)]
+          other-user    (other-user chat-key)
+          this-user     (get-gameprop chat-key :user)
+          other-chatid  (users/user-chat other-user)
+          other-msg     (new org.goat.core.Message other-chatid "" true "goat")
+          playing       (get-gameprop challenge-key :playing)]
       ;; If both players press enter simultaneously, they could end up entering this code at the same moment?
       (locking playing
         (if (= @playing 2)
@@ -544,60 +544,61 @@
             (reset! playing 1))
           (if (= @playing 1)
             ;;wrap up the challenge now
-            (let [first-img (get-fgameprop challenge-key :img)
-                  second-img (get-gameprop chat-key :img)
+            (let [first-img      (get-fgameprop challenge-key :img)
+                  second-img     (get-gameprop chat-key :img)
                   combined-image (append-images second-img first-img)
-                  m-main (get-gameprop challenge-key :m)]
+                  m-main         (get-gameprop challenge-key :m)]
               (reset! playing 0)
               (.reply m-main "The challenge has concluded!")
               (.replyWithImage m-main combined-image)
-              (let [p1 (get-fgameprop challenge-key :user)
-                    p2 (get-gameprop chat-key :user)
+              (let [p1         (get-fgameprop challenge-key :user)
+                    p2         (get-gameprop chat-key :user)
                     p1-guesses (count (get-fgameprop challenge-key :guesses))
                     p2-guesses (count (get-gameprop chat-key :guesses))
-                    p1-won (get-fgameprop challenge-key :won)
-                    p2-won (get-gameprop chat-key :won)]
+                    p1-won     (get-fgameprop challenge-key :won)
+                    p2-won     (get-gameprop chat-key :won)]
                 (cond
                   (and p1-won p2-won
                        (= p1-guesses p2-guesses))
-                      (.reply m-main "The scorekeeper hereby declares this match a score draw.")
+                  (.reply m-main "The scorekeeper hereby declares this match a score draw.")
                   (and p1-won (not p2-won))
-                      (.reply m-main (str "Well done " p1 ", you won! Commiserations " p2 "."))
+                  (.reply m-main (str "Well done " p1 ", you won! Commiserations " p2 "."))
                   (and (not p1-won) p2-won)
-                      (.reply m-main (str "Good job " p2 ", you were victorious! Hard luck to you, " p1 "."))
+                  (.reply m-main (str "Good job " p2 ", you were victorious! Hard luck to you, " p1 "."))
                   (and p1-won p2-won
                        (< p1-guesses p2-guesses))
-                      (.reply m-main (str "A valiant attempt by " p2 ", but " p1 " was just too strong and got there faster. Well done " p1 "!"))
+                  (.reply m-main (str "A valiant attempt by " p2 ", but " p1 " was just too strong and got there faster. Well done " p1 "!"))
                   (and p1-won p2-won
                        (< p2-guesses p1-guesses))
-                      (.reply m-main (str "Nae luck " p1 ". " p2 " was just that little bit better. Nice work, " p2 "!"))
+                  (.reply m-main (str "Nae luck " p1 ". " p2 " was just that little bit better. Nice work, " p2 "!"))
                   (and (not p1-won) (not p2-won))
-                      (.reply m-main "Wow, that must have been really hard, or, you are both really bad at wordle. You both lost!"))
+                  (.reply m-main "Wow, that must have been really hard, or, you are both really bad at wordle. You both lost!"))
                 (users/audit-challenge-game p1 p2 p1-guesses p2-guesses p1-won p2-won))
 
               (swap! state assoc-in
                      [:game-states]
                      (dissoc (get-in @state [:game-states]) challenge-key))))))))
+  (println (str "USER:" (get-gameprop chat-key :user)))
   (let [pbs (audit-game chat-key)]
     (swap! state assoc-in
            [:game-states]
            (dissoc (get-in @state [:game-states]) chat-key))
-    pbs))
+    pbs)
 
-(defn get-user
-  "Get the sender of the message. If the message contains 'elspeth' then
+  (defn get-user
+    "Get the sender of the message. If the message contains 'elspeth' then
   set user to elspeth. If the game in progress is an elspeth game, then
   it always continues as an elspeth game."
-  [m chat-key]
-  (let [has-elspeth (clojure.string/includes? (clojure.string/lower-case (.getText m)) "elspeth")
-        sender (.getSender m)]
-    (if (playing? chat-key)
-      (if (= "Elspeth" (get-gameprop chat-key :user))
-        "Elspeth"
-        sender)
-      (if has-elspeth
-        "Elspeth"
-        sender))))
+    [m chat-key]
+    (let [has-elspeth (clojure.string/includes? (clojure.string/lower-case (.getText m)) "elspeth")
+          sender      (.getSender m)]
+      (if (playing? chat-key)
+        (if (= "Elspeth" (get-gameprop chat-key :user))
+          "Elspeth"
+          sender)
+        (if has-elspeth
+          "Elspeth"
+          sender)))))
 
 (defn combine-keys
   "Concatenate supplied chat-key symbols, to obtain a combined identifier."
