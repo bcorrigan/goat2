@@ -642,7 +642,7 @@
         (if (= "wordle" command)
           (if (not (playing? chat-key))
             (let [size (get-size trailing)
-                  challenge-user (get-challenge (.getModText m))
+                  challenge-user (users/user-known? (get-challenge (.getModText m)))
                   difficulty (get-difficulty trailing)
                   worddata (words/get-word difficulty size)
                   word (get worddata :word)
@@ -653,7 +653,7 @@
                  m
                  "Don't be an eejit. I won't do more than 10 or less than 2.")
                 (if challenge-user
-                  (if (users/user-known? challenge-user)
+                  (if challenge-user
                     (if (users/user-known? user)
                       (if (= (clojure.string/lower-case challenge-user) (clojure.string/lower-case user))
                         (.reply m "You can't challenge yourself, silly.")
@@ -689,7 +689,7 @@
                       (.reply m (str "Ohh, feeling cocky, are we, " user "?")))
                     (.replyWithImage m (get-img chat-key draw
                                                 (board-width chat-key)
-                                                (board-height chat-key)))))))
+                                                (board-height chat-key))))))
             (.reply m "We're already playing a game, smart one."))
           (if (playing? chat-key)
             (do

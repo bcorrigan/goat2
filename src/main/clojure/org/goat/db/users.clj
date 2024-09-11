@@ -82,9 +82,10 @@
 (defn user-known?
   "True if the user is already known to us."
   [username]
-  (not (empty? (sql/query db [(format (str "select username"
-                               " from users"
-                               " where username='%s' collate NOCASE") username)]))))
+  (get (first (sql/query db [(format (str "select username"
+                                           " from users"
+                                           " where username='%s' collate NOCASE") username)] )) :username ))
+
 
 (defn user-add
   "Upsert the given user in users table"
