@@ -486,7 +486,7 @@
 (defn get-stats-quil-img
   "Setup sketch for given underlying stats draw fn"
   [chat-key drawfn width height]
-  (set-gameprop chat-key :img nil)
+  (remove-stats-img! chat-key)
   (q/defsketch org.goat.module.Wordle
     :host "host"
     :renderer :p2d
