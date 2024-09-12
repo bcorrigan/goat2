@@ -4,16 +4,11 @@
   (:require [quil.core :as q :include-macros true]
             [org.goat.db.words :as words]
             [org.goat.db.users :as users]
-            [clojure.java.io :as io]
-            [clojure.java.process :as process]
             [clojure.set :as set]
-            [clojure.java.shell :as shell]
             [clojure.edn :as edn]
             [clojure.math :as math]
             [clojure.string :as str])
   (:import  [java.awt.image BufferedImage]
-            [javax.imageio ImageIO]
-            [java.io File]
             [org.goat.core Module]
             [org.goat.core BotStats]))
 
@@ -37,6 +32,25 @@
   :size 5 :answerdef \"definition\" :hits 1000 }"
   (atom {}))
 
+(def stats-state
+  (atom {}))
+
+(defn get-stats-img
+  "Get stats image for a given chat"
+  [chat-key]
+  (get-in @stats-state [:stat-states chat-key :img]))
+
+(defn set-stats-img
+  "Set stats image for a given chat"
+  [chat-key img]
+  (swap! stats-state assoc-in [:stat-states chat-key :img] img))
+
+(defn remove-stats-img!
+  "Remove image associated with given chat"
+  [chat-key]
+  (swap! stats-state assoc-in
+         [:stat-states]
+         (dissoc (get-in @stats-state [:stat-states]) chat-key)))
 
 (defn guesses-made
   "How many guesses have been made for the given chatid game?"
@@ -451,11 +465,11 @@
   (let [gr (q/create-graphics 800 1200 :p2d)]
     (q/with-graphics gr
       (draw-stats-gr gr chat-key user)
-      (set-gameprop chat-key :img (pgraphics-to-bufferedimage (q/current-graphics)))
+      (set-stats-img chat-key (pgraphics-to-bufferedimage (q/current-graphics)))
       (q/exit))))
 
 (defn get-img
-  "Setup sketch for given underlying draw fn"
+  "Setup sketch for given underlying game draw fn"
   [chat-key drawfn width height]
   (set-gameprop chat-key :img nil)
   (q/defsketch org.goat.module.Wordle
@@ -468,6 +482,21 @@
   (while (nil? (get-gameprop chat-key :img))
     (Thread/sleep 50))
   (get-gameprop chat-key :img))
+
+(defn get-stats-quil-img
+  "Setup sketch for given underlying stats draw fn"
+  [chat-key drawfn width height]
+  (set-gameprop chat-key :img nil)
+  (q/defsketch org.goat.module.Wordle
+    :host "host"
+    :renderer :p2d
+    :size [width height]
+    :setup (partial drawfn chat-key))
+
+  (while (nil? (get-stats-img chat-key))
+    (Thread/sleep 50))
+  (get-stats-img chat-key))
+
 
 (defn get-size
   "If size is present, set it, otherwise just return 5."
@@ -638,7 +667,9 @@
         trailing (clojure.string/lower-case (.getText m))
         user (get-user m chat-key)]
     (if (= "stats" command)
-      (.replyWithImage m (get-img chat-key (partial draw-stats user) stats-width stats-height ))
+      (do
+        (.replyWithImage m (get-stats-quil-img chat-key (partial draw-stats user) stats-width stats-height ))
+        (remove-stats-img! chat-key))
       (if (= "streak" command)
         (let [streak (users/get-streak user)
               streak-msg (get-streak-msg streak user)]
