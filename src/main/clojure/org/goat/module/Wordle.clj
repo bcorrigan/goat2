@@ -603,10 +603,13 @@
 (defn combine-keys
   "Concatenate supplied chat-key symbols, to obtain a combined identifier."
   [chat-key1 chat-key2]
+  (let [skeys (sort [chat-key1 chat-key2])
+        key1 (first skeys)
+        key2 (second skeys)]
   (symbol
    (str ":"
-        (symbol (str chat-key1))
-        (symbol (str chat-key2)))))
+        (symbol (str key1))
+        (symbol (str key2))))))
 
 (defn get-streak-msg
   "Get a congratulatory (or critical) message depending on user's streak"
@@ -628,6 +631,7 @@
 
 (defn -processChannelMessage
   [_ m]
+  (println (str "state:" @state ))
   (let [chat-key (keyword (str (.getChatId m)))
         guess (clojure.string/upper-case (.getText m))
         command (clojure.string/lower-case (.getModCommand m))
@@ -665,6 +669,7 @@
                               user1-msg      (new org.goat.core.Message user1-chatid "" true "goat")
                               user2-msg      (new org.goat.core.Message user2-chatid "" true "goat")
                               challenge-key  (combine-keys user1-chat-key user2-chat-key)]
+                          (println (str "challenge-key:" challenge-key))
                           (if (not (or (playing? user1-chat-key) (playing? user2-chat-key)))
                             (do
                               ;; Init game for each user and message for each seperately
@@ -746,6 +751,7 @@
                               streak (get pbs :streak)
                               won-rate-150 (get pbs :won-rate-150)
                               guess-rate-20 (get pbs :guess-rate-20)]
+                          (println (str "pbs:" pbs))
                           (if (not (nil? streak))
                             (if (= 0 (mod streak 5))
                               (.reply m (format "Well done %s!! Your PB streak is now %s." user streak))))
