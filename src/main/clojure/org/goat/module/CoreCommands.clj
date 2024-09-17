@@ -19,7 +19,7 @@
                   uptime-str (StringUtil/vshortDurationString uptime)]
               (.reply m uptime-str))
         (= (.getModCommand m) "goat")
-            (.reply m (str (Constants/BOLD) "Goat!" (Constants/END_BOLD)))
+            (.reply m (str Constants/BOLD "Goat!" Constants/END_BOLD))
         (= (.getModCommand m) "version")
             (let [version (str "Java Version: " (Runtime/version))
                   os-version (System/getProperty "os.name")]

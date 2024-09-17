@@ -807,4 +807,4 @@
 (defn -getCommands [_] (into-array String '("wordle" "streak", "stats")))
 
 (defn -messageType [_]
-  (Module/WANT_ALL_MESSAGES))
+  Module/WANT_ALL_MESSAGES)
