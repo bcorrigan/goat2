@@ -9,6 +9,7 @@
             [clojure.math :as math]
             [clojure.string :as str])
   (:import  [java.awt.image BufferedImage]
+            [java.awt Color]
             [org.goat.core Module]
             [org.goat.core BotStats]))
 
@@ -542,8 +543,10 @@
         height2         (.getHeight img2)
         combined-width  (+ width1 width2)
         combined-height (max height1 height2)
+        bgcolor         (Color. 26 26 28)
         combined-img    (BufferedImage. combined-width combined-height BufferedImage/TYPE_INT_ARGB)
         g2d             (.createGraphics combined-img)]
+    (.setBackground  g2d bgcolor)
     (.drawImage g2d img1 0 0 nil)
     (.drawImage g2d img2 width1 0 nil)
     (.dispose g2d)
@@ -582,7 +585,6 @@
             (let [first-img      (get-fgameprop challenge-key :img)
                   second-img     (get-gameprop chat-key :img)
                   combined-image (append-images second-img first-img)
-                  m-main         (get-gameprop challenge-key :m)
                   reply          (partial reply-both m other-msg)]
               (reset! playing 0)
               (reply "The challenge has concluded!")
