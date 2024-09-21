@@ -549,6 +549,12 @@
     (.dispose g2d)
     combined-img))
 
+(defn reply-both
+  "Reply to two chats"
+  [m1 m2 msg]
+  (.reply m1 msg)
+  (.reply m2 msg))
+
 (defn clear-game!
   "For a given chatid, remove all the game state entirely.
   Returns any PBs that have been set in the concluded game.
@@ -576,10 +582,12 @@
             (let [first-img      (get-fgameprop challenge-key :img)
                   second-img     (get-gameprop chat-key :img)
                   combined-image (append-images second-img first-img)
-                  m-main         (get-gameprop challenge-key :m)]
+                  m-main         (get-gameprop challenge-key :m)
+                  reply          (partial reply-both m other-msg)]
               (reset! playing 0)
-              (.reply m-main "The challenge has concluded!")
-              (.replyWithImage m-main combined-image)
+              (reply "The challenge has concluded!")
+              (.replyWithImage m combined-image)
+              (.replyWithImage other-msg combined-image)
               (let [p1         (get-fgameprop challenge-key :user)
                     p2         (get-gameprop chat-key :user)
                     p1-guesses (count (get-fgameprop challenge-key :guesses))
@@ -589,19 +597,19 @@
                 (cond
                   (and p1-won p2-won
                        (= p1-guesses p2-guesses))
-                  (.reply m-main "The scorekeeper hereby declares this match a score draw.")
+                  (reply "The scorekeeper hereby declares this match a score draw.")
                   (and p1-won (not p2-won))
-                  (.reply m-main (str "Well done " p1 ", you won! Commiserations " p2 "."))
+                  (reply (str "Well done " p1 ", you won! Commiserations " p2 "."))
                   (and (not p1-won) p2-won)
-                  (.reply m-main (str "Good job " p2 ", you were victorious! Hard luck to you, " p1 "."))
+                  (reply (str "Good job " p2 ", you were victorious! Hard luck to you, " p1 "."))
                   (and p1-won p2-won
                        (< p1-guesses p2-guesses))
-                  (.reply m-main (str "A valiant attempt by " p2 ", but " p1 " was just too strong and got there faster. Well done " p1 "!"))
+                  (reply (str "A valiant attempt by " p2 ", but " p1 " was just too strong and got there faster. Well done " p1 "!"))
                   (and p1-won p2-won
                        (< p2-guesses p1-guesses))
-                  (.reply m-main (str "Nae luck " p1 ". " p2 " was just that little bit better. Nice work, " p2 "!"))
+                  (reply (str "Nae luck " p1 ". " p2 " was just that little bit better. Nice work, " p2 "!"))
                   (and (not p1-won) (not p2-won))
-                  (.reply m-main "Wow, that must have been really hard, or, you are both really bad at wordle. You both lost!"))
+                  (reply "Wow, that must have been really hard, or, you are both really bad at wordle. You both lost!"))
                 (users/audit-challenge-game p1 p2 p1-guesses p2-guesses p1-won p2-won))
 
               (swap! state assoc-in
