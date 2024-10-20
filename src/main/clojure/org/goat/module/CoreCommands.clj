@@ -12,7 +12,11 @@
   (cond (= (.getModCommand m) "mem")
             (let [mem-bytes (. (Runtime/getRuntime) totalMemory)
                   mem-kb (/ mem-bytes 1024)]
-                  (.reply m (str mem-kb "kb")))
+              (.reply m (str mem-kb "kb")))
+        (= (.getModCommand m) "gc")
+            (do
+              (System/gc)
+              (.reply m "Performed gc."))
         (= (.getModCommand m) "uptime")
             (let [now (System/currentTimeMillis)
                   uptime (- now init)
@@ -31,4 +35,4 @@
 
 (defn -processPrivateMessage [this m] (-processChannelMessage this m))
 
-(defn -getCommands [_] (into-array String '("mem" "uptime", "goat", "version", "setchat")))
+(defn -getCommands [_] (into-array String '("gc", "mem" "uptime", "goat", "version", "setchat")))
