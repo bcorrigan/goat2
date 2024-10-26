@@ -9,7 +9,7 @@
             [clojure.math :as math]
             [clojure.string :as str])
   (:import  [java.awt.image BufferedImage]
-            [java.awt Color]
+            [java.awt Color Font RenderingHints]
             [org.goat.core Module]
             [org.goat.core BotStats]))
 
@@ -536,19 +536,31 @@
 
 (defn append-images
   "Append two images side by side as one new image."
-  [img1 img2]
+  [img1 img2 player1-name player2-name]
   (let [width1          (.getWidth img1)
         width2          (.getWidth img2)
         height1         (.getHeight img1)
         height2         (.getHeight img2)
+        text-height     30 ;; height of the text area
+        text-color      (Color. 248 248 248)
         combined-width  (+ width1 width2)
-        combined-height (max height1 height2)
+        combined-height (+ (max height1 height2) text-height)
         bgcolor         (Color. 26 26 28)
         combined-img    (BufferedImage. combined-width combined-height BufferedImage/TYPE_INT_ARGB)
         g2d             (.createGraphics combined-img)]
-    (.setBackground  g2d bgcolor)
-    (.drawImage g2d img1 0 0 nil)
-    (.drawImage g2d img2 width1 0 nil)
+    ;; Set rendering hints for smoother text
+    (.setRenderingHint g2d RenderingHints/KEY_TEXT_ANTIALIASING RenderingHints/VALUE_TEXT_ANTIALIAS_ON)
+    ;;fill background
+    (.setColor g2d bgcolor)
+    (.fillRect g2d 0 0 combined-width combined-height)
+    ;;draw player names
+    (.setColor g2d text-color)
+    (.setFont g2d (Font. "Source Code Pro" Font/BOLD 20))
+    (.drawString g2d player1-name 10 25)
+    (.drawString g2d player2-name (+ width1 10) 25)
+    ;;append images
+    (.drawImage g2d img1 0 text-height nil)
+    (.drawImage g2d img2 width1 text-height nil)
     (.dispose g2d)
     combined-img))
 
@@ -584,15 +596,15 @@
             ;;wrap up the challenge now
             (let [first-img      (get-fgameprop challenge-key :img)
                   second-img     (get-gameprop chat-key :img)
-                  combined-image (append-images second-img first-img)
+                  p1             (get-fgameprop challenge-key :user)
+                  p2             (get-gameprop chat-key :user)
+                  combined-image (append-images second-img first-img p2 p1)
                   reply          (partial reply-both m other-msg)]
               (reset! playing 0)
               (reply "The challenge has concluded!")
               (.replyWithImage m combined-image)
               (.replyWithImage other-msg combined-image)
-              (let [p1         (get-fgameprop challenge-key :user)
-                    p2         (get-gameprop chat-key :user)
-                    p1-guesses (count (get-fgameprop challenge-key :guesses))
+              (let [p1-guesses (count (get-fgameprop challenge-key :guesses))
                     p2-guesses (count (get-gameprop chat-key :guesses))
                     p1-won     (get-fgameprop challenge-key :won)
                     p2-won     (get-gameprop chat-key :won)]
@@ -757,7 +769,7 @@
                       (.reply
                        m
                        "You seem to be digging yourself into a hole! Do better."))
-                    (if (and (> (guesses-made chat-key) 2)
+                    (if (and (> (guesses-made chat-key) 1)
                              (not (won? chat-key))
                              (< (guesses-made chat-key) max-guesses))
                       (.reply m (letter-help chat-key)))
