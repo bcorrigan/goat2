@@ -190,6 +190,45 @@
   [user n]
   (count-where-limit "won=false" user n))
 
+(defn count-recent-wins
+  "How many games were won out of last N days by player A vs player B.
+   This is only for p1 vs p2 where p1 wins - it doesn't count if p1 is 2nd in the table"
+  [winner loser days]
+  (let [days-param (str "-" days " days")]
+        (+
+         (get (first (sql/query db [ "select count(*) as count
+                                from challenges
+                                where user1=?
+                                and user2=?
+                                and user1_won=true
+                                and user1_guesses<user2_guesses
+                                and datetime(endtime / 1000, 'unixepoch') > datetime('now', ?)" winner loser days-param])) :count)
+         (get (first (sql/query db [ "select count(*) as count
+                                 from challenges
+                                 where user1=?
+                                 and user2=?
+                                 and user2_won=true
+                                 and user2_guesses<user1_guesses
+                                 and datetime(endtime / 1000, 'unixepoch') > datetime('now', ?)" loser winner days-param])) :count))))
+
+(defn count-recent-draws
+  "How many games were drawn out of last N days by player A vs player B."
+  [p1 p2 days]
+  (let [days-param (str "-" days " days")]
+    (+
+     (get (first (sql/query db [ "select count(*) as count
+                                from challenges
+                                where user1=?
+                                and user2=?
+                                and user1_guesses=user2_guesses
+                                and datetime(endtime / 1000, 'unixepoch') > datetime('now', ?)" p1 p2 days-param])) :count)
+     (get (first (sql/query db [ "select count(*) as count
+                                 from challenges
+                                 where user1=?
+                                 and user2=?
+                                 and user2_guesses=user1_guesses
+                                 and datetime(endtime / 1000, 'unixepoch') > datetime('now', ?)" p2 p1 days-param])) :count))))
+
 (defn results-n
   "Get results of last N games"
   [user n]

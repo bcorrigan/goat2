@@ -33,25 +33,25 @@
   :size 5 :answerdef \"definition\" :hits 1000 }"
   (atom {}))
 
-(def stats-state
+(def img-state
   (atom {}))
 
-(defn get-stats-img
+(defn get-img
   "Get stats image for a given chat"
-  [chat-key]
-  (get-in @stats-state [:stat-states chat-key :img]))
+  [chat-key img-key]
+  (get-in @img-state [img-key chat-key :img]))
 
-(defn set-stats-img
+(defn set-img
   "Set stats image for a given chat"
-  [chat-key img]
-  (swap! stats-state assoc-in [:stat-states chat-key :img] img))
+  [chat-key img-key img]
+  (swap! img-state assoc-in [img-key chat-key :img] img))
 
-(defn remove-stats-img!
+(defn remove-img!
   "Remove image associated with given chat"
-  [chat-key]
-  (swap! stats-state assoc-in
-         [:stat-states]
-         (dissoc (get-in @stats-state [:stat-states]) chat-key)))
+  [chat-key img-key]
+  (swap! img-state assoc-in
+         [img-key]
+         (dissoc (get-in @img-state [img-key]) chat-key)))
 
 (defn guesses-made
   "How many guesses have been made for the given chatid game?"
@@ -460,16 +460,76 @@
         (q/text (str "/150 Win ratio: " (format "%.3f" (* 100 (or (users/get-record user :won-rate-150) 0.0)))) text-indent (text-row-px 12))
         (q/text (str "/20 Guess ratio: " (format "%.3f" (or (users/get-record user :guess-rate-20) 0.0))) text-indent (text-row-px 13))))))
 
+(defn draw-pie-chart-gr
+  "Draw a pie chart in wordle coloring representing head2head combat stats.
+  p1 and p2 are the names of p1 and p2, other params are number of wins and draws."
+  [gr player1-wins player2-wins draws p1 p2]
+  (q/with-graphics gr
+    (let [width            600
+          height           600
+          center-x         (/ width 2)
+          center-y         (- (/ height 2) 80)
+          radius           400
+          total            (+ player1-wins player2-wins draws)
+          to-radians       (fn [degrees] (/ (* degrees Math/PI) 180))
+          p1-color         [83 140 78]
+          p2-color         [180 158 59]
+          draw-color       [58 58 60]
+          draw-slice       (fn [start-angle end-angle color]
+                       (q/fill color)
+                       (q/arc center-x center-y radius radius
+                              (to-radians start-angle)
+                              (to-radians end-angle)
+                              :pie))
+          draw-legend-item (fn [text color x y]
+                             (q/fill color)
+                             (q/rect x y 60 30)
+                             (q/fill 248 248 248)
+                             (q/text-align :left :center)
+                             (q/text text (+ x 70) (+ y 15) ))]
+
+                                        ; Set up the drawing
+      (q/background 26 26 28)
+      (q/smooth)
+      (q/no-stroke)
+
+                                        ; Draw the slices
+      (draw-slice 0
+                  (* 360 (/ player1-wins total))
+                  p1-color)  ; Red for player 1
+      (draw-slice (* 360 (/ player1-wins total))
+                  (* 360 (/ (+ player1-wins player2-wins) total))
+                  p2-color)  ; Blue for player 2
+      (draw-slice (* 360 (/ (+ player1-wins player2-wins) total))
+                  360
+                  draw-color)  ; Green for draws
+
+                                        ; Add labels
+      (q/text-size 20)
+      (draw-legend-item (str p1 ": " player1-wins) p1-color (- center-x 280) 450)
+      (draw-legend-item (str p2 ": " player2-wins) p2-color (- center-x 280) 500)
+      (draw-legend-item (str "Draws: " draws ) draw-color (- center-x 280) 550))))
+
 (defn draw-stats
   "Draw the *stats* window"
   [user chat-key]
   (let [gr (q/create-graphics 800 1200 :p2d)]
     (q/with-graphics gr
       (draw-stats-gr gr chat-key user)
-      (set-stats-img chat-key (pgraphics-to-bufferedimage (q/current-graphics)))
+      (set-img chat-key :stats-img  (pgraphics-to-bufferedimage (q/current-graphics)))
       (q/exit))))
 
-(defn get-img
+(defn draw-pie-chart
+  "Draw the pie chart representing who's best"
+  [player1-wins player2-wins draws p1 p2 chat-key]
+  (let [gr (q/create-graphics 800 800 :p2d)]
+    (q/with-graphics gr
+      (draw-pie-chart-gr gr player1-wins player2-wins draws p1 p2)
+      ;; need some get-pie-img - can this not be abstracted?
+      (set-img chat-key :pie-img (pgraphics-to-bufferedimage (q/current-graphics)))
+      (q/exit))))
+
+(defn get-drawn-img
   "Setup sketch for given underlying game draw fn"
   [chat-key drawfn width height]
   (set-gameprop chat-key :img nil)
@@ -487,16 +547,30 @@
 (defn get-stats-quil-img
   "Setup sketch for given underlying stats draw fn"
   [chat-key drawfn width height]
-  (remove-stats-img! chat-key)
+  (remove-img! chat-key :stats-img)
   (q/defsketch org.goat.module.Wordle
     :host "host"
     :renderer :p2d
     :size [width height]
     :setup (partial drawfn chat-key))
 
-  (while (nil? (get-stats-img chat-key))
+  (while (nil? (get-img chat-key :stats-img))
     (Thread/sleep 50))
-  (get-stats-img chat-key))
+  (get-img chat-key :stats-img))
+
+(defn get-quil-img
+  "Setup sketch for given underlying draw fn"
+  [chat-key drawfn width height img-key]
+  (remove-img! chat-key img-key)
+  (q/defsketch org.goat.module.Wordle
+    :host "host"
+    :renderer :p2d
+    :size [width height]
+    :setup (partial drawfn chat-key))
+
+  (while (nil? (get-img chat-key img-key))
+    (Thread/sleep 50))
+  (get-img chat-key img-key))
 
 
 (defn get-size
@@ -690,8 +764,18 @@
         user (get-user m chat-key)]
     (if (= "stats" command)
       (do
-        (.replyWithImage m (get-stats-quil-img chat-key (partial draw-stats user) stats-width stats-height ))
-        (remove-stats-img! chat-key))
+        (.replyWithImage m (get-quil-img chat-key (partial draw-stats user) stats-width stats-height :stats-img))
+        (remove-img! chat-key :stats-img))
+      (if (= "statsvs" command)
+        (let [opponent (clojure.string/trim (.getModTrailing m))]
+          (if (users/user-known? opponent)
+            (let [ days 7
+                   user-wins (users/count-recent-wins user opponent days)
+                   opponent-wins (users/count-recent-wins opponent user days)
+                   draws (users/count-recent-draws user opponent days) ]
+              (.replyWithImage m (get-quil-img chat-key (partial draw-pie-chart user-wins opponent-wins draws user opponent) 800 800 :pie-img))
+              (remove-img! chat-key :pie-img))
+            (.reply m "Er, who is that?")))
       (if (= "streak" command)
         (let [streak (users/get-streak user)
               streak-msg (get-streak-msg streak user)]
@@ -729,11 +813,11 @@
                               (new-challenge! challenge-key user1-chat-key user2-chat-key (.getChatId m) user challenge-user m)
                               (.reply m "Starting a challenge match!! Let's go!")
                               (new-game! user1-chat-key word size definition hits challenge-user difficulty challenge-key)
-                              (.replyWithImage user1-msg (get-img user1-chat-key draw
+                              (.replyWithImage user1-msg (get-drawn-img user1-chat-key draw
                                                                   (board-width user1-chat-key)
                                                                   (board-height user1-chat-key)))
                               (new-game! user2-chat-key word size definition hits user difficulty challenge-key)
-                              (.replyWithImage user2-msg (get-img user2-chat-key draw
+                              (.replyWithImage user2-msg (get-drawn-img user2-chat-key draw
                                                                   (board-width user2-chat-key)
                                                                   (board-height user2-chat-key))))
                             (.reply m "There's already a challenge match being played! Can't have too much challenge."))))
@@ -746,7 +830,7 @@
                       (.reply m "I hope you enjoy the game Elspeth!"))
                     (if (= difficulty :hard)
                       (.reply m (str "Ohh, feeling cocky, are we, " user "?")))
-                    (.replyWithImage m (get-img chat-key draw
+                    (.replyWithImage m (get-drawn-img chat-key draw
                                                 (board-width chat-key)
                                                 (board-height chat-key)))))))
             (.reply m "We're already playing a game, smart one."))
@@ -758,7 +842,7 @@
                 (if (words/real-word? (clojure.string/upper-case guess))
                   (do
                     (add-guess! chat-key guess user)
-                    (.replyWithImage m (get-img chat-key draw (board-width chat-key) (board-height chat-key)))
+                    (.replyWithImage m (get-drawn-img chat-key draw (board-width chat-key) (board-height chat-key)))
                     (if (and (= (guesses-made chat-key) (- max-guesses 1))
                              (not (won? chat-key)))
                       (.reply m "Uh oh!"))
@@ -822,7 +906,7 @@
                             (.reply m
                                     (str "The too-difficult-for-you word means: "
                                          (get-gameprop chat-key :answerdef)))
-                            (clear-game! chat-key m))))))))))))))
+                            (clear-game! chat-key m)))))))))))))))
 
 (defn -processPrivateMessage [this m] (-processChannelMessage this m))
 
