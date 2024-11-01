@@ -522,7 +522,7 @@
 (defn draw-pie-chart
   "Draw the pie chart representing who's best"
   [player1-wins player2-wins draws p1 p2 chat-key]
-  (let [gr (q/create-graphics 800 800 :p2d)]
+  (let [gr (q/create-graphics 600 600 :p2d)]
     (q/with-graphics gr
       (draw-pie-chart-gr gr player1-wins player2-wins draws p1 p2)
       ;; need some get-pie-img - can this not be abstracted?
@@ -543,20 +543,6 @@
   (while (nil? (get-gameprop chat-key :img))
     (Thread/sleep 50))
   (get-gameprop chat-key :img))
-
-(defn get-stats-quil-img
-  "Setup sketch for given underlying stats draw fn"
-  [chat-key drawfn width height]
-  (remove-img! chat-key :stats-img)
-  (q/defsketch org.goat.module.Wordle
-    :host "host"
-    :renderer :p2d
-    :size [width height]
-    :setup (partial drawfn chat-key))
-
-  (while (nil? (get-img chat-key :stats-img))
-    (Thread/sleep 50))
-  (get-img chat-key :stats-img))
 
 (defn get-quil-img
   "Setup sketch for given underlying draw fn"
@@ -767,13 +753,13 @@
         (.replyWithImage m (get-quil-img chat-key (partial draw-stats user) stats-width stats-height :stats-img))
         (remove-img! chat-key :stats-img))
       (if (= "statsvs" command)
-        (let [opponent (clojure.string/trim (.getModTrailing m))]
+        (let [opponent (clojure.string/trim (.getModText m))]
           (if (users/user-known? opponent)
             (let [ days 7
                    user-wins (users/count-recent-wins user opponent days)
                    opponent-wins (users/count-recent-wins opponent user days)
                    draws (users/count-recent-draws user opponent days) ]
-              (.replyWithImage m (get-quil-img chat-key (partial draw-pie-chart user-wins opponent-wins draws user opponent) 800 800 :pie-img))
+              (.replyWithImage m (get-quil-img chat-key (partial draw-pie-chart user-wins opponent-wins draws user opponent) 601 601 :pie-img))
               (remove-img! chat-key :pie-img))
             (.reply m "Er, who is that?")))
       (if (= "streak" command)

@@ -198,8 +198,8 @@
         (+
          (-> (sql/query db [ "select count(*) as count
                                 from challenges
-                                where user1=?
-                                and user2=?
+                                where lower(user1)=lower(?)
+                                and lower(user2)=lower(?)
                                 and user1_won=true
                                 and user1_guesses<user2_guesses
                                 and datetime(endtime / 1000, 'unixepoch') > datetime('now', ?)" winner loser days-param])
@@ -207,8 +207,8 @@
              :count)
          (-> (sql/query db [ "select count(*) as count
                                  from challenges
-                                 where user1=?
-                                 and user2=?
+                                 where lower(user1)=lower(?)
+                                 and lower(user2)=lower(?)
                                  and user2_won=true
                                  and user2_guesses<user1_guesses
                                  and datetime(endtime / 1000, 'unixepoch') > datetime('now', ?)" loser winner days-param])
@@ -222,16 +222,16 @@
     (+
      (-> (sql/query db [ "select count(*) as count
                                 from challenges
-                                where user1=?
-                                and user2=?
+                                where lower(user1)=lower(?)
+                                and lower(user2)=lower(?)
                                 and user1_guesses=user2_guesses
                                 and datetime(endtime / 1000, 'unixepoch') > datetime('now', ?)" p1 p2 days-param])
          first
          :count)
      (-> (sql/query db [ "select count(*) as count
                                  from challenges
-                                 where user1=?
-                                 and user2=?
+                                 where lower(user1)=lower(?)
+                                 and lower(user2)=lower(?)
                                  and user2_guesses=user1_guesses
                                  and datetime(endtime / 1000, 'unixepoch') > datetime('now', ?)" p2 p1 days-param])
          first
