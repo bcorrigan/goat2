@@ -82,51 +82,63 @@
 (defn user-known?
   "True if the user is already known to us."
   [username]
-  (get (first (sql/query db [(format (str "select username"
-                                           " from users"
-                                           " where username='%s' collate NOCASE") username)] )) :username ))
+  (-> (sql/query db ["select username
+                     from users
+                     where username=? collate NOCASE" username])
+      first
+      :username ))
 
 (defn user-add
   "Upsert the given user in users table"
   [username chatid]
-  (sql/execute! db [(str "insert into users (username, chatid) "
-                         " values(?,?)"
-                         " on conflict(username)"
-                         " do update set chatid=excluded.chatid") username chatid]))
+  (sql/execute! db ["insert into users (username, chatid)
+                     values(?,?)
+                     on conflict(username)
+                     do update set chatid=excluded.chatid" username chatid]))
 
 (defn user-chat
   "Get a given user chat"
   [username]
-  (long (get (first (query db [(format (str "select chatid"
-                          " from users"
-                          " where username='%s' collate NOCASE") username)])) :chatid)))
+  (-> (query db [ "select chatid
+                   from users
+                   where username=? collate NOCASE" username])
+      first
+      :chatid
+      long))
 
 (defn get-losttime
   "Return timestamp at which given user last lost a normal game"
   [user]
-  (get (first (sql/query db [(format (str "select max(endtime) as losttime"
-                                          std-game-sql
-                                          " and won=false"
-                                          " and username='%s'") user)])) :losttime))
+  (-> (sql/query db [(str "select max(endtime) as losttime"
+                           std-game-sql
+                         " and won=false
+                           and username=?") user])
+      first
+      :losttime))
 
 (defn get-streak
   "Return the current streak for the given user."
   [user]
   (let [losttime (get-losttime user) ]
-    (get (first (sql/query db [(format (str "select count(*) as streak "
+    (-> (sql/query db [(str "select count(*) as streak "
                                    std-game-sql
-                                   " and endtime>%d"
-                                   " and username='%s'") losttime user)])) :streak)))
+                                   " and endtime>?
+                                     and username=?") losttime user])
+    first
+    :streak)))
 
 
 ;; not sure how this might behave if we have non-integer record types
 (defn get-record
   "Get some record from records table"
   [user record]
-  (edn/read-string (get (first (sql/query db [(format (str "select recordval as record"
-                          " from records"
-                          " where username='%s'"
-                          " and record='%s'") user (symbol record))])) :record)))
+  (-> (sql/query db ["select recordval as record
+                         from records
+                         where username=?
+                         and record=?" user (symbol record)])
+     first
+     :record
+     edn/read-string))
 
 (defn save-record
   "Update the given record in records table"
@@ -141,19 +153,20 @@
   "Get all records set at time t for user"
   [user t]
   (map #(hash-map (keyword (get %1 :record)) (get %1 :recordval))
-         (sql/query db [(format (str "select record,recordval
+         (sql/query db ["select record,recordval
                                    from records
-                                   where username='%s'
-                                   and recordtime=%s;") user t)])))
+                                   where username=?
+                                   and recordtime=?" user t])))
 
 (defn count-where
   "How many records for given user match given condition?"
   [cond user]
-  (get (first (sql/query db [(format (str "select count(*) as count"
-                                          std-game-sql
-                                          " and username='%s'"
-                                          " and " cond
-                                          ) user)])) :count))
+  (-> (sql/query db [(str "select count(*) as count"
+                           std-game-sql
+                          " and username=?"
+                          " and " cond) user])
+      first
+      :count))
 
 (defn games-won
   "How many games has given user won"
@@ -171,14 +184,15 @@
 (defn count-where-limit
   "How many records match a given condition, out of the last 10 games?"
   [cond user n]
-  (get (first (sql/query db [(format (str "select count(*) as count"
-                                          " from (select *"
-                                          std-game-sql
-                                          " and username='%s'"
-                                          " order by endtime desc"
-                                          " limit %s)"
-                                          " where %s "
-                                          ) user n cond)])) :count))
+  (-> (sql/query db [(str "select count(*) as count
+                           from (select *"
+                           std-game-sql
+                          " and username=?
+                            order by endtime desc
+                            limit ?)
+                            where ? ") user n cond])
+      first
+      :count))
 
 (defn games-won-n
   "How many games won out of last N"
