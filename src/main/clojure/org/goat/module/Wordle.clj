@@ -971,6 +971,29 @@
    "Here's a word that was clearly out of your league. %s is defined as: %s"
    "Time to learn a word that's evidently not in your limited arsenal. %s signifies: %s"])
 
+(def no-progress-responses
+  ["You're about as close to solving this as a penguin is to flying. Time to switch tactics!"
+   "Your strategy is so effective, you might solve this by the heat death of the universe. Try something new!"
+   "I've seen glaciers move faster than your progress. Maybe try a different approach?"
+   "You're circling the answer like a shark, if the shark were blind and had no sense of direction. Mix it up!"
+   "Your guesses are so off, they're in a different postal code. Time for a new game plan!"
+   "You're not just digging yourself into a hole, you're tunneling to Australia. Change course!"
+   "If your goal is to use all possible wrong letters, you're succeeding! Otherwise, maybe rethink this?"
+   "Your Wordle skills are evolving! Backwards. Time to shuffle that strategy deck!"
+   "You're so far off track, you might discover a new word. But that's not the goal here. New approach time!"
+   "I've seen more progress in a traffic jam. Time to take a detour from your current strategy!"
+   "Your guesses are so wild, they should be in a zoo. How about trying something a bit more... logical?"
+   "You're repeating yourself more than a broken record. Scratch that disc and try a new tune!"
+   "If persistence alone won Wordle, you'd be champion. Sadly, it doesn't. Time for Plan B... or is it Plan Z by now?"
+   "Your strategy is about as effective as a chocolate teapot. Time to brew up some new ideas!"
+   "You're stuck in a loop tighter than a pretzel. Time to unknot your thinking!"
+   "Your progress is so non-existent, it's practically theoretical. Let's make it practical, shall we?"
+   "You're playing Wordle like it's a game of 'How many ways can I avoid the right answer?' New tactic, perhaps?"
+   "If your goal was to eliminate all wrong answers, you're crushing it! If not, maybe try a new approach?"
+   "Your guesses are so consistently off, I'm starting to think it's a talent. A useless talent, but still. Mix it up!"
+   "You're circling the drain faster than my hopes for your victory. Time to pull the plug on this strategy!"])
+
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; GAME LOGIC FNS ;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -992,21 +1015,23 @@
 (defn handle-guess [m chat-key guess user]
   (add-guess! chat-key guess user)
   (.replyWithImage m (get-drawn-img chat-key draw (board-width chat-key) (board-height chat-key)))
-  (cond
-    (and (= (guesses-made chat-key) (- max-guesses 1))
-         (not (won? chat-key)))
-    (.reply m "Uh oh!")
 
-    (and (> (guesses-made chat-key) 2)
-         (< (guesses-made chat-key) max-guesses)
-         (no-progress? chat-key)
-         (not (won? chat-key)))
-    (.reply m "You seem to be digging yourself into a hole! Do better.")
+  (when (and (not (won? chat-key))
+             (< (guesses-made chat-key) max-guesses))
+    (cond
+      (= (guesses-made chat-key) (- max-guesses 1))
+      (do
+        (.reply m "Uh oh! Last chance:")
+        (.reply m (letter-help chat-key)))
 
-    (and (> (guesses-made chat-key) 1)
-         (not (won? chat-key))
-         (< (guesses-made chat-key) max-guesses))
-    (.reply m (letter-help chat-key))))
+      (and (> (guesses-made chat-key) 2)
+           (no-progress? chat-key))
+      (do
+        (.reply m (rand-nth no-progress-responses))
+        (.reply m (letter-help chat-key)))
+
+      :else
+      (.reply m (letter-help chat-key)))))
 
 (defn handle-win [m chat-key]
   (set-gameprop chat-key :won true)
