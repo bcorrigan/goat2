@@ -8,10 +8,11 @@
    :subname "resources/users.db"})
 
 (def std-game-sql
-  ( str " from wordlegames"
-  " where type='single'"
-  " and size=5"
-  " and difficulty='easy' "))
+  "Standard game select condition common to many queries"
+  " from wordlegames
+    where type='single'
+    and size=5
+    and difficulty='easy' ")
 
 (defn create-db
   "If no DB file found, create the user db and table"
@@ -190,7 +191,7 @@
                           " and username=?
                             order by endtime desc
                             limit ?)
-                            where ? ") user n cond])
+                            where " cond ) user n])
       first
       :count))
 
@@ -255,12 +256,11 @@
   "Get results of last N games"
   [user n]
   (map (fn [x] (update x :won #(if (= 1 %) true false)))
-       (sql/query db [(format (str "select won,guesses "
-                                          std-game-sql
-                                          " and username='%s'"
-                                          " order by endtime desc"
-                                          " limit %s "
-                                          ) user n)])))
+       (sql/query db [(str "select won,guesses "
+                           std-game-sql
+                           " and username=?
+                             order by endtime desc
+                             limit ? ") user n])))
 (defn get-guess-rate
   "Calculate the avg. guesses-to-win for last n games"
   [user n]
@@ -316,11 +316,11 @@
 (defn best-wordle-player
   "Who is the best at standard wordle?"
   []
-  (sql/query db [(format (str "select distinct username
-                                              from wordlegames
-                                              where type='single'
-                                              and size=5
-                                              and difficulty='easy'"))]))
+  (sql/query db ["select distinct username
+                  from wordlegames
+                  where type='single'
+                  and size=5
+                  and difficulty='easy'"]))
 
 
 (defn get-stats

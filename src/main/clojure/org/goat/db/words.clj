@@ -72,16 +72,16 @@
                 (= :hard difficulty) "and r.hits<100000"
                 (= :easy difficulty) "and r.hits>2000000"
                 (= :veasy difficulty) "and r.hits>100000000")]
-     (first (query db [(format (str "select d.word,d.definition,r.hits"
-                             " from defs d, ranks r"
-                             " where d.word=r.word"
-                             " and d.length=%s"
-                             " %s"
-                             " order by random()"
-                             " limit 1") size hits)])))))
+     (first (query db [(str "select d.word,d.definition,r.hits
+                         from defs d, ranks r
+                         where d.word=r.word
+                         and d.length=? "
+                         hits
+                       " order by random()
+                         limit 1") size])))))
 
 (defn real-word?
   "Check the given word is in the defs dictionary."
   [word]
-  (not (empty? (query db [(format "select * from defs where word='%s' limit 1"
-                                  (clojure.string/upper-case word))]))))
+  (not (empty? (query db ["select * from defs where word=? limit 1"
+                                  (clojure.string/upper-case word)]))))

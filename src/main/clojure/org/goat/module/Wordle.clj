@@ -740,159 +740,496 @@
         (>= streak 1)
         (str "Baby steps, " user ", you have a streak of " streak ". Maybe this time you can go further.")))
 
-(defn -processChannelMessage
-  [_ m]
-  (println (str "state:" @state ))
-  (let [chat-key (keyword (str (.getChatId m)))
-        guess (clojure.string/upper-case (.getText m))
-        command (clojure.string/lower-case (.getModCommand m))
-        trailing (clojure.string/lower-case (.getText m))
-        user (get-user m chat-key)]
-    (if (= "stats" command)
-      (do
-        (.replyWithImage m (get-quil-img chat-key (partial draw-stats user) stats-width stats-height :stats-img))
-        (remove-img! chat-key :stats-img))
-      (if (= "statsvs" command)
-        (let [opponent (clojure.string/trim (.getModText m))]
-          (if (users/user-known? opponent)
-            (let [ days 7
-                   user-wins (users/count-recent-wins user opponent days)
-                   opponent-wins (users/count-recent-wins opponent user days)
-                   draws (users/count-recent-draws user opponent days) ]
-              (.replyWithImage m (get-quil-img chat-key (partial draw-pie-chart user-wins opponent-wins draws user opponent) 601 601 :pie-img))
-              (remove-img! chat-key :pie-img))
-            (.reply m "Er, who is that?")))
-      (if (= "streak" command)
-        (let [streak (users/get-streak user)
-              streak-msg (get-streak-msg streak user)]
-          (.reply m streak-msg))
-        (if (= "wordle" command)
-          (if (not (playing? chat-key))
-            (let [size (get-size trailing)
-                  challenge-user (users/user-known? (get-challenge (.getModText m)))
-                  difficulty (get-difficulty trailing)
-                  worddata (words/get-word difficulty size)
+(def invalid-guess-responses
+  ["Are you just mashing the keyboard now?"
+   "I don't think that's a word in the English language. Or indeed any language."
+   "Your creativity is... interesting."
+   "Ah, I see you've invented a new word. How avant-garde!"
+   "That's a lovely keysmash you've got there."
+   "I'm starting to think you're not taking this seriously."
+   "Is that your cat walking on the keyboard?"
+   "Fascinating. Tell me more about this 'word' of yours."
+   "I'm not sure that's in the dictionary. Or any dictionary."
+   "Your spelling is... unconventional."
+   "Are you trying to summon an elder god with that word?"
+   "I admire your commitment to nonsense."
+   "That's certainly... a choice."
+   "I think you might need a refresher on the alphabet."
+   "Interesting strategy. Bold. Wrong, but bold."
+   "Is that what happens when you sneeze while typing?"
+   "I'm not sure if that's a word or a secret code."
+   "Are you trying to break the game or just the English language?"
+   "That's a very creative interpretation of 'word'."
+   "I think your autocorrect just had a nervous breakdown."
+   "Did you just headbutt the keyboard?"
+   "Are you trying to communicate in alien?"
+   "I'm beginning to think you're playing a different game entirely."
+   "That's not a word. That's not even close to a word."
+   "I've seen more coherent alphabet soup."
+   "Are you entering passwords from your other accounts now?"
+   "I don't think that word means what you think it means. In fact, I don't think it means anything at all."
+   "Your spelling is so bad, it's almost good. Almost."
+   "Did you just throw Scrabble tiles at the screen and type what stuck?"
+   "I'm not saying it's gibberish, but... actually, yes, I am saying it's gibberish."
+   "That's a lovely collection of letters you've assembled there. Shame it doesn't mean anything."
+   "I think you've discovered a new form of encryption."
+   "Are you trying to set a record for most consecutive invalid guesses?"
+   "I'm starting to think you're doing this on purpose."
+   "That's not a word in this dimension. Maybe try another one?"
+   "Are you mildly dyslexic? Or just severely dyslexic."])
+
+(def win-responses
+  {1 ["You won on the first guess? Are you a mind reader or just insanely lucky?"
+      "I bow before your wordsmithing prowess. That was simply incredible!"
+      "Did you hack the game, or are you just that good? Phenomenal!"
+      "I'm not saying you're a word wizard, but... actually, yes, I am saying exactly that."
+      "One guess? ONE? I'm speechless. Utterly gobsmacked. Bravo!"
+      "Are you sure you're not cheating? Because that was suspiciously perfect."
+      "I think we just witnessed a Wordle miracle. Astounding!"
+      "You've peaked. It's all downhill from here. What a guess!"
+      "Although I can do 100 million calculations per second, I'm going to need a moment to process how ridiculously good that was."
+      "That wasn't a guess. That was divine intervention. Simply otherworldly!"
+      "I feel like I just witnessed the Wordle equivalent of a hole-in-one. Incredible!"
+      "You've officially broken the game. We can all go home now."
+      "I didn't think it was possible to win on the first try. I stand corrected."
+      "Are you some kind of Wordle savant? That was unbelievable!"
+      "I'm pretty sure that violates the laws of probability. Absolutely amazing!"
+      "You've ascended to Wordle godhood. We're not worthy!"
+      "That wasn't a guess. That was a work of art. Masterful!"
+      "I'm going to tell my grandkids about this someday. Legendary!"
+      "You've peaked. It's all downhill from here. What a guess!"
+      "I'm not saying you're psychic, but... are you psychic?"]
+
+   2 ["Two guesses? That's not just good, that's scary good!"
+      "I'm impressed. Very impressed. You're a Wordle natural!"
+      "Wow, you cracked it in two! You must be a word wizard!"
+      "That was like watching a master at work. Brilliant job!"
+      "You're making this look way too easy. Fantastic guessing!"
+      "I'm in awe of your Wordle skills. That was exceptional!"
+      "You must have a dictionary for a brain. Incredible work!"
+      "That was a virtuoso performance. Take a bow!"
+      "You're not just good at this, you're freakishly good. Well done!"
+      "I think we have a Wordle prodigy on our hands. Bravo!"
+      "Your word game is strong. Very, very strong. Impressive!"
+      "That was like watching a chess grandmaster, but with words. Superb!"
+      "You've got some serious Wordle mojo. Excellent job!"
+      "I'm beginning to suspect you might be a linguistic genius. Great work!"
+      "That was a masterclass in Wordle strategy. Well played!"
+      "You're not human. You're some kind of Wordle-solving machine. Incredible!"
+      "I'm running out of superlatives here. That was simply fantastic!"
+      "You must have a sixth sense for words. Remarkable guessing!"
+      "That wasn't just good, that was 'frame it and put it on the wall' good!"
+      "I think you might have found your calling. Wordle champion extraordinaire!"]
+
+   3 ["Three guesses? Now that's what I call efficiency!"
+      "Well done! You solved it with style and speed."
+      "Great job! You've got a real talent for this game."
+      "Impressive work! You cracked it in no time."
+      "Nicely done! Your Wordle skills are on point."
+      "Excellent guessing! You made that look easy."
+      "Bravo! You've got a knack for this, don't you?"
+      "That was smooth! You've clearly got this game figured out."
+      "Well played! Your word deduction skills are admirable."
+      "Fantastic job! You're quite the Wordle whiz."
+      "Stellar performance! You've got a good head for words."
+      "Great solving! You've got the Wordle touch."
+      "Impressive stuff! You're a natural at this game."
+      "Nicely solved! Your Wordle game is strong."
+      "Well executed! You've got this down to a science."
+      "Excellent work! You're making this look too easy."
+      "Kudos! Your word skills are seriously impressive."
+      "Great guessing! You've got a real gift for this."
+      "Well done! You're a Wordle force to be reckoned with."
+      "Bravo! Your Wordle prowess is something to behold."]
+
+   4 ["Four guesses? Not bad, not bad at all!"
+      "Good job! You figured it out with room to spare."
+      "Nice work! You're getting pretty good at this."
+      "Well done! That was a solid performance."
+      "Not too shabby! You've got a decent handle on this game."
+      "Pretty good! You're definitely improving."
+      "Nicely solved! You're above average, you know."
+      "Good stuff! You're holding your own against the Wordle."
+      "Well played! You're certainly no Wordle novice."
+      "Not bad at all! You're getting the hang of this."
+      "Decent job! You're showing some real potential."
+      "Good going! You're making steady progress."
+      "Nice one! You're developing a knack for this."
+      "Solid work! You're definitely on the right track."
+      "Well executed! You're becoming quite the Wordle solver."
+      "Good show! You're certainly no slouch at this game."
+      "Nice solving! You're definitely above the curve."
+      "Well done! You're holding your own quite nicely."
+      "Good job! You're showing some real Wordle acumen."
+      "Not too bad! You're certainly no Wordle pushover."]
+
+   5 ["Five guesses? Well, you got there in the end!"
+      "Phew! That was a close one, but you made it."
+      "You won, but I bet that last guess had you sweating."
+      "Victory snatched from the jaws of defeat! Well, almost."
+      "Not your best performance, but a win's a win, right?"
+      "You like to keep it suspenseful, don't you?"
+      "Living dangerously, I see. But you pulled it off!"
+      "Cut it a bit fine there, didn't you? But you made it!"
+      "I was getting worried for a moment, but you came through."
+      "That was tense! But you got there in the end."
+      "Not the most elegant win, but it counts!"
+      "You had me on the edge of my seat, but you did it!"
+      "A bit of a nail-biter, that one. But you prevailed!"
+      "Squeaked by on that one, didn't you? Still, good job!"
+      "That was like watching a high-wire act. Nerve-wracking but successful!"
+      "You like to make things interesting, don't you? But you pulled it off!"
+      "I thought you were done for, but you proved me wrong. Nice save!"
+      "That was a close shave! But you managed to clinch it."
+      "You certainly know how to build suspense! Good job... eventually."
+      "Whew! That was a close one. But you made it across the finish line!"]
+
+   6 ["Six guesses? Well, you won... technically."
+      "Cutting it a bit fine there, weren't you? But hey, a win's a win."
+      "Phew! You just scraped by on that one. Literally."
+      "Well, you won. I guess. If you want to call that winning."
+      "That was like watching a sloth solve a Rubik's cube. But you got there!"
+      "I was about to send out a search party. But you made it... barely."
+      "Were you trying to use up all six guesses on purpose? Because you succeeded."
+      "That was less 'winning' and more 'not losing'. But I'll take it."
+      "I've seen glaciers move faster. But you got there in the end!"
+      "Did you enjoy your leisurely stroll to the answer?"
+      "I was starting to wonder if you'd ever guess it. But you surprised me!"
+      "That was a real nail-biter. And by nail-biter, I mean I chewed off all my nails waiting for you to get it."
+      "You really like to keep me in suspense, don't you?"
+      "I hope you're not planning a career as a professional wordle player."
+      "Well, you used all the guesses. Every. Single. One. But you won ugly I suppose."
+      "That was less of a sprint and more of a marathon. But you crossed the finish line even though you walked round the course, so well done?"
+      "I was about to call it a day, but you finally got there!"
+      "You sure know how to stretch out a game of Wordle to its absolute limit."
+      "I'm not saying you're slow, but... actually, yes, that's exactly what I'm saying."
+      "Congratulations on your last-second, by-the-skin-of-your-teeth victory!"]})
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; GAME LOGIC FNS ;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defn start-new-game [m chat-key user size difficulty]
+  (let [worddata (words/get-word difficulty size)
+        word (get worddata :word)
+        definition (get worddata :definition)
+        hits (get worddata :hits)]
+    (new-game! chat-key word size definition hits user difficulty nil)
+    (when (= "Elspeth" user)
+      (.reply m "I hope you enjoy the game Elspeth!"))
+    (when (= difficulty :hard)
+      (.reply m (str "Ohh, feeling cocky, are we, " user "?")))
+    (.replyWithImage m (get-drawn-img chat-key draw
+                                      (board-width chat-key)
+                                      (board-height chat-key)))))
+
+(defn handle-guess [m chat-key guess user]
+  (add-guess! chat-key guess user)
+  (.replyWithImage m (get-drawn-img chat-key draw (board-width chat-key) (board-height chat-key)))
+  (cond
+    (and (= (guesses-made chat-key) (- max-guesses 1))
+         (not (won? chat-key)))
+    (.reply m "Uh oh!")
+
+    (and (> (guesses-made chat-key) 2)
+         (< (guesses-made chat-key) max-guesses)
+         (no-progress? chat-key)
+         (not (won? chat-key)))
+    (.reply m "You seem to be digging yourself into a hole! Do better.")
+
+    (and (> (guesses-made chat-key) 1)
+         (not (won? chat-key))
+         (< (guesses-made chat-key) max-guesses))
+    (.reply m (letter-help chat-key))))
+
+(defn handle-win [m chat-key]
+  (set-gameprop chat-key :won true)
+  (let [guesses-count (guesses-made chat-key)
+        congrats-msg (rand-nth (get win-responses guesses-count))]
+    (.reply m congrats-msg))
+
+  (.reply m (str "Definition: " (get-gameprop chat-key :answerdef)))
+
+  (let [pbs (clear-game! chat-key m)
+        user (get-gameprop chat-key :user)
+        streak (get pbs :streak)
+        won-rate-150 (get pbs :won-rate-150)
+        guess-rate-20 (get pbs :guess-rate-20)]
+    (when (and (not (nil? streak)) (= 0 (mod streak 5)))
+      (.reply m (format "Well done %s!! Your PB streak is now %s." user streak)))
+    (when (not (nil? won-rate-150))
+      (.reply m (format "NEW PB!!! Well done %s!! Your PB win rate is now %s." user won-rate-150)))
+    (when (not (nil? guess-rate-20))
+      (.reply m (format "NEW PB!!! Well done %s!! Your PB guess rate is now %s." user guess-rate-20)))))
+
+(defn handle-loss [m chat-key]
+  (set-gameprop chat-key :won false)
+  (.reply m (str "Oh no! You lost the game! \n The answer was: "
+                 (get-gameprop chat-key :answer)))
+  (.reply m (str "The too-difficult-for-you word means: "
+                 (get-gameprop chat-key :answerdef)))
+  (clear-game! chat-key m))
+
+
+(defn handle-game-end [m chat-key]
+  (if (won? chat-key)
+    (handle-win m chat-key)
+    (handle-loss m chat-key)))
+
+(defn handle-gameplay [m chat-key guess user]
+  (if (and (= (get-gameprop chat-key :size)
+              (count (re-matches #"[a-zA-Z]*" guess)))
+           (words/real-word? (clojure.string/upper-case guess)))
+    (do
+      (handle-guess m chat-key guess user)
+      (when (or (won? chat-key) (= max-guesses (guesses-made chat-key)))
+        (handle-game-end m chat-key)))
+    (.reply m (rand-nth invalid-guess-responses))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; COMMAND HANDLING FNS ;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defn handle-stats-command [m chat-key user]
+  (.replyWithImage m (get-quil-img chat-key (partial draw-stats user) stats-width stats-height :stats-img))
+  (remove-img! chat-key :stats-img))
+
+(defn handle-statsvs-command [m chat-key user]
+  (let [opponent (clojure.string/trim (.getModText m))]
+    (if (users/user-known? opponent)
+      (let [days          7
+            user-wins     (users/count-recent-wins user opponent days)
+            opponent-wins (users/count-recent-wins opponent user days)
+            draws         (users/count-recent-draws user opponent days)]
+        (.replyWithImage m (get-quil-img chat-key (partial draw-pie-chart user-wins opponent-wins draws user opponent) 601 601 :pie-img))
+        (remove-img! chat-key :pie-img))
+      (.reply m "Er, who is that?"))))
+
+(defn handle-streak-command [m user]
+  (let [streak     (users/get-streak user)
+        streak-msg (get-streak-msg streak user)]
+    (.reply m streak-msg)))
+
+(defn handle-challenge [m chat-key user challenge-user size difficulty]
+  (if (users/user-known? user)
+    (if (= (clojure.string/lower-case challenge-user) (clojure.string/lower-case user))
+      (.reply m "You can't challenge yourself, silly.")
+      (let [user1-chatid   (users/user-chat challenge-user)
+            user2-chatid   (users/user-chat user)
+            user1-chat-key (keyword (str user1-chatid))
+            user2-chat-key (keyword (str user2-chatid))
+            user1-msg      (new org.goat.core.Message user1-chatid "" true "goat")
+            user2-msg      (new org.goat.core.Message user2-chatid "" true "goat")
+            challenge-key  (combine-keys user1-chat-key user2-chat-key)]
+        (println (str "challenge-key:" challenge-key))
+        (if (not (or (playing? user1-chat-key) (playing? user2-chat-key)))
+          (do
+            ;; Init game for each user and message for each separately
+            (new-challenge! challenge-key user1-chat-key user2-chat-key (.getChatId m) user challenge-user m)
+            (.reply m "Starting a challenge match!! Let's go!")
+            (let [worddata (words/get-word difficulty size)
                   word (get worddata :word)
                   definition (get worddata :definition)
                   hits (get worddata :hits)]
-              (println (str "challenge user:" challenge-user) )
-              (if (or (> size 10) (< size 2))
-                (.reply
-                 m
-                 "Don't be an eejit. I won't do more than 10 or less than 2.")
-                (if challenge-user
-                  (if challenge-user
-                    (if (users/user-known? user)
-                      (if (= (clojure.string/lower-case challenge-user) (clojure.string/lower-case user))
-                        (.reply m "You can't challenge yourself, silly.")
-                        (let [user1-chatid   (users/user-chat challenge-user)
-                              user2-chatid   (users/user-chat user)
-                              user1-chat-key (keyword (str user1-chatid))
-                              user2-chat-key (keyword (str user2-chatid))
-                              user1-msg      (new org.goat.core.Message user1-chatid "" true "goat")
-                              user2-msg      (new org.goat.core.Message user2-chatid "" true "goat")
-                              challenge-key  (combine-keys user1-chat-key user2-chat-key)]
-                          (println (str "challenge-key:" challenge-key))
-                          (if (not (or (playing? user1-chat-key) (playing? user2-chat-key)))
-                            (do
-                              ;; Init game for each user and message for each seperately
-                              (new-challenge! challenge-key user1-chat-key user2-chat-key (.getChatId m) user challenge-user m)
-                              (.reply m "Starting a challenge match!! Let's go!")
-                              (new-game! user1-chat-key word size definition hits challenge-user difficulty challenge-key)
-                              (.replyWithImage user1-msg (get-drawn-img user1-chat-key draw
-                                                                  (board-width user1-chat-key)
-                                                                  (board-height user1-chat-key)))
-                              (new-game! user2-chat-key word size definition hits user difficulty challenge-key)
-                              (.replyWithImage user2-msg (get-drawn-img user2-chat-key draw
-                                                                  (board-width user2-chat-key)
-                                                                  (board-height user2-chat-key))))
-                            (.reply m "There's already a challenge match being played! Can't have too much challenge."))))
-                      (.reply m (str "I can't message you privately, " user
-                                     ", please message me privately the word \"setchat\" and try again.")))
-                    (.reply m "Er, who???")) ;; user not known
-                  (do  ;;if not a challenge, it is a normal game
-                    (new-game! chat-key word size definition hits user difficulty nil)
-                    (if (= "Elspeth" user)
-                      (.reply m "I hope you enjoy the game Elspeth!"))
-                    (if (= difficulty :hard)
-                      (.reply m (str "Ohh, feeling cocky, are we, " user "?")))
-                    (.replyWithImage m (get-drawn-img chat-key draw
-                                                (board-width chat-key)
-                                                (board-height chat-key)))))))
-            (.reply m "We're already playing a game, smart one."))
-          (if (playing? chat-key)
-            (do
-              (println "guess:" guess ":answer:" (get-gameprop chat-key :answer))
-              (if (= (get-gameprop chat-key :size)
-                     (count (re-matches #"[a-zA-Z]*" guess)))
-                (if (words/real-word? (clojure.string/upper-case guess))
-                  (do
-                    (add-guess! chat-key guess user)
-                    (.replyWithImage m (get-drawn-img chat-key draw (board-width chat-key) (board-height chat-key)))
-                    (if (and (= (guesses-made chat-key) (- max-guesses 1))
-                             (not (won? chat-key)))
-                      (.reply m "Uh oh!"))
-                    (if (and (> (guesses-made chat-key) 3)
-                             (< (guesses-made chat-key) max-guesses)
-                             (no-progress? chat-key)
-                             (not (won? chat-key)))
-                      (.reply
-                       m
-                       "You seem to be digging yourself into a hole! Do better."))
-                    (if (and (> (guesses-made chat-key) 1)
-                             (not (won? chat-key))
-                             (< (guesses-made chat-key) max-guesses))
-                      (.reply m (letter-help chat-key)))
-                    (if (won? chat-key)
-                      (do
-                        (set-gameprop chat-key :won true)
-                        (cond
-                          (= max-guesses (guesses-made chat-key))
-                          (.reply m "Phew! You won - barely.")
-                          (= 5 (guesses-made chat-key))
-                          (.reply
-                           m
-                           "You won, but I'm sure you feel a little bit dissapointed.")
-                          (= 4 (guesses-made chat-key))
-                          (.reply m
-                                  "Well done! You won, and you won competently.")
-                          (= 3 (guesses-made chat-key))
-                          (.reply m "WOW!! An excellent performance!! You won!")
-                          (= 2 (guesses-made chat-key))
-                          (.reply
-                           m
-                           "Gasp! How could you possibly win like that? Are you gifted?")
-                          (= 1 (guesses-made chat-key))
-                          (.reply
-                           m
-                           "You won. I prostrate myself before you, for clearly I am in the presence of a wordle deity. Let this day live forever in our memories."))
-                        (.reply m
-                                (str "Definition: "
-                                     (get-gameprop chat-key :answerdef)))
-                        ;;FIXME this doesn't seem to work
-                        (let [pbs (clear-game! chat-key m)
-                              streak (get pbs :streak)
-                              won-rate-150 (get pbs :won-rate-150)
-                              guess-rate-20 (get pbs :guess-rate-20)]
-                          (println (str "pbs:" pbs))
-                          (if (not (nil? streak))
-                            (if (= 0 (mod streak 5))
-                              (.reply m (format "Well done %s!! Your PB streak is now %s." user streak))))
-                          (if (not (nil? won-rate-150))
-                            (.reply m (format "NEW PB!!! Well done %s!! Your PB win rate is now %s." user won-rate-150)))
-                          (if (not (nil? guess-rate-20))
-                            (.reply m (format "NEW PB!!! Well done %s!! Your PB guess rate is now %s." user guess-rate-20)))))
-                      (if (= max-guesses (guesses-made chat-key))
-                        (do
-                          (set-gameprop chat-key :won false)
-                          (.reply
-                             m
-                             (str "Oh no! You lost the game! \n The answer was: "
-                                  (get-gameprop chat-key :answer)))
-                            (.reply m
-                                    (str "The too-difficult-for-you word means: "
-                                         (get-gameprop chat-key :answerdef)))
-                            (clear-game! chat-key m)))))))))))))))
+              (new-game! user1-chat-key word size definition hits challenge-user difficulty challenge-key)
+              (.replyWithImage user1-msg (get-drawn-img user1-chat-key draw
+                                                        (board-width user1-chat-key)
+                                                        (board-height user1-chat-key)))
+              (new-game! user2-chat-key word size definition hits user difficulty challenge-key)
+              (.replyWithImage user2-msg (get-drawn-img user2-chat-key draw
+                                                        (board-width user2-chat-key)
+                                                        (board-height user2-chat-key)))))
+          (.reply m "There's already a challenge match being played! Can't have too much challenge."))))
+    (.reply m (str "I can't message you privately, " user
+                   ", please message me privately the word \"setchat\" and try again."))))
+
+(defn handle-wordle-command [m chat-key user trailing]
+  (if (not (playing? chat-key))
+    (let [size           (get-size trailing)
+          challenge-user (users/user-known? (get-challenge (.getModText m)))
+          difficulty     (get-difficulty trailing)]
+      (cond
+        (or (> size 10) (< size 2))
+        (.reply m "Don't be an eejit. I won't do more than 10 or less than 2.")
+
+        challenge-user
+        (handle-challenge m chat-key user challenge-user size difficulty)
+
+        :else
+        (start-new-game m chat-key user size difficulty)))
+    (.reply m "We're already playing a game, smart one.")))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; MODULE ENTRY POINT ;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defn -processChannelMessage [_ m]
+  (let [chat-key (keyword (str (.getChatId m)))
+        guess    (clojure.string/upper-case (.getText m))
+        command  (clojure.string/lower-case (.getModCommand m))
+        trailing (clojure.string/lower-case (.getText m))
+        user     (get-user m chat-key)]
+    (case command
+      "stats"   (handle-stats-command m chat-key user)
+      "statsvs" (handle-statsvs-command m chat-key user)
+      "streak"  (handle-streak-command m user)
+      "wordle"  (handle-wordle-command m chat-key user trailing)
+      (when (playing? chat-key)
+        (handle-gameplay m chat-key guess user)))))
+
+;; (defn -processChannelMessage
+;;   [_ m]
+;;   (println (str "state:" @state ))
+;;   (let [chat-key (keyword (str (.getChatId m)))
+;;         guess (clojure.string/upper-case (.getText m))
+;;         command (clojure.string/lower-case (.getModCommand m))
+;;         trailing (clojure.string/lower-case (.getText m))
+;;         user (get-user m chat-key)]
+;;     (if (= "stats" command)
+;;       (do
+;;         (.replyWithImage m (get-quil-img chat-key (partial draw-stats user) stats-width stats-height :stats-img))
+;;         (remove-img! chat-key :stats-img))
+;;       (if (= "statsvs" command)
+;;         (let [opponent (clojure.string/trim (.getModText m))]
+;;           (if (users/user-known? opponent)
+;;             (let [ days 7
+;;                    user-wins (users/count-recent-wins user opponent days)
+;;                    opponent-wins (users/count-recent-wins opponent user days)
+;;                    draws (users/count-recent-draws user opponent days) ]
+;;               (.replyWithImage m (get-quil-img chat-key (partial draw-pie-chart user-wins opponent-wins draws user opponent) 601 601 :pie-img))
+;;               (remove-img! chat-key :pie-img))
+;;             (.reply m "Er, who is that?")))
+;;       (if (= "streak" command)
+;;         (let [streak (users/get-streak user)
+;;               streak-msg (get-streak-msg streak user)]
+;;           (.reply m streak-msg))
+;;         (if (= "wordle" command)
+;;           (if (not (playing? chat-key))
+;;             (let [size (get-size trailing)
+;;                   challenge-user (users/user-known? (get-challenge (.getModText m)))
+;;                   difficulty (get-difficulty trailing)
+;;                   worddata (words/get-word difficulty size)
+;;                   word (get worddata :word)
+;;                   definition (get worddata :definition)
+;;                   hits (get worddata :hits)]
+;;               (println (str "challenge user:" challenge-user) )
+;;               (if (or (> size 10) (< size 2))
+;;                 (.reply
+;;                  m
+;;                  "Don't be an eejit. I won't do more than 10 or less than 2.")
+;;                 (if challenge-user
+;;                   (if challenge-user
+;;                     (if (users/user-known? user)
+;;                       (if (= (clojure.string/lower-case challenge-user) (clojure.string/lower-case user))
+;;                         (.reply m "You can't challenge yourself, silly.")
+;;                         (let [user1-chatid   (users/user-chat challenge-user)
+;;                               user2-chatid   (users/user-chat user)
+;;                               user1-chat-key (keyword (str user1-chatid))
+;;                               user2-chat-key (keyword (str user2-chatid))
+;;                               user1-msg      (new org.goat.core.Message user1-chatid "" true "goat")
+;;                               user2-msg      (new org.goat.core.Message user2-chatid "" true "goat")
+;;                               challenge-key  (combine-keys user1-chat-key user2-chat-key)]
+;;                           (println (str "challenge-key:" challenge-key))
+;;                           (if (not (or (playing? user1-chat-key) (playing? user2-chat-key)))
+;;                             (do
+;;                               ;; Init game for each user and message for each seperately
+;;                               (new-challenge! challenge-key user1-chat-key user2-chat-key (.getChatId m) user challenge-user m)
+;;                               (.reply m "Starting a challenge match!! Let's go!")
+;;                               (new-game! user1-chat-key word size definition hits challenge-user difficulty challenge-key)
+;;                               (.replyWithImage user1-msg (get-drawn-img user1-chat-key draw
+;;                                                                   (board-width user1-chat-key)
+;;                                                                   (board-height user1-chat-key)))
+;;                               (new-game! user2-chat-key word size definition hits user difficulty challenge-key)
+;;                               (.replyWithImage user2-msg (get-drawn-img user2-chat-key draw
+;;                                                                   (board-width user2-chat-key)
+;;                                                                   (board-height user2-chat-key))))
+;;                             (.reply m "There's already a challenge match being played! Can't have too much challenge."))))
+;;                       (.reply m (str "I can't message you privately, " user
+;;                                      ", please message me privately the word \"setchat\" and try again.")))
+;;                     (.reply m "Er, who???")) ;; user not known
+;;                   (do  ;;if not a challenge, it is a normal game
+;;                     (new-game! chat-key word size definition hits user difficulty nil)
+;;                     (if (= "Elspeth" user)
+;;                       (.reply m "I hope you enjoy the game Elspeth!"))
+;;                     (if (= difficulty :hard)
+;;                       (.reply m (str "Ohh, feeling cocky, are we, " user "?")))
+;;                     (.replyWithImage m (get-drawn-img chat-key draw
+;;                                                 (board-width chat-key)
+;;                                                 (board-height chat-key)))))))
+;;             (.reply m "We're already playing a game, smart one."))
+;;           (if (playing? chat-key)
+;;             (do
+;;               (println "guess:" guess ":answer:" (get-gameprop chat-key :answer))
+;;               (if (= (get-gameprop chat-key :size)
+;;                      (count (re-matches #"[a-zA-Z]*" guess)))
+;;                 (if (words/real-word? (clojure.string/upper-case guess))
+;;                   (do
+;;                     (add-guess! chat-key guess user)
+;;                     (.replyWithImage m (get-drawn-img chat-key draw (board-width chat-key) (board-height chat-key)))
+;;                     (if (and (= (guesses-made chat-key) (- max-guesses 1))
+;;                              (not (won? chat-key)))
+;;                       (.reply m "Uh oh!"))
+;;                     (if (and (> (guesses-made chat-key) 3)
+;;                              (< (guesses-made chat-key) max-guesses)
+;;                              (no-progress? chat-key)
+;;                              (not (won? chat-key)))
+;;                       (.reply
+;;                        m
+;;                        "You seem to be digging yourself into a hole! Do better."))
+;;                     (if (and (> (guesses-made chat-key) 1)
+;;                              (not (won? chat-key))
+;;                              (< (guesses-made chat-key) max-guesses))
+;;                       (.reply m (letter-help chat-key)))
+;;                     (if (won? chat-key)
+;;                       (do
+;;                         (set-gameprop chat-key :won true)
+;;                         (cond
+;;                           (= max-guesses (guesses-made chat-key))
+;;                           (.reply m "Phew! You won - barely.")
+;;                           (= 5 (guesses-made chat-key))
+;;                           (.reply
+;;                            m
+;;                            "You won, but I'm sure you feel a little bit dissapointed.")
+;;                           (= 4 (guesses-made chat-key))
+;;                           (.reply m
+;;                                   "Well done! You won, and you won competently.")
+;;                           (= 3 (guesses-made chat-key))
+;;                           (.reply m "WOW!! An excellent performance!! You won!")
+;;                           (= 2 (guesses-made chat-key))
+;;                           (.reply
+;;                            m
+;;                            "Gasp! How could you possibly win like that? Are you gifted?")
+;;                           (= 1 (guesses-made chat-key))
+;;                           (.reply
+;;                            m
+;;                            "You won. I prostrate myself before you, for clearly I am in the presence of a wordle deity. Let this day live forever in our memories."))
+;;                         (.reply m
+;;                                 (str "Definition: "
+;;                                      (get-gameprop chat-key :answerdef)))
+;;                         ;;FIXME this doesn't seem to work
+;;                         (let [pbs (clear-game! chat-key m)
+;;                               streak (get pbs :streak)
+;;                               won-rate-150 (get pbs :won-rate-150)
+;;                               guess-rate-20 (get pbs :guess-rate-20)]
+;;                           (println (str "pbs:" pbs))
+;;                           (if (not (nil? streak))
+;;                             (if (= 0 (mod streak 5))
+;;                               (.reply m (format "Well done %s!! Your PB streak is now %s." user streak))))
+;;                           (if (not (nil? won-rate-150))
+;;                             (.reply m (format "NEW PB!!! Well done %s!! Your PB win rate is now %s." user won-rate-150)))
+;;                           (if (not (nil? guess-rate-20))
+;;                             (.reply m (format "NEW PB!!! Well done %s!! Your PB guess rate is now %s." user guess-rate-20)))))
+;;                       (if (= max-guesses (guesses-made chat-key))
+;;                         (do
+;;                           (set-gameprop chat-key :won false)
+;;                           (.reply
+;;                              m
+;;                              (str "Oh no! You lost the game! \n The answer was: "
+;;                                   (get-gameprop chat-key :answer)))
+;;                             (.reply m
+;;                                     (str "The too-difficult-for-you word means: "
+;;                                          (get-gameprop chat-key :answerdef)))
+;;                             (clear-game! chat-key m)))))))))))))))
 
 (defn -processPrivateMessage [this m] (-processChannelMessage this m))
 
