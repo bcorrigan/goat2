@@ -905,6 +905,72 @@
       "I'm not saying you're slow, but... actually, yes, that's exactly what I'm saying."
       "Congratulations on your last-second, by-the-skin-of-your-teeth victory!"]})
 
+(def lose-responses
+  ["I'm not saying you're bad at Wordle, but dictionary publishers just breathed a sigh of relief."
+   "Have you considered taking up a different hobby? Perhaps competitive paint drying?"
+   "Your Wordle skills are so bad, even autocorrect is facepalming right now."
+   "I've seen better guesses from a random word generator. And it was broken."
+   "You might want to consider a career that doesn't involve... well, words. Or thinking."
+   "That was so bad, I think you actually made the English language cry."
+   "Congratulations! You've just set a new record for 'Most Creative Way to Lose at Wordle'."
+   "I'm starting to think you're playing 'How NOT to guess the word'."
+   "Your performance was so legendary, it'll be used in Wordle schools as a cautionary tale."
+   "I've seen more coherent letter combinations in alphabet soup."
+   "You do realize the goal is to guess the word, not avoid it at all costs, right?"
+   "I think you've discovered a new game called anti-Wordle. Impressive, in a way."
+   "Your Wordle skills are like your winning streak - non-existent."
+   "I'm not saying you should give up, but... maybe consider donating your keyboard to science?"
+   "That was so bad, I think you owe the dictionary an apology."
+   "I've seen better word skills from a cat walking across a keyboard."
+   "Your Wordle game is so weak, it just applied for life support."
+   "Congratulations on turning a simple word game into an epic tragedy."
+   "I think you just redefined 'rock bottom' for Wordle players everywhere."
+   "Your Wordle skills are like a unicorn: mythical and non-existent."])
+
+(def lose-reveal-responses
+  ["Well, that was... something. The word you spectacularly failed to guess was: %s"
+   "Ouch. I felt that from here. The word that defeated you was: %s"
+   "And the award for 'Most Creative Way to Lose at Wordle' goes to you! The actual word was: %s"
+   "I'm running out of ways to say 'you lost'. Oh wait, here's one: YOU LOST. The word was: %s"
+   "Congratulations on your consistent ability to avoid the correct answer! It was: %s"
+   "In a stunning turn of events, you've managed to lose again. The elusive word was: %s"
+   "Well, you tried. Not very well, but you tried. The correct word was: %s"
+   "I'm not mad, I'm just disappointed. The word you were looking for was: %s"
+   "And the crowd goes... silent. Better luck next time! The word was: %s"
+   "That was... an attempt. An unsuccessful one, but an attempt. The word was: %s"
+   "I'd slow clap, but I don't want to hurt your feelings. The correct answer was: %s"
+   "Well, that happened. The word that just happened to you was: %s"
+   "I'm sensing a pattern here, and it's not a winning one. The word was: %s"
+   "On the bright side, you've eliminated one more word you don't know. It was: %s"
+   "Plot twist: You lost. Again. The protagonist of this tragedy was: %s"
+   "Impressive. Most impressive. Oh wait, I meant depressive. The word was: %s"
+   "Your Wordle journey ends here, not with a bang but a whimper. The word was: %s"
+   "In the game of Wordle, you either win or... well, this. The correct word was: %s"
+   "I'd say 'better luck next time', but let's be real. Anyway, the word was: %s"
+   "Behold, the word that bested our brave but bewildered player: %s"])
+
+(def definition-reveal-responses
+  ["For those whose vocabulary is as limited as their Wordle skills, %s means: %s"
+   "Allow me to expand your clearly insufficient lexicon. %s is defined as: %s"
+   "Brace yourself for some learning, oh Wordle-challenged one. %s signifies: %s"
+   "Let's enlighten that word-deprived brain of yours. %s is a fancy term for: %s"
+   "Here's a nugget of wisdom for your word-starved mind. %s translates to: %s"
+   "Prepare to be educated, oh vocabularily challenged one. %s is synonymous with: %s"
+   "For the benefit of your clearly limited word bank, %s can be understood as: %s"
+   "Let me introduce you to a word that's clearly not in your repertoire. %s means: %s"
+   "Time for a vocabulary lesson, since you clearly need it. %s is defined as: %s"
+   "Expanding your word knowledge one crushing defeat at a time. %s signifies: %s"
+   "Here's some enlightenment for your word-impoverished existence. %s stands for: %s"
+   "Behold, a word beyond your grasp! %s is a sophisticated way of saying: %s"
+   "Let's add to your clearly deficient word pool. %s is another way to express: %s"
+   "For future reference (and fewer embarrassing losses), %s is defined as: %s"
+   "Here's a word to add to your apparently minuscule vocabulary. %s means: %s"
+   "Prepare to learn, oh lexically challenged one. %s is a term used for: %s"
+   "Let's bridge the vast gap in your word knowledge. %s is synonymous with: %s"
+   "Expanding your horizons one word at a time. Today's lesson: %s means %s"
+   "Here's a word that was clearly out of your league. %s is defined as: %s"
+   "Time to learn a word that's evidently not in your limited arsenal. %s signifies: %s"])
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; GAME LOGIC FNS ;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -964,10 +1030,12 @@
 
 (defn handle-loss [m chat-key]
   (set-gameprop chat-key :won false)
-  (.reply m (str "Oh no! You lost the game! \n The answer was: "
-                 (get-gameprop chat-key :answer)))
-  (.reply m (str "The too-difficult-for-you word means: "
-                 (get-gameprop chat-key :answerdef)))
+  (.reply m (rand-nth lose-responses))
+  (.reply m (format (rand-nth lose-reveal-responses)
+                    (get-gameprop chat-key :answer)))
+  (.reply m (format (rand-nth definition-reveal-responses)
+                   (get-gameprop chat-key :answer)
+                   (get-gameprop chat-key :answerdef)))
   (clear-game! chat-key m))
 
 
