@@ -21,12 +21,6 @@
 (def A-Z (set (map char (concat (range 65 91)))))
 (def bot (BotStats/getInstance))
 
-;(defn file-name
-;  "Get the wordle file name."
-;  [chat-key]
-;  (format "/run/user/1000/wordle.%s.png"
-;          (str (symbol chat-key))))
-
 (def state
   "key is :game-states->chatid - returning
   {:guesses [\"WRONG HOUSE\"] :answer \"RIGHT\"
@@ -34,6 +28,7 @@
   (atom {}))
 
 (def img-state
+  "A temporary image cache - quil runs in a different thread to the main thread, this is essentially a simple means to communicate an image from the quil applet thread back to the main thread, which waits for this to be populated."
   (atom {}))
 
 (defn get-img
@@ -181,8 +176,11 @@
   [answer c]
   (clojure.string/replace-first answer c "."))
 
-(defn tosymsl-
-  ([guess answer] (tosymsl- guess answer (mask-answer guess answer)))
+(defn classify-letters
+  "See compare-guess-to-answer. This is the main implementation. We \"mask\" the answer where letters are correct
+  first, then we simply compare letter by letter, if it matches it is :revealed, if it doesn't and is in masked_answer
+  then it is :semiknown, otherwise it is :wrong. Then we conj with recursive call for next letter."
+  ([guess answer] (classify-letters guess answer (mask-answer guess answer)))
   ([guess answer masked-ans]
    (if (empty? guess)
      '()
@@ -190,41 +188,42 @@
            ans_let (first answer)
            ans_rest (clojure.string/join (rest guess))
            ges_rest (clojure.string/join (rest answer))]
-       (cond (= ges_let ans_let) (conj (tosymsl- ans_rest ges_rest masked-ans)
+       (cond (= ges_let ans_let) (conj (classify-letters ans_rest ges_rest masked-ans)
                                        :revealed)
              (contains-char? masked-ans ges_let)
              (conj
-              (tosymsl- ans_rest ges_rest (mask-first masked-ans ges_let))
+              (classify-letters ans_rest ges_rest (mask-first masked-ans ges_let))
               :semiknown)
-             :else (conj (tosymsl- ans_rest ges_rest masked-ans) :wrong))))))
+             :else (conj (classify-letters ans_rest ges_rest masked-ans) :wrong))))))
 
-(defn tosyms
+(defn compare-guess-to-answer
   "Compare given guess to answer. For each letter:
     If letter is correct and in right position - :revealed
     If letter is in the answer, but in the wrong position - :semiknown
     If letter is NOT in the answer - :wrong
     A vec of these keywords is returned for each letter in the supplied guess."
   [guess answer]
-  (vec (tosymsl- guess answer)))
+  (vec (classify-letters guess answer)))
 
-(deftest test-tosyms
+;; This was a tricky fn so lets have a test for once
+(deftest test-compare-guess-to-answer
   (is (= [:wrong :semiknown :wrong :semiknown :revealed]
-         (tosyms "FEELS" "PALES")))
+         (compare-guess-to-answer "FEELS" "PALES")))
   (is (= [:wrong :semiknown :wrong :revealed :revealed]
-         (tosyms "FLEES" "PALES")))
+         (compare-guess-to-answer "FLEES" "PALES")))
   (is (= [:wrong :revealed :revealed :revealed :wrong]
-         (tosyms "GLEES" "FLEET")))
+         (compare-guess-to-answer "GLEES" "FLEET")))
   (is (= [:semiknown :semiknown :revealed :wrong :wrong]
-         (tosyms "EELSY" "AGLEE")))
+         (compare-guess-to-answer "EELSY" "AGLEE")))
   (is (= [:semiknown :semiknown :wrong :wrong :wrong]
-         (tosyms "EEESY" "AGLEE"))))
+         (compare-guess-to-answer "EEESY" "AGLEE"))))
 
 (defn no-progress?
   "If the last 3 guesses have not resulted in finding new information
    (other than excluded letters) - returns true"
   [chat-key]
   (apply =
-         (mapv #(tosyms % (get-gameprop chat-key :answer))
+         (mapv #(compare-guess-to-answer % (get-gameprop chat-key :answer))
                (take-last 3 (get-gameprop chat-key :guesses)))))
 
 ;;TODO make our own string util pkg....
@@ -253,7 +252,7 @@
   "Append the given guess to the state map.
    This will also update the lists of seen letters"
   [chat-key guess user]
-  (let [syms (tosyms guess (get-gameprop chat-key :answer))
+  (let [syms (compare-guess-to-answer guess (get-gameprop chat-key :answer))
         le-syms (map vector syms guess)]
     (mapv #(do (cond (= :wrong (first %)) (add-exc-letter! chat-key (second %))
                      (= :revealed (first %)) (add-inc-letter! chat-key
@@ -316,7 +315,7 @@
               j (range (count (get guesses i)))]
         (let [guess (get guesses i)
               letter (nth (seq guess) j)
-              sym (get (tosyms guess answer) j)
+              sym (get (compare-guess-to-answer guess answer) j)
               y (+ letter-border (* letter-size i))
               x (+ letter-border (* letter-size j))]
           (draw-letter letter x y sym)))
@@ -722,6 +721,10 @@
         (symbol (str key1))
         (symbol (str key2))))))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; RESPONSE STRINGS ;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 (defn get-streak-msg
   "Get a congratulatory (or critical) message depending on user's streak"
   [streak user]
@@ -993,6 +996,27 @@
    "Your guesses are so consistently off, I'm starting to think it's a talent. A useless talent, but still. Mix it up!"
    "You're circling the drain faster than my hopes for your victory. Time to pull the plug on this strategy!"])
 
+(defn last-chance-message []
+  (rand-nth ["Uh oh! Last chance."
+             "Final guess! Careful!"
+             "Last shot! Think carefully."
+             "One more try!"
+             "Make it count!"
+             "No pressure, but..."
+             "Final attempt! Focus!"
+             "Last guess! Good luck!"
+             "This is it!"
+             "Now or never!"
+             "Moment of truth!"
+             "Final opportunity! Concentrate!"
+             "Last guess incoming!"
+             "Crunch time!"
+             "Do or die!"
+             "Final round! Ready?"
+             "Last chance saloon!"
+             "Make it or break it!"
+             "The final countdown!"
+             "One last shot!"]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; GAME LOGIC FNS ;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1021,7 +1045,7 @@
     (cond
       (= (guesses-made chat-key) (- max-guesses 1))
       (do
-        (.reply m "Uh oh! Last chance:")
+        (.reply m (last-chance-message))
         (.reply m (letter-help chat-key)))
 
       (and (> (guesses-made chat-key) 2)
