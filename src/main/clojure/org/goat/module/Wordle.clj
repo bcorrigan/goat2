@@ -259,7 +259,7 @@
                                                               (second %))))
           le-syms)
     (add-to-col! chat-key :guesses guess)
-    (if (not (= (get-gameprop chat-key :user) user))
+    (when (not (= (get-gameprop chat-key :user) user))
       ;; multiple users have played this game
       (set-gameprop chat-key :type :group))))
 
@@ -397,15 +397,15 @@
   "Draw onto the given graphics our stats"
   [gr chat-key user]
   (let [stats (users/get-stats user)
-        games (get stats :results-150)]
+        games (:results-150 stats)]
     (q/with-graphics gr
       (q/background 17 17 18) ;;black
       (doseq [i (range (count games))]
         (let [col (mod i 5)
               row (int (math/floor (/ i 5)))
               game (nth games i)
-              won (get game :won)
-              guesses (get game :guesses)
+              won (:won game)
+              guesses (:guesses game)
               boxcol (get-wonbox-col won guesses)]
           (q/fill (first boxcol) (second boxcol) (nth boxcol 2))
           (q/stroke (first boxcol) (second boxcol) (nth boxcol 2))
@@ -414,14 +414,14 @@
                   (- stats-square-px 4)
                   (- stats-square-px 4))))
       ;; Text
-      (let [games-played (+ (or (get stats :games-won) 0) (or (get stats :games-lost) 0))
-            games-played-150 (+ (or (get stats :games-won-150) 0) (or (get stats :games-lost-150) 0))
-            win-ratio (* 100 (double (/ (or (get stats :games-won-150) 0) games-played-150)))
+      (let [games-played (+ (or (:games-won stats) 0) (or (:games-lost stats) 0))
+            games-played-150 (+ (or (:games-won-150 stats) 0) (or (:games-lost-150 stats) 0))
+            win-ratio (* 100 (double (/ (or (:games-won-150 stats) 0) games-played-150)))
             win-ratio-fmt (format "%.3f" win-ratio)
-            guess-rate-150 (format "%.3f" (or (get stats :guess-rate-150) 0))
-            guess-rate-20 (format "%.3f" (or (get stats :guess-rate-20) 0))
-            games-played-20 (+ (or (get stats :games-won-20) 0) (or (get stats :games-lost-20) 0))
-            win-ratio-20 (* 100 (double (/ (or (get stats :games-won-20) 0) games-played-20)))
+            guess-rate-150 (format "%.3f" (or (:guess-rate-150 stats) 0))
+            guess-rate-20 (format "%.3f" (or (:guess-rate-20 stats) 0))
+            games-played-20 (+ (or (:games-won-20 stats) 0) (or (:games-lost-20 stats) 0))
+            win-ratio-20 (* 100 (double (/ (or (:games-won-20 stats) 0) games-played-20)))
             win-ratio-20-fmt (format "%.3f" win-ratio-20)
             big-font  (q/create-font "Noto Sans" big-font-pt)
             small-font (q/create-font "Noto Sans" small-font-pt)]
@@ -446,7 +446,7 @@
           (q/fill 123 177 114)  ;; green
           (q/fill 255 167 255)) ;; pink
         (q/text (str "Win ratio: " win-ratio-20-fmt "%") text-indent (text-row-px 8))
-        (if (<= (or (get stats :guess-rate-20) 0) (or (get stats :guess-rate-150) 0))
+        (if (<= (or (:guess-rate-20 stats) 0) (or (:guess-rate-150 stats) 0))
           (q/fill 123 177 114)  ;; green
           (q/fill 255 167 255)) ;; pink
         (q/text (str "Guess rate: " guess-rate-20) text-indent (text-row-px 9))
@@ -577,10 +577,10 @@
 (defn get-challenge
   "Parse out who is being challenged."
   [s]
-  (if (str/includes? s "challenge")
+  (when (str/includes? s "challenge")
     (let [mr (re-matcher  #"\W*\w+\W+(\w+)\W*" s)]
       (.matches mr)
-      (if (.hasMatch  mr)
+      (when (.hasMatch  mr)
         (.group mr 1)))))
 
 (defn audit-game
@@ -636,7 +636,7 @@
   if a challenge game we conclude the challege and record challenge stats."
   [chat-key m]
 
-  (if (get-gameprop chat-key :challenge)
+  (when (get-gameprop chat-key :challenge)
     (let [challenge-key (get-gameprop chat-key :challenge-key)
           other-user    (other-user chat-key)
           this-user     (get-gameprop chat-key :user)
@@ -651,7 +651,7 @@
             (.reply other-msg (str this-user " just finished, " other-user ", better get your skates on!"))
             (set-gameprop challenge-key :first-game (get-game chat-key))
             (reset! playing 1))
-          (if (= @playing 1)
+          (when (= @playing 1)
             ;;wrap up the challenge now
             (let [first-img      (get-fgameprop challenge-key :img)
                   second-img     (get-gameprop chat-key :img)
@@ -1024,9 +1024,9 @@
 
 (defn start-new-game [m chat-key user size difficulty]
   (let [worddata (words/get-word difficulty size)
-        word (get worddata :word)
-        definition (get worddata :definition)
-        hits (get worddata :hits)]
+        word (:word worddata)
+        definition (:definition worddata)
+        hits (:hits worddata)]
     (new-game! chat-key word size definition hits user difficulty nil)
     (when (= "Elspeth" user)
       (.reply m "I hope you enjoy the game Elspeth!"))
@@ -1060,9 +1060,9 @@
 
   (let [pbs (clear-game! chat-key m)
         user (get-gameprop chat-key :user)
-        streak (get pbs :streak)
-        won-rate-150 (get pbs :won-rate-150)
-        guess-rate-20 (get pbs :guess-rate-20)]
+        streak (:streak pbs)
+        won-rate-150 (:won-rate-150 pbs)
+        guess-rate-20 (:guess-rate-20 pbs)]
     (when (and (not (nil? streak)) (= 0 (mod streak 5)))
       (.reply m (format "Well done %s!! Your PB streak is now %s." user streak)))
     (when (not (nil? won-rate-150))
@@ -1138,9 +1138,9 @@
             (new-challenge! challenge-key user1-chat-key user2-chat-key (.getChatId m) user challenge-user m)
             (.reply m "Starting a challenge match!! Let's go!")
             (let [worddata (words/get-word difficulty size)
-                  word (get worddata :word)
-                  definition (get worddata :definition)
-                  hits (get worddata :hits)]
+                  word (:word worddata)
+                  definition (:definition worddata)
+                  hits (:hits worddata)]
               (new-game! user1-chat-key word size definition hits challenge-user difficulty challenge-key)
               (.replyWithImage user1-msg (get-drawn-img user1-chat-key draw
                                                         (board-width user1-chat-key)
