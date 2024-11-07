@@ -1042,20 +1042,13 @@
 
   (when (and (not (won? chat-key))
              (< (guesses-made chat-key) max-guesses))
-    (cond
-      (= (guesses-made chat-key) (- max-guesses 1))
-      (do
-        (.reply m (last-chance-message))
-        (.reply m (letter-help chat-key)))
+    (.reply m (letter-help chat-key))
+    (when (= (guesses-made chat-key) (- max-guesses 1))
+      (.reply m (last-chance-message)))
 
-      (and (> (guesses-made chat-key) 2)
-           (no-progress? chat-key))
-      (do
-        (.reply m (rand-nth no-progress-responses))
-        (.reply m (letter-help chat-key)))
-
-      :else
-      (.reply m (letter-help chat-key)))))
+    (when (and (> (guesses-made chat-key) 2)
+         (no-progress? chat-key))
+        (.reply m (rand-nth no-progress-responses)))))
 
 (defn handle-win [m chat-key]
   (set-gameprop chat-key :won true)
