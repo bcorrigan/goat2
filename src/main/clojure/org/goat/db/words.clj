@@ -64,21 +64,29 @@
 
 (defn get-word
   "Get a random word. Provide argument :hard to get a hard word,
-   :easy to get an easy word."
+   :easy to get an easy word.
+  If additional argument :all is provided, will return ALL words."
   ([size] (get-word :normal size))
-  ([difficulty size]
+  ([difficulty size] (get-word difficulty size :single)  )
+  ([difficulty size limit]
    (let [hits (cond
                 (= :normal difficulty) "and r.hits>100000"
                 (= :hard difficulty) "and r.hits<100000"
                 (= :easy difficulty) "and r.hits>2000000"
-                (= :veasy difficulty) "and r.hits>100000000")]
-     (first (query db [(str "select d.word,d.definition,r.hits
-                         from defs d, ranks r
-                         where d.word=r.word
-                         and d.length=? "
-                         hits
-                       " order by random()
-                         limit 1") size])))))
+                (= :veasy difficulty) "and r.hits>100000000")
+         limit-clause (if (= limit :all)
+                        ""
+                        "limit 2")
+         query-result (query db [(str "select d.word,d.definition,r.hits
+                                       from defs d, ranks r
+                                       where d.word=r.word
+                                       and d.length=? "
+                                       hits
+                                     " order by random() "
+                                     limit-clause) size])]
+     (if (= limit :all)
+       query-result
+       (first query-result)))))
 
 (defn real-word?
   "Check the given word is in the defs dictionary."

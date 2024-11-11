@@ -1,66 +1,37 @@
-* Challenge game [5/7]
+* Wordle Analytics
 
-- [X] Parse "wordle challenge Bob" as a challenge against user Bob
-- [X] Have notion of "user" and private chat ID for that user
-- [X] Handle errors - user doesn't exist OR user exists but no known private chat
-- [X] Initiate two games for each user with initial messages
-- [X] Have additional status in games, db, indicating they are challenge games
-- [ ] At conclusion of challenge game, indicate status of other user and to other user
-- [ ] At conclusion of both challenge games, report side-by-side image and declare victor in main chat
+It would be nice if the bot could more accurately judge performance of
+a player.
 
-** processMessage changes
+- When a player makes a *mistake* - chastise them
+- When they make near optimal word choices - congratulate them
+- Have some kind of post match analysis
+- Inform them when they had a lucky guess
 
-1) Get the chat-keys for each user
-2) Init game for each user/chat-key
-3) Send start messages for each user/chat-key
-4) Store image somehow? Just append the images side by side?
+How to achieve this?
 
-** Challenge Game conclusion race conditions
-
-How to solve this?
-
-Unique key for a "challenge" match? => the two chat-keys ordered and appended?
-
-With this, we can have some atom/shared state which must be locked.
-
-First game to "complete status" locks?
-
-Not sure if an issue or how much of an issue really.
-
-Something like this should work:
-#+BEGIN_SRC clojure
-(def work-in-progress (atom false))
-
-(defn start-work []
-  (locking work-in-progress
-    (if @work-in-progress
-      (do
-        (println "Work is already in progress.")
-        )
-      (do
-        (reset! work-in-progress true)
-        ;; Perform the work here
-        (println "Work completed.")
-        (reset! work-in-progress false)))))
-
-(defn main []
-  (future (start-work)) ; Start work in a separate thread
-  (start-work)) ; Try to start work again in the main thread
-#+END_SRC
-
-* Challenge game append images
-
-COnsider using JAI as below to append some images instead of the quil BS
-
-#+BEGIN_SRC clojure
-(ns image-append-example
-  (:import (javax.media.jai.JAI)
-           (com.sun.media.imageio.plugins.jpeg JPEGImageReader)))
-
-(defn append-images [img1 img2]
-  (let [reader (JPEGImageReader.)
-        input-streams [(java.io.ByteArrayInputStream. (.getStream img1))
-                       (java.io.ByteArrayInputStream. (.getStream img2))]
-        result-image (JAI/createCompositeImage input-streams)]
-    (.write result-image "output.jpg")))
-#+END_SRC
+- First, we need a function that, given a guess word and the letter
+  categories, can work out all matching words from the dictionary.
+- Given this, given a series of guesses and word categories, we can
+  easily find the set of matching words that the answer must be among.
+- The "optimal" guess, is the word which when guesses, reduces the
+  possible candidate list by the maximum amount.
+- How much calculation are we talking about?
+    - There are 2457 words in the :easy set (these are the possible
+      answers)
+    - There are 5874 words in the :all set (these are the possible
+      valid guesses)
+    - So, worst case easy in game before 1st guess we could see around
+      (* 5874 2457) comparisons to be made - 1.4 million - but likely
+      in the 100s of K for a typical game
+    - On my dinky dual core 2014 era server I would guess this will
+      take a few seconds? It may be doable.. especially if we employ
+      optimisations below:
+- There are some (many?) optimisations to be done:
+    - The largest candidate list is at the start. We could memoise the
+      candidate list for opening words?
+    - We could "merge" the rules - rather than have 3 uess words with
+      3 sets of letter categories, can they be merged into one set of
+      known facts?
+    - Test fastest "exclusions" first. eg "word must contain a D at
+      1st position" can be quickly tested for?
