@@ -68,3 +68,32 @@
          (compare-guess-to-answer "EELSY" "AGLEE")))
   (is (= [:semiknown :semiknown :wrong :wrong :wrong]
          (compare-guess-to-answer "EEESY" "AGLEE"))))
+
+(defn get-facts
+  "Given a map of guesses->classifications, this will calculate and return a list of facts,
+  comprising 2 categories:
+    - :known - letters known to exist in the word at the given index (ie green in wordle) - a vec of pairs char->position
+    - :bounded - bounds for letters where we know some information - a map of chars to :upper and/or :lower bound
+    - :known-nots - letters known to NOT exist in the word at the given index. A map of indexes to chars
+
+  By representing in this way, we can \"add\" multiple facts together in a simple way and then quickly check all known facts
+  at once.
+
+  Some example responses:
+
+  Answer: ABBAS Guess: LOOOS
+  Response: {:known [('S' 4)]
+             :bounded {'L' {:upper 0} 'O' {:upper 0} 'S' {:lower 1} }
+             :known-nots { 0 #{'L'} 1 #{'O'} 2 #{'O'} 3 #{'O'} }
+
+  Answer: ABBAS Guess: ABABA
+  Response: {:known [('A' 0) ('B' 1)] :bounded {'A' {:lower 2 :upper 2} 'B' {:lower 2}  }  }
+
+  As ALL letters have an :upper bound of 5 (and :lower of 0) at start of game, we don't calculate this obvious fact. Only if :lower >0 do we represent it, and only if :upper < 5 - otherwise it is the default value. The default :upper is (5 - sum of :lower bounds + this letter's lower bound) and default lower is always 0. So for example ABABA above default :upper is (5 - (2 + 2)) = 1. So we know that 'Z' may appear between 0 and 1 times - while 'B' is 2 or 3 times.
+
+  However, we don't pass the answer as a param - rather we pass the classifications (from compare-guess-to-answer)
+  and the guess. That way we're separating our comparison of guess to answer to figure out each letter status - from the
+  logic for composing facts."
+  [classifications bounds]
+    ;; um tbd
+  )

@@ -166,11 +166,11 @@
                                       (get-gameprop chat-key :excluded-letters))
         included (get-gameprop chat-key :included-letters)
         letter-aid (set/difference less-excluded included)]
-    (str (clojure.string/join
+    (str (str/join
           "\n"
-          (strutil/chop (clojure.string/join " " (mapv str letter-aid)) 2))
+          (strutil/chop (str/join " " (mapv str letter-aid)) 2))
          " \n [ "
-         (clojure.string/join " " included)
+         (str/join " " included)
          " ]")))
 
 (defn parse-size
@@ -283,7 +283,7 @@
   set user to elspeth. If the game in progress is an elspeth game, then
   it always continues as an elspeth game."
     [m chat-key]
-    (let [has-elspeth (clojure.string/includes? (clojure.string/lower-case (.getText m)) "elspeth")
+    (let [has-elspeth (str/includes? (str/lower-case (.getText m)) "elspeth")
           sender      (.getSender m)]
       (if (playing? chat-key)
         (if (= "Elspeth" (get-gameprop chat-key :user))
@@ -359,7 +359,7 @@
         guess-rate-20 (:guess-rate-20 pbs)]
     (when (and (not (nil? streak)) (= 0 (mod streak 5)))
       (.reply m (format "Well done %s!! Your PB streak is now %s." user streak)))
-    (when (not (nil? won-rate-150))
+)    (when (not (nil? won-rate-150))
       (.reply m (format "NEW PB!!! Well done %s!! Your PB win rate is now %s." user won-rate-150)))
     (when (not (nil? guess-rate-20))
       (.reply m (format "NEW PB!!! Well done %s!! Your PB guess rate is now %s." user guess-rate-20)))))
@@ -383,7 +383,7 @@
 (defn handle-gameplay [m chat-key guess user]
   (if (and (= (get-gameprop chat-key :size)
               (count (re-matches #"[a-zA-Z]*" guess)))
-           (words/real-word? (clojure.string/upper-case guess)))
+           (words/real-word? (str/upper-case guess)))
     (do
       (handle-guess m chat-key guess user)
       (when (or (won? chat-key) (= max-guesses (guesses-made chat-key)))
@@ -398,7 +398,7 @@
   (.replyWithImage m (gfx/get-img-sync chat-key {:user user :type :stats})))
 
 (defn handle-statsvs-command [m chat-key user]
-  (let [opponent (clojure.string/trim (.getModText m))]
+  (let [opponent (str/trim (.getModText m))]
     (if (users/user-known? opponent)
       (let [days          7
             user-wins     (users/count-recent-wins user opponent days)
@@ -414,7 +414,7 @@
 
 (defn handle-challenge [m user challenge-user size difficulty]
   (if (users/user-known? user)
-    (if (= (clojure.string/lower-case challenge-user) (clojure.string/lower-case user))
+    (if (= (str/lower-case challenge-user) (str/lower-case user))
       (.reply m "You can't challenge yourself, silly.")
       (let [user1-chatid   (users/user-chat challenge-user)
             user2-chatid   (users/user-chat user)
@@ -462,9 +462,9 @@
 
 (defn -processChannelMessage [_ m]
   (let [chat-key (keyword (str (.getChatId m)))
-        guess    (clojure.string/upper-case (.getText m))
-        command  (clojure.string/lower-case (.getModCommand m))
-        trailing (clojure.string/lower-case (.getText m))
+        guess    (str/upper-case (.getText m))
+        command  (str/lower-case (.getModCommand m))
+        trailing (str/lower-case (.getText m))
         user     (get-user m chat-key)]
     (case command
       "stats"   (handle-stats-command m chat-key user)
