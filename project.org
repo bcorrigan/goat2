@@ -30,7 +30,7 @@ How to achieve this?
 - There are some (many?) optimisations to be done:
     - The largest candidate list is at the start. We could memoise the
       candidate list for opening words?
-    - We could "merge" the rules - rather than have 3 uess words with
+    - We could "merge" the rules - rather than have 3 guess words with
       3 sets of letter categories, can they be merged into one set of
       known facts?
     - Test fastest "exclusions" first. eg "word must contain a D at

@@ -2,9 +2,11 @@
   (:gen-class :extends org.goat.core.Module
               :exposes {WANT_ALL_MESSAGES {:get WANT_ALL_MESSAGES}})
   (:require [org.goat.db.words :as words]
+            [org.goat.util.str :as strutil]
             [org.goat.db.users :as users]
             [org.goat.wordle.gfx :as gfx]
             [org.goat.wordle.str :as msg]
+            [org.goat.wordle.analytics :as analytics]
             [clojure.set :as set]
             [clojure.edn :as edn]
             [clojure.string :as str])
@@ -134,90 +136,19 @@
   [chat-key]
   (= (last (get-gameprop chat-key :guesses)) (get-gameprop chat-key :answer)))
 
-(defn contains-char?
-  "Does the string contain the char c?"
-  [string c]
-  (boolean (some #(= % c) string)))
-
-(defn mask-answer
-  [guess answer]
-  (vec (for [i (range (count guess))
-             :let [ges_let (get guess i)
-                   ans_let (get answer i)]]
-         (if (= ges_let ans_let) \. ans_let))))
-
-(defn mask-first
-  "Mask the first instance of c in answer"
-  [answer c]
-  (clojure.string/replace-first answer c "."))
-
-(defn classify-letters
-  "See compare-guess-to-answer. This is the main implementation. We \"mask\" the answer where letters are correct
-  first, then we simply compare letter by letter, if it matches it is :revealed, if it doesn't and is in masked_answer
-  then it is :semiknown, otherwise it is :wrong. Then we conj with recursive call for next letter."
-  ([guess answer] (classify-letters guess answer (mask-answer guess answer)))
-  ([guess answer masked-ans]
-   (if (empty? guess)
-     '()
-     (let [ges_let (first guess)
-           ans_let (first answer)
-           ans_rest (clojure.string/join (rest guess))
-           ges_rest (clojure.string/join (rest answer))]
-       (cond (= ges_let ans_let) (conj (classify-letters ans_rest ges_rest masked-ans)
-                                       :revealed)
-             (contains-char? masked-ans ges_let)
-             (conj
-              (classify-letters ans_rest ges_rest (mask-first masked-ans ges_let))
-              :semiknown)
-             :else (conj (classify-letters ans_rest ges_rest masked-ans) :wrong))))))
-
-(defn compare-guess-to-answer
-  "Compare given guess to answer. For each letter:
-    If letter is correct and in right position - :revealed
-    If letter is in the answer, but in the wrong position - :semiknown
-    If letter is NOT in the answer - :wrong
-    A vec of these keywords is returned for each letter in the supplied guess."
-  [guess answer]
-  (vec (classify-letters guess answer)))
-
-;; This was a tricky fn so lets have a test for once
-(deftest test-compare-guess-to-answer
-  (is (= [:wrong :semiknown :wrong :semiknown :revealed]
-         (compare-guess-to-answer "FEELS" "PALES")))
-  (is (= [:wrong :semiknown :wrong :revealed :revealed]
-         (compare-guess-to-answer "FLEES" "PALES")))
-  (is (= [:wrong :revealed :revealed :revealed :wrong]
-         (compare-guess-to-answer "GLEES" "FLEET")))
-  (is (= [:semiknown :semiknown :revealed :wrong :wrong]
-         (compare-guess-to-answer "EELSY" "AGLEE")))
-  (is (= [:semiknown :semiknown :wrong :wrong :wrong]
-         (compare-guess-to-answer "EEESY" "AGLEE"))))
-
 (defn no-progress?
   "If the last 3 guesses have not resulted in finding new information
    (other than excluded letters) - returns true"
   [chat-key]
   (apply =
-         (mapv #(compare-guess-to-answer % (get-gameprop chat-key :answer))
+         (mapv #(analytics/compare-guess-to-answer % (get-gameprop chat-key :answer))
                (take-last 3 (get-gameprop chat-key :guesses)))))
-
-;;TODO make our own string util pkg....
-(defn chop
-  [s piece-count]
-  (let [step (/ (count s) piece-count)]
-    (->> (range (inc piece-count)) ;; <-- Enumerated split positions
-         (map #(-> %
-                   (* step)
-                   double
-                   Math/round)) ;; <-- Where to split
-         (partition 2 1) ;; <-- Form slice lower/upper bounds
-         (map (fn [[l u]] (subs s l u)))))) ;; <-- Slice input string
 
 (defn add-guess!
   "Append the given guess to the state map.
    This will also update the lists of seen letters"
   [chat-key guess user]
-  (let [syms (compare-guess-to-answer guess (get-gameprop chat-key :answer))
+  (let [syms (analytics/compare-guess-to-answer guess (get-gameprop chat-key :answer))
         le-syms (map vector syms guess)]
     (mapv #(do (cond (= :wrong (first %)) (add-exc-letter! chat-key (second %))
                      (= :revealed (first %)) (add-inc-letter! chat-key
@@ -237,7 +168,7 @@
         letter-aid (set/difference less-excluded included)]
     (str (clojure.string/join
           "\n"
-          (chop (clojure.string/join " " (mapv str letter-aid)) 2))
+          (strutil/chop (clojure.string/join " " (mapv str letter-aid)) 2))
          " \n [ "
          (clojure.string/join " " included)
          " ]")))
@@ -251,7 +182,6 @@
 (defn get-difficulty
   "If hard difficulty is present, set it, otherwise just return :normal"
   [s]
-
   (let [elspeth (re-find #"elspeth" s)
         difficulty (re-find #"hard" s)]
     (if (nil? elspeth)
