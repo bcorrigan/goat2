@@ -2,11 +2,14 @@
   :description "FIXME: add description"
   :java-source-paths ["src/main/java"]
   :source-paths ["src/main/clojure"]
-  ;:main org.goat.Goat
-  :aot :all  ; Compile all AOT
-  
-  ; Updated Java compiler options to use --release instead of -source/-target
   :javac-options ["--release" "23"]
+  
+  ;; Add manifest configuration
+  :manifest {"Main-Class" "org.goat.Goat"}
+  
+  ;; Add jar configuration
+  :jar-name "goat-0.1.jar"
+  :uberjar-name "goat-0.1-standalone.jar"
   
   :dependencies [[org.clojure/clojure "1.12.0"]
                 [org.telegram/telegrambots-longpolling "8.2.0"]
@@ -18,7 +21,6 @@
                 [org.apache.commons/commons-lang3 "3.17.0"]
                 [org.reflections/reflections "0.10.2"]
                 [com.zoho/hawking "0.1.9"]
-                ; Updated MapDB dependency with exclusions to address version range warnings
                 [org.mapdb/mapdb "3.1.0" 
                  :exclusions [org.jetbrains.kotlin/kotlin-stdlib
                              org.eclipse.collections/eclipse-collections-api
@@ -30,44 +32,12 @@
                 [org.clojure/java.jdbc "0.7.12"]
                 [org.xerial/sqlite-jdbc "3.48.0.0"]]
 
-  :profiles {:dev {:dependencies [[cider/cider-nrepl "0.52.0"]
-                                  [nrepl/nrepl "1.3.1"]]}
-             :uberjar {:main org.goat.Goat
-                       :aot :all}}
+  :profiles {:dev {:dependencies [[nrepl/nrepl "1.3.1"]]}
+             :uberjar {:aot :all}}
 
   :repositories [["clojars" "https://repo.clojars.org"]
                 ["spring-external" "http://repository.springsource.com/maven/bundles/external"]]
 
-  :plugins [[cider/cider-nrepl "0.52.0"]]
-
-  :repl-options {:host "localhost"
-                :port 40000
-                :middleware [cider.nrepl/wrap-apropos
-                            cider.nrepl/wrap-classpath
-                            cider.nrepl/wrap-complete
-                            cider.nrepl/wrap-debug
-                            cider.nrepl/wrap-format
-                            cider.nrepl/wrap-info
-                            cider.nrepl/wrap-inspect
-                            cider.nrepl/wrap-macroexpand
-                            cider.nrepl/wrap-ns
-                            cider.nrepl/wrap-spec
-                            cider.nrepl/wrap-profile
-                            cider.nrepl/wrap-refresh
-                            cider.nrepl/wrap-resource
-                            cider.nrepl/wrap-stacktrace
-                            cider.nrepl/wrap-test
-                            cider.nrepl/wrap-trace
-                            cider.nrepl/wrap-out
-                            cider.nrepl/wrap-undef
-                            cider.nrepl/wrap-version
-                            cider.nrepl/wrap-xref]}
-
-  :uberjar-name "goat-0.1-standalone.jar"
-  
   :target-path "target/%s"
   
   :clean-targets ^{:protect false} [:target-path])
-
-
-
