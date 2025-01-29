@@ -311,7 +311,7 @@
         size (get-gameprop chat-key :size)
         answer (get-gameprop chat-key :answer)
         guesses-classified (zipmap guesses
-                                   (map #(compare-guess-to-answer % answer)
+                                   (map #(analytics/compare-guess-to-answer % answer)
                                         guesses))]
     (gfx/get-img-sync chat-key {:type    :board
                                 :size    size
@@ -359,7 +359,7 @@
         guess-rate-20 (:guess-rate-20 pbs)]
     (when (and (not (nil? streak)) (= 0 (mod streak 5)))
       (.reply m (format "Well done %s!! Your PB streak is now %s." user streak)))
-)    (when (not (nil? won-rate-150))
+    (when (not (nil? won-rate-150))
       (.reply m (format "NEW PB!!! Well done %s!! Your PB win rate is now %s." user won-rate-150)))
     (when (not (nil? guess-rate-20))
       (.reply m (format "NEW PB!!! Well done %s!! Your PB guess rate is now %s." user guess-rate-20)))))

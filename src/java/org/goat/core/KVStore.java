@@ -64,6 +64,7 @@ public class KVStore<T> implements Map<String, T> {
             //db.defrag(true);
 
             globalMap= (ConcurrentNavigableMap<String, Object>) db.treeMap("globalMap").createOrOpen();
+            System.out.println("KVStore initialised.");
         }
     }
 
@@ -434,4 +435,3 @@ public class KVStore<T> implements Map<String, T> {
 
     }
 }
-

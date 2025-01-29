@@ -16,7 +16,9 @@ public class Users {
     private static CopyOnWriteArraySet<String> userNames = new CopyOnWriteArraySet<String>();
 
     static {
+        System.out.println("Initialising users...");
         initNames();
+        System.out.println("Users initialised.");
     }
 
     public static boolean hasUser(String name) {
@@ -141,4 +143,3 @@ public class Users {
         }
     }
 }
-
