@@ -10,7 +10,7 @@
 (defn -processChannelMessage
   [_ m]
   (cond (= (.getModCommand m) "mem")
-            (let [mem-bytes (. (Runtime/getRuntime) totalMemory)
+            (let [mem-bytes (.totalMemory (Runtime/getRuntime))
                   mem-kb (/ mem-bytes 1024)]
               (.reply m (str mem-kb "kb")))
         (= (.getModCommand m) "gc")

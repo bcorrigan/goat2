@@ -112,7 +112,7 @@
   [guesses]
   (if (> guesses 5)
     6
-    (+ 1 guesses)))
+    (inc guesses)))
 
 (defn board-width
   "get the width of the board for the given chat-key"
@@ -266,10 +266,10 @@
       (q/no-stroke)
 
                                         ; Draw the slices
-      (let [p1-to-angle (* 360 (if (> player1-wins 0)
+      (let [p1-to-angle (* 360 (if (pos? player1-wins)
                        (/ player1-wins total)
                        0))
-            p2-to-angle (* 360 (if (> player2-wins 0)
+            p2-to-angle (* 360 (if (pos? player2-wins)
                               (/ (+ player1-wins player2-wins) total)
                               p1-to-angle))]
         (draw-slice 0

@@ -1,16 +1,19 @@
 (defproject org/goat "0.1"
-  :description "FIXME: add description"
-  :java-source-paths ["src/main/java"]
-  :source-paths ["src/main/clojure"]
+  :description "A telegram bot for fun and hijinx"
+  :java-source-paths ["src/java"]
+  :source-paths ["src/clj"]
   :javac-options ["--release" "23"]
   
   ;; Add manifest configuration
   :manifest {"Main-Class" "org.goat.Goat"}
   
   ;; Add jar configuration
-  :jar-name "goat-0.1.jar"
-  :uberjar-name "goat-0.1-standalone.jar"
+  :uberjar-exclusions [#"resources/.*"]
+  :resource-paths []
+  :jar-name ~(format "goat-%s.jar" (.format (java.text.SimpleDateFormat. "yyyyMMdd") (java.util.Date.)))
+  :uberjar-name ~(format "goat-%s-standalone.jar" (.format (java.text.SimpleDateFormat. "yyyyMMdd") (java.util.Date.)))  
   
+
   :dependencies [[org.clojure/clojure "1.12.0"]
                 [org.telegram/telegrambots-longpolling "8.2.0"]
                 [org.telegram/telegrambots-webhook "8.2.0"]
@@ -27,7 +30,6 @@
                              org.eclipse.collections/eclipse-collections
                              org.eclipse.collections/eclipse-collections-forkjoin
                              com.google.guava/guava]]
-                [jline/jline "0.9.94"]
                 [quil "4.3.1563"]
                 [org.clojure/java.jdbc "0.7.12"]
                 [org.xerial/sqlite-jdbc "3.48.0.0"]]
@@ -35,8 +37,7 @@
   :profiles {:dev {:dependencies [[nrepl/nrepl "1.3.1"]]}
              :uberjar {:aot :all}}
 
-  :repositories [["clojars" "https://repo.clojars.org"]
-                ["spring-external" "http://repository.springsource.com/maven/bundles/external"]]
+  :repositories [["clojars" "https://repo.clojars.org"]]
 
   :target-path "target/%s"
   

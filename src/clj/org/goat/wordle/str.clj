@@ -5,7 +5,7 @@
 (defn get-streak-msg
   "Get a congratulatory (or critical) message depending on user's streak"
   [streak user]
-  (cond (= 0 streak)
+  (cond (zero? streak)
         (str "Your streak is a big fat 0 I'm afraid, " user ". Don't feel bad, everybody is good at something.")
         (>= streak 50)
         (str user ", you are the god of wordle with a streak of " streak)

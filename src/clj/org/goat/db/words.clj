@@ -91,5 +91,4 @@
 (defn real-word?
   "Check the given word is in the defs dictionary."
   [word]
-  (not (empty? (query db ["select * from defs where word=? limit 1"
-                                  (clojure.string/upper-case word)]))))
+  (seq (query db ["select * from defs where word=? limit 1" (clojure.string/upper-case word)])))

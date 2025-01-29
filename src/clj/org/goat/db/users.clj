@@ -37,23 +37,8 @@
                                           [:starttime :datetime]
                                           [:endtime :datetime]
                                           ])))
-       (if (not (util/tbl-exists? db :wordlegames))
-         (do
-         (sql/db-do-commands db
-                             (sql/create-table-ddl :records
-                                                   [[:username :text]
-                                                    [:record :text]
-                                                    [:recordval :text]
-                                                    [:recordtime :datetime]]))
-
-         (sql/execute! db "create unique index recidx on records(username, record)" )))
-       (if (not (util/tbl-exists? db :users))
-         (do
-         (sql/db-do-commands db (sql/create-table-ddl :users
-                                                      [[:username :text]
-                                                       [:chatid :int]
-                                                       ]))
-         (sql/execute! db "create unique index usridx on users(username)" )))
+       (when-not (util/tbl-exists? db :wordlegames) (sql/db-do-commands db (sql/create-table-ddl :records [[:username :text] [:record :text] [:recordval :text] [:recordtime :datetime]])) (sql/execute! db "create unique index recidx on records(username, record)"))
+       (when-not (util/tbl-exists? db :users) (sql/db-do-commands db (sql/create-table-ddl :users [[:username :text] [:chatid :int]])) (sql/execute! db "create unique index usridx on users(username)"))
 
        (if (not (util/tbl-exists? db :challenges))
          (sql/db-do-commands db (sql/create-table-ddl :challenges

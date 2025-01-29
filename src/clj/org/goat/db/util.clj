@@ -3,7 +3,4 @@
 (defn tbl-exists?
   "Check the given table exists"
   [db tbl]
-  (not (empty? (query db ["select name
-                           from sqlite_master
-                           where type='table'
-                           AND name=?" (name tbl)]))))
+  (seq (query db ["select name\n                           from sqlite_master\n                           where type='table'\n                           AND name=?" (name tbl)])))
