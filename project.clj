@@ -2,11 +2,11 @@
   :description "FIXME: add description"
   :java-source-paths ["src/main/java"]
   :source-paths ["src/main/clojure"]
-  :main org.goat.Goat
-  :aot :all  ; Add this to address the AOT warning
+  ;:main org.goat.Goat
+  :aot :all  ; Compile all AOT
   
   ; Updated Java compiler options to use --release instead of -source/-target
-  :javac-options ["--release" "22"]
+  :javac-options ["--release" "23"]
   
   :dependencies [[org.clojure/clojure "1.12.0"]
                 [org.telegram/telegrambots-longpolling "8.2.0"]
@@ -31,7 +31,9 @@
                 [org.xerial/sqlite-jdbc "3.48.0.0"]]
 
   :profiles {:dev {:dependencies [[cider/cider-nrepl "0.52.0"]
-                                [nrepl/nrepl "1.3.1"]]}}
+                                  [nrepl/nrepl "1.3.1"]]}
+             :uberjar {:main org.goat.Goat
+                       :aot :all}}
 
   :repositories [["clojars" "https://repo.clojars.org"]
                 ["spring-external" "http://repository.springsource.com/maven/bundles/external"]]
