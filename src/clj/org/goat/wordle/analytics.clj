@@ -69,52 +69,98 @@
   (is (= [:semiknown :semiknown :wrong :wrong :wrong]
          (compare-guess-to-answer "EEESY" "AGLEE"))))
 
-(defn get-facts-old
+
+(defn get-facts
   "Given a map of guesses->classifications, this will calculate and return a list of facts,
   comprising 2 categories:
     - :known - letters known to exist in the word at the given index (ie green in wordle) - a vec of pairs char->position
-    - :bounded - bounds for letters where we know some information - a map of chars to :upper and/or :lower bound
-    - :known-nots - letters known to NOT exist in the word at the given index. A map of indexes to chars
+    - :bounds - bounds for letters where we know some information - a map of chars to :upper and/or :lower bound
+    - :known-nots - letters known to NOT exist in the word at the given index. A map of indexes to chars"
+  ([classifications guess] (get-facts classifications guess {:known [] :bounds {} :known-nots {}} 0))
+  ([classifications guess facts index]
+   (if (empty? classifications)
+     facts
+     (let [classfn (first classifications)
+           letter (first guess)
+           rest-classes (rest classifications)
+           rest-guess (rest guess)
+           current-known (:known facts)
+           current-bounds (:bounds facts)
+           current-known-nots (:known-nots facts)
+           new-known-nots (if (or (= classfn :semiknown) (= classfn :wrong))
+                            (update current-known-nots index (fn [s] (conj (or s #{}) letter)))
+                            current-known-nots)
+           process-bounds (fn [bounds lower-key]
+                            (let [letter-lower (inc (get-in bounds [letter lower-key] 0))
+                                  new-bounds (assoc-in bounds [letter :lower] letter-lower)
+                                  current-upper (get-in new-bounds [letter :upper] Integer/MAX_VALUE)]
+                              (if (and (not= current-upper Integer/MAX_VALUE)
+                                       (< current-upper letter-lower))
+                                (assoc-in new-bounds [letter :upper] letter-lower)
+                                new-bounds)))]
+       (cond
+         (= :revealed classfn)
+         (let [new-known (conj current-known [letter index])
+               new-bounds (process-bounds current-bounds :lower)]
+           (recur rest-classes rest-guess
+                  {:known new-known
+                   :bounds new-bounds
+                   :known-nots new-known-nots}
+                  (inc index)))
+         
+         (= :semiknown classfn)
+         (let [new-bounds (process-bounds current-bounds :lower)]
+           (recur rest-classes rest-guess
+                  {:known current-known
+                   :bounds new-bounds
+                   :known-nots new-known-nots}
+                  (inc index)))
+         
+         (= :wrong classfn)
+         (let [current-letter-lower (get-in current-bounds [letter :lower] 0)
+               new-upper (if (zero? current-letter-lower)
+                           0
+                           current-letter-lower)
+               new-bounds (assoc-in current-bounds [letter :upper] new-upper)]
+           (recur rest-classes rest-guess
+                  {:known current-known
+                   :bounds new-bounds
+                   :known-nots new-known-nots}
+                  (inc index))))))))
 
-  By representing in this way, we can \"add\" multiple facts together in a simple way and then quickly check all known facts
-  at once.
 
-  Some example responses:
+(deftest test-get-facts-basic
+  (let [classfns '(:wrong :wrong :wrong :wrong :revealed)
+        facts (get-facts classfns "ABCDE")]
+    (println "facts:" facts)
+    (is (= {\A {:upper 0},
+            \B {:upper 0},
+            \C {:upper 0},
+            \D {:upper 0},
+            \E {:lower 1}}
+           (:bounds facts))
+        "A-D should have an upper bound of 0, E should have an unknown upper bound and a lower bound of 1")
+    (is (= [[\E 4]]
+           (:known facts))
+        "E is known at position 4 and nothing else")
+    (is (= {0 #{\A}, 1 #{\B}, 2 #{\C}, 3 #{\D}}
+           (:known-nots facts))
+        "A is known to not be at pos 0, B is known to not be at pos 1 etc.")))
 
-  Answer: ABBAS Guess: LOOOS
-  Response: {:known [('S' 4)]
-             :bounded {'L' {:upper 0} 'O' {:upper 0} 'S' {:lower 1} }
-             :known-nots { 0 #{'L'} 1 #{'O'} 2 #{'O'} 3 #{'O'} }
+(deftest test-get-facts-semiknown
+  (let [classfns '(:wrong :wrong :semiknown :semiknown :revealed)
+        facts (get-facts classfns "EBCDE")]
 
-  Answer: ABBAS Guess: ABABA
-  Response: {:known [('A' 0) ('B' 1)] :bounded {'A' {:lower 2 :upper 2} 'B' {:lower 2}  }  }
-
-  As ALL letters have an :upper bound of 5 (and :lower of 0) at start of game, we don't calculate this obvious fact. Only if :lower >0 do we represent it, and only if :upper < 5 - otherwise it is the default value. The default :upper is (5 - sum of :lower bounds + this letter's lower bound) and default lower is always 0. So for example ABABA above default :upper is (5 - (2 + 2)) = 1. So we know that 'Z' may appear between 0 and 1 times - while 'B' is 2 or 3 times.
-
-  However, we don't pass the answer as a param - rather we pass the classifications (from compare-guess-to-answer)
-  and the guess. That way we're separating our comparison of guess to answer to figure out each letter status - from the
-  logic for composing facts."
-  ([classifications guess] (get-facts-old classifications guess {}))
-  ([classifications guess bounds] (get-facts-old classifications guess bounds 0))
-  ([classifications guess bounds index]
-  ;; um tbd
-   (let [classfn (first classifications)
-         letter (first guess)]
-     (cond (= :revealed classfn)
-           (do
-             ;; add '(guess-char index) pair to :known, add to :bounded and recur
-             ;;if :bounded->:upper = :known count for the letter, remove from :known-nots too
-
-             )
-           (= :semiknown classfn)
-           (do
-             ;; add to :bounded, add to :known-nots and recur
-             )
-           (= :wrong classfn)
-           (do
-             ;; add to add to bounded, and recur
-             )
-           )
-     )
-   ))
+    (is (= {\E {:upper 1 :lower 1},
+            \B {:upper 0},
+            \C {:lower 1},
+            \D {:lower 1}}
+           (:bounds facts))
+        "E should have an upper and lower bound of 1. B should have upper bound 0. C and D should have lower bound of 1.")
+    (is (= [[\E 4]]
+           (:known facts))
+        "E is known at position 4 and nothing else")
+    (is (= {0 #{\E}, 1 #{\B}, 2 #{\C}, 3 #{\D} }
+           (:known-nots facts))
+        "E is known to not be at pos 0, B is known to not be at pos 1, and C&D as semiknown are known to not be at 2 and 3")))
 
