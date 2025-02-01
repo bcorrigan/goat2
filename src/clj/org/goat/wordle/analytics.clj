@@ -69,17 +69,34 @@
   (is (= [:semiknown :semiknown :wrong :wrong :wrong]
          (compare-guess-to-answer "EEESY" "AGLEE"))))
 
-
 (defn get-facts
-  "Given a map of guesses->classifications, this will calculate and return a list of facts,
-  comprising 2 categories:
-    - :known - letters known to exist in the word at the given index (ie green in wordle) - a vec of pairs char->position
-    - :bounds - bounds for letters where we know some information - a map of chars to :upper and/or :lower bound
-    - :known-nots - letters known to NOT exist in the word at the given index. A map of indexes to chars"
-  ([classifications guess] (get-facts classifications guess {:known [] :bounds {} :known-nots {}} 0))
+  "Given classifications and guess, returns facts with:
+   - :known = map of position → confirmed letter
+   - :bounds = map of letters → {:lower X :upper Y}
+   - :known-nots = map of position → set of excluded letters *at explicit positions*"
+  ([classifications guess]
+   (get-facts classifications guess {:known {} :bounds {} :known-nots {} :current-guess-counts {}} 0))
   ([classifications guess facts index]
    (if (empty? classifications)
-     facts
+     ;; After processing all classifications, update :bounds with :current-guess-counts
+     (let [current-guess-counts (:current-guess-counts facts)
+           ;; Update lower bounds and ensure upper >= lower
+           new-bounds (reduce (fn [bounds [letter count]]
+                                (let [current-lower (get-in bounds [letter :lower] 0)
+                                      new-lower (max current-lower count)
+                                      current-upper (get-in bounds [letter :upper] Integer/MAX_VALUE)
+                                      new-upper (if (> new-lower current-upper)
+                                                  new-lower
+                                                  current-upper)
+                                      new-bounds (assoc-in bounds [letter :lower] new-lower)]
+                                  (if (< new-upper 20)
+                                    (assoc-in new-bounds [letter :upper] new-upper)
+                                    new-bounds)))
+                              (:bounds facts)
+                              current-guess-counts)]
+       (-> facts
+           (assoc :bounds new-bounds)
+           (dissoc :current-guess-counts)))
      (let [classfn (first classifications)
            letter (first guess)
            rest-classes (rest classifications)
@@ -87,45 +104,49 @@
            current-known (:known facts)
            current-bounds (:bounds facts)
            current-known-nots (:known-nots facts)
+           current-guess-counts (:current-guess-counts facts)
+           ;; Update current-guess-counts if classfn is :revealed or :semiknown
+           new-guess-counts (if (or (= classfn :revealed) (= classfn :semiknown))
+                              (update current-guess-counts letter (fnil inc 0))
+                              current-guess-counts)
            new-known-nots (if (or (= classfn :semiknown) (= classfn :wrong))
                             (update current-known-nots index (fn [s] (conj (or s #{}) letter)))
                             current-known-nots)
-           process-bounds (fn [bounds lower-key]
-                            (let [letter-lower (inc (get-in bounds [letter lower-key] 0))
-                                  new-bounds (assoc-in bounds [letter :lower] letter-lower)
-                                  current-upper (get-in new-bounds [letter :upper] Integer/MAX_VALUE)]
-                              (if (and (not= current-upper Integer/MAX_VALUE)
-                                       (< current-upper letter-lower))
-                                (assoc-in new-bounds [letter :upper] letter-lower)
-                                new-bounds)))]
+           ;; For :wrong, process upper bound
+           process-upper (fn [bounds]
+                           (let [current-letter-lower (get-in bounds [letter :lower] 0)
+                                 new-upper (if (zero? current-letter-lower)
+                                             0
+                                             current-letter-lower)
+                                 current-upper (get-in bounds [letter :upper] Integer/MAX_VALUE)
+                                 updated-upper (min current-upper new-upper)]
+                             (assoc-in bounds [letter :upper] updated-upper)))]
        (cond
          (= :revealed classfn)
-         (let [new-known (conj current-known [letter index])
-               new-bounds (process-bounds current-bounds :lower)]
+         (let [new-known (assoc current-known index letter)]
            (recur rest-classes rest-guess
-                  {:known new-known
-                   :bounds new-bounds
-                   :known-nots new-known-nots}
+                  (-> facts
+                      (assoc :known new-known)
+                      (assoc :known-nots new-known-nots)
+                      (assoc :current-guess-counts new-guess-counts)
+                      (assoc :bounds current-bounds))
                   (inc index)))
          
          (= :semiknown classfn)
-         (let [new-bounds (process-bounds current-bounds :lower)]
-           (recur rest-classes rest-guess
-                  {:known current-known
-                   :bounds new-bounds
-                   :known-nots new-known-nots}
-                  (inc index)))
+         (recur rest-classes rest-guess
+                (-> facts
+                    (assoc :known-nots new-known-nots)
+                    (assoc :current-guess-counts new-guess-counts)
+                    (assoc :bounds current-bounds))
+                (inc index))
          
          (= :wrong classfn)
-         (let [current-letter-lower (get-in current-bounds [letter :lower] 0)
-               new-upper (if (zero? current-letter-lower)
-                           0
-                           current-letter-lower)
-               new-bounds (assoc-in current-bounds [letter :upper] new-upper)]
+         (let [new-bounds (process-upper current-bounds)]
            (recur rest-classes rest-guess
-                  {:known current-known
-                   :bounds new-bounds
-                   :known-nots new-known-nots}
+                  (-> facts
+                      (assoc :known-nots new-known-nots)
+                      (assoc :current-guess-counts new-guess-counts)
+                      (assoc :bounds new-bounds))
                   (inc index))))))))
 
 
@@ -140,7 +161,7 @@
             \E {:lower 1}}
            (:bounds facts))
         "A-D should have an upper bound of 0, E should have an unknown upper bound and a lower bound of 1")
-    (is (= [[\E 4]]
+    (is (= {4 \E}
            (:known facts))
         "E is known at position 4 and nothing else")
     (is (= {0 #{\A}, 1 #{\B}, 2 #{\C}, 3 #{\D}}
@@ -157,10 +178,84 @@
             \D {:lower 1}}
            (:bounds facts))
         "E should have an upper and lower bound of 1. B should have upper bound 0. C and D should have lower bound of 1.")
-    (is (= [[\E 4]]
+    (is (= {4 \E}
            (:known facts))
         "E is known at position 4 and nothing else")
     (is (= {0 #{\E}, 1 #{\B}, 2 #{\C}, 3 #{\D} }
            (:known-nots facts))
         "E is known to not be at pos 0, B is known to not be at pos 1, and C&D as semiknown are known to not be at 2 and 3")))
 
+(deftest test-get-more-facts
+  (let [classfns1 '(:wrong :wrong :semiknown :semiknown :revealed)
+        facts1 (get-facts classfns1 "EBCDE")
+        classfns2 '(:wrong :revealed :semiknown :wrong :revealed)
+        facts2 (get-facts classfns2 "XCDXE" facts1 0)]
+    (is (= {4 \E, 1 \C} ; Position 1 maps to C, position 4 to E
+           (:known facts2))
+        "C added at pos 1, E remains at pos 4")
+    ;; fails because both \C and \D are incorrectly bounded as {:lower 1 :upper 2147483647} suggesting an overflow!
+    ;; other letters are correct
+    (is (= {\E { :upper 1 :lower 1 },
+            \B { :upper 0 },
+            \C { :lower 1 },
+            \D { :lower 1 },
+            \X { :upper 0 }}
+           (:bounds facts2))
+        "C and D are still lower 1, X is resolved to upper 0, E remains are upper 1 lower 1")
+    (is (= {0 #{\E \X}, 1 #{\B}, 2 #{\C \D}, 3 #{\D \X}}
+           (:known-nots facts2))
+        ":known-nots should be as listed")
+    ))
+
+(defn word-matches-known?
+  "test word matches given known letter positions"
+  [known-letters word]
+  (if (= known-letters '())
+    true
+    (let [i (first (first known-letters))
+          known-letter (second (first known-letters))
+          word-letter (get word i)]
+      (and (= known-letter
+              word-letter)
+           (word-matches-known? (rest known-letters) word)))))
+
+(deftest test-word-matches-known?
+  (is (and
+       (word-matches-known? {0 \A 4 \A} "AXXXA")
+       (word-matches-known? {0 \A 2 \A 3 \X} "AXAXA")
+       (word-matches-known? {1 \X 4 \A} "AXXXA")
+       (word-matches-known? {3 \Q 4 \M 0 \X 2 \Z 1 \Y} "XYZQM")
+       (word-matches-known? {} "AXXXA"))
+      "These should all match correctly.")
+  (is (not
+       (and
+        (word-matches-known? {0 \A 3 \A} "AXXXA")
+        (word-matches-known? {0 \A 2 \A 4 \X} "AXAXA")
+        (word-matches-known? {0 \X 4 \A} "AXXXA")
+        (word-matches-known? {3 \Q 4 \Q 0 \X 2 \Z 1 \Y} "XYZQM")
+        (word-matches-known? {4 \X} "AXXXA")))
+      "None of these should match"))
+
+;; in progress..
+(defn word-matches-known-nots?
+  "Test word does not have letter in these positions"
+  [known-nots word]
+  (if (= known-nots '())
+    true
+    (let [i (first (first known-letters))
+          known-letter (second (first known-letters))
+          word-letter (get word i)]
+      (and (= known-letter
+              word-letter)
+           (word-matches-known? (rest known-letters) word)))))
+
+(defn word-matches-facts?
+  "Test the given word matches all the given facts.
+   Facts look like e.g.
+  {:known {4 E, 1 C},
+   :bounds {E {:upper 1, :lower 1}, B {:upper 0}, C {:lower 1}, D {:lower 1}, X {:upper 0}},
+   :known-nots {0 #{E X}, 1 #{B}, 2 #{C D}, 3 #{D X}}}
+  Broadly - letters known to exist at a given position, letters known NOT to exist at a given position, and bounds on letters."
+  [facts word]
+  (and (word-matches-known? (:known facts) word))
+  )
