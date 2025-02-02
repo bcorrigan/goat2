@@ -72,6 +72,7 @@
    (let [hits (cond
                 (= :normal difficulty) "and r.hits>100000"
                 (= :hard difficulty) "and r.hits<100000"
+                (= :all difficulty) "and r.hits>0"
                 (= :easy difficulty) "and r.hits>2000000"
                 (= :veasy difficulty) "and r.hits>100000000")
          limit-clause (if (= limit :all)

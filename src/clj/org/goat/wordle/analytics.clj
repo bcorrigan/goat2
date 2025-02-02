@@ -1,7 +1,8 @@
 (ns org.goat.wordle.analytics
   (:require [clojure.set :as set]
             [clojure.string :as str]
-            [org.goat.util.str :as strutil]))
+            [org.goat.util.str :as strutil]
+            [org.goat.db.words :as words]))
 
 ;; All the hardcore wordle logic goes here!
 ;; If you want to know:
@@ -349,6 +350,9 @@
   (reset! word-freqs
           (zipmap dict (map frequencies dict))))
 
+;;populate the indexes
+(build-indexes! (words/get-word :all 5 :all))
+
 (defn allowed-words-for-facts
   "Compute the set of words allowed by the given facts using precomputed indexes."
   [facts]
@@ -383,7 +387,7 @@
 (defn optimal-guesses
   "Return map of possible guesses->match counts, optimised with indexes."
   [dict]
-   (build-indexes! dict)
+   ;;(build-indexes! dict)
    (let [dict-vec (vec dict)
          ;; Precompute to avoid recalculating
          process-guess (fn [guess]
@@ -403,8 +407,13 @@
           (into {}))))
 
 (deftest test-optimal-guesses
-  (let [optimals (optimal-guesses '("AA" "AC" "CC" "CD" "CX" "XC" "QQ" "AB")) ;;AC is best QQ is worst
-        best (ffirst (sort-by val < optimals))
-        worst (ffirst (sort-by val > optimals))]
-    (is (= best "AC") "AC should be the BEST choice")
-    (is (= worst "QQ") "QQ should be the WORST choice")))
+  (let [dict '("AA" "AC" "CC" "CD" "CX" "XC" "QQ" "AB")]
+    (build-indexes! dict)
+    (let [optimals (optimal-guesses dict) ;;AC is best QQ is worst
+          best (ffirst (sort-by val < optimals))
+          worst (ffirst (sort-by val > optimals))]
+      (is (= best "AC") "AC should be the BEST choice")
+      (is (= worst "QQ") "QQ should be the WORST choice"))))
+
+
+;; (def mydict (map :word (words/get-word :all 5 :all)))

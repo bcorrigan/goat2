@@ -1,17 +1,19 @@
 (ns org.goat.module.Wordle
-  (:gen-class :extends org.goat.core.Module
-              :exposes {WANT_ALL_MESSAGES {:get WANT_ALL_MESSAGES}})
-  (:require [org.goat.db.words :as words]
-            [org.goat.util.str :as strutil]
-            [org.goat.db.users :as users]
-            [org.goat.wordle.gfx :as gfx]
-            [org.goat.wordle.str :as msg]
-            [org.goat.wordle.analytics :as analytics]
-            [clojure.set :as set]
-            [clojure.edn :as edn]
-            [clojure.string :as str])
-  (:import  [org.goat.core Module]
-            [org.goat.core BotStats]))
+  (:require
+   [clojure.edn :as edn]
+   [clojure.set :as set]
+   [clojure.string :as str]
+   [org.goat.db.users :as users]
+   [org.goat.db.words :as words]
+   [org.goat.util.str :as strutil]
+   [org.goat.wordle.analytics :as analytics]
+   [org.goat.wordle.gfx :as gfx]
+   [org.goat.wordle.str :as msg])
+  (:import
+   (org.goat.core BotStats Module))
+  (:gen-class
+   :extends org.goat.core.Module
+   :exposes undefined))
 
 (use 'clojure.test)
 
@@ -80,18 +82,18 @@
         challenge (some? challenge-key)]
     (swap! state assoc-in
            [:game-states chat-key]
-           {:guesses [],
-            :excluded-letters #{},
-            :included-letters #{},
-            :answer answer,
-            :size size,
-            :type :single, ;;can be :single (if one player) or :multi
-            :starttime starttime,
-            :user user,
-            :difficulty difficulty,
-            :answerdef answerdef,
-            :challenge challenge,
-            :challenge-key challenge-key,
+           {:guesses []
+            :excluded-letters #{}
+            :included-letters #{}
+            :answer answer
+            :size size
+            :type :single ;; can be :single (if one player) or :multi
+            :starttime starttime
+            :user user
+            :difficulty difficulty
+            :answerdef answerdef
+            :challenge challenge
+            :challenge-key challenge-key
             :drawing (atom false)
             :hits hits})))
 
@@ -100,15 +102,14 @@
   [challenge-key chat-key1 chat-key2 group-chat-key user1 user2 m]
   (swap! state assoc-in
          [:game-states challenge-key]
-         {:chat-key1 chat-key1,
-          :chat-key2 chat-key2,
-          :group-chat-key group-chat-key,
-          :user1 user1,
-          :user2 user2,
-          :playing (atom 2),
-          :m m
+         {:chat-key1 chat-key1
+          :chat-key2 chat-key2
+          :group-chat-key group-chat-key
+          :user1 user1
+          :user2 user2
+          :playing (atom 2)
+          :m m}))
           ;; :first-game (all the details of the other game)
-          }))
 
 (defn other-user
   "Get the other user in a challenge."
@@ -129,7 +130,6 @@
     (if (= chat-key chat-key1)
       (get-gameprop challenge-key :chat-key2)
       chat-key1)))
-
 
 (defn won?
   "Has the user just won the game?"
@@ -167,8 +167,8 @@
         included (get-gameprop chat-key :included-letters)
         letter-aid (set/difference less-excluded included)]
     (str (str/join
-          "\n"
-          (strutil/chop (str/join " " (mapv str letter-aid)) 2))
+           "\n"
+           (strutil/chop (str/join " " (mapv str letter-aid)) 2))
          " \n [ "
          (str/join " " included)
          " ]")))
@@ -185,7 +185,7 @@
   (let [elspeth (re-find #"elspeth" s)
         difficulty (re-find #"hard" s)]
     (if (nil? elspeth)
-      (if (nil? difficulty) :easy :hard)
+      (if (nil? difficulty) :all :hard)
       :veasy)))
 
 (defn get-challenge
@@ -235,7 +235,7 @@
             (set-gameprop challenge-key :first-game (get-game chat-key))
             (reset! playing 1))
           (when (= @playing 1)
-            ;;wrap up the challenge now
+            ;; wrap up the challenge now
             (let [first-img      (get-fgameprop challenge-key :img)
                   second-img     (get-gameprop chat-key :img)
                   p1             (get-fgameprop challenge-key :user)
@@ -278,20 +278,20 @@
            (dissoc (get-in @state [:game-states]) chat-key))
     pbs))
 
-  (defn get-user
-    "Get the sender of the message. If the message contains 'elspeth' then
+(defn get-user
+  "Get the sender of the message. If the message contains 'elspeth' then
   set user to elspeth. If the game in progress is an elspeth game, then
   it always continues as an elspeth game."
-    [m chat-key]
-    (let [has-elspeth (str/includes? (str/lower-case (.getText m)) "elspeth")
-          sender      (.getSender m)]
-      (if (playing? chat-key)
-        (if (= "Elspeth" (get-gameprop chat-key :user))
-          "Elspeth"
-          sender)
-        (if has-elspeth
-          "Elspeth"
-          sender))))
+  [m chat-key]
+  (let [has-elspeth (str/includes? (str/lower-case (.getText m)) "elspeth")
+        sender      (.getSender m)]
+    (if (playing? chat-key)
+      (if (= "Elspeth" (get-gameprop chat-key :user))
+        "Elspeth"
+        sender)
+      (if has-elspeth
+        "Elspeth"
+        sender))))
 
 (defn combine-keys
   "Concatenate supplied chat-key symbols, to obtain a combined identifier."
@@ -299,10 +299,10 @@
   (let [skeys (sort [chat-key1 chat-key2])
         key1 (first skeys)
         key2 (second skeys)]
-  (symbol
-   (str ":"
-        (symbol (str key1))
-        (symbol (str key2))))))
+    (symbol
+      (str ":"
+           (symbol (str key1))
+           (symbol (str key2))))))
 
 (defn get-board-img
   "Marshalls reqd data to call our drawing function and calls it, returning the bufferedimage"
@@ -341,8 +341,8 @@
       (.reply m (msg/last-chance-message)))
 
     (when (and (> (guesses-made chat-key) 2)
-         (no-progress? chat-key))
-        (.reply m (rand-nth msg/no-progress-responses)))))
+               (no-progress? chat-key))
+      (.reply m (rand-nth msg/no-progress-responses)))))
 
 (defn handle-win [m chat-key]
   (set-gameprop chat-key :won true)
@@ -370,10 +370,9 @@
   (.reply m (format (rand-nth msg/lose-reveal-responses)
                     (get-gameprop chat-key :answer)))
   (.reply m (format (rand-nth msg/definition-reveal-responses)
-                   (get-gameprop chat-key :answer)
-                   (get-gameprop chat-key :answerdef)))
+                    (get-gameprop chat-key :answer)
+                    (get-gameprop chat-key :answerdef)))
   (clear-game! chat-key m))
-
 
 (defn handle-game-end [m chat-key]
   (if (won? chat-key)
@@ -423,12 +422,36 @@
             user1-msg      (new org.goat.core.Message user1-chatid "" true "goat")
             user2-msg      (new org.goat.core.Message user2-chatid "" true "goat")
             challenge-key  (combine-keys user1-chat-key user2-chat-key)]
-        (if-not (or (playing? user1-chat-key) (playing? user2-chat-key)) (do (new-challenge! challenge-key user1-chat-key user2-chat-key (.getChatId m) user challenge-user m) (.reply m "Starting a challenge match!! Let's go!") (let [worddata (words/get-word difficulty size) word (:word worddata) definition (:definition worddata) hits (:hits worddata)] (new-game! user1-chat-key word size definition hits challenge-user difficulty challenge-key) (.replyWithImage user1-msg (get-board-img user1-chat-key)) (new-game! user2-chat-key word size definition hits user difficulty challenge-key) (.replyWithImage user2-msg (get-board-img user2-chat-key)))) (.reply m "There's already a challenge match being played! Can't have too much challenge."))))
+        (if-not (or
+                 (playing? user1-chat-key)
+                 (playing? user2-chat-key))
+          (do
+            (new-challenge! challenge-key user1-chat-key user2-chat-key (.getChatId m) user challenge-user m)
+            (.reply m "Starting a challenge match!! Let's go!")
+            (let [worddata (words/get-word difficulty size)
+                  word (:word worddata)
+                  definition (:definition worddata)
+                  hits (:hits worddata)]
+              (new-game! user1-chat-key word size definition hits challenge-user difficulty challenge-key)
+              (.replyWithImage user1-msg (get-board-img user1-chat-key))
+              (new-game! user2-chat-key word size definition hits user difficulty challenge-key)
+              (.replyWithImage user2-msg (get-board-img user2-chat-key))))
+          (.reply m "There's already a challenge match being played! Can't have too much challenge."))))
     (.reply m (str "I can't message you privately, " user
                    ", please message me privately the word \"setchat\" and try again."))))
 
 (defn handle-wordle-command [m chat-key user trailing]
-  (if-not (playing? chat-key) (let [size (parse-size trailing) challenge-user (users/user-known? (get-challenge (.getModText m))) difficulty (get-difficulty trailing)] (cond (or (> size 10) (< size 2)) (.reply m "Don't be an eejit. I won't do more than 10 or less than 2.") challenge-user (handle-challenge m user challenge-user size difficulty) :else (start-new-game m chat-key user size difficulty))) (.reply m "We're already playing a game, smart one.")))
+  (if-not (playing? chat-key)
+    (let [size (parse-size trailing)
+          challenge-user (users/user-known? (get-challenge (.getModText m)))
+          difficulty (get-difficulty trailing)]
+      (cond
+        (or (> size 10) (< size 2))
+            (.reply m "Don't be an eejit. I won't do more than 10 or less than 2.")
+        challenge-user
+            (handle-challenge m user challenge-user size difficulty)
+        :else (start-new-game m chat-key user size difficulty)))
+    (.reply m "We're already playing a game, smart one.")))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; MODULE ENTRY POINT ;;;;;;;;;;;;;;;;;;;;
