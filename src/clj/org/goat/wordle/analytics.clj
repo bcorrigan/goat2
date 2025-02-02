@@ -152,7 +152,6 @@
 (deftest test-get-facts-basic
   (let [classfns '(:wrong :wrong :wrong :wrong :revealed)
         facts (get-facts classfns "ABCDE")]
-    (println "facts:" facts)
     (is (= {\A {:upper 0},
             \B {:upper 0},
             \C {:upper 0},
