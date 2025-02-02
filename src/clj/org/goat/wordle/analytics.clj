@@ -210,7 +210,7 @@
   [known-letters word]
   (if (= known-letters '())
     true
-    (let [i (first (first known-letters))
+    (let [i (ffirst known-letters)
           known-letter (second (first known-letters))
           word-letter (get word i)]
       (and (= known-letter
@@ -239,7 +239,7 @@
   [known-nots word]
   (if (= known-nots '())
     false
-    (let [i (first (first known-nots))
+    (let [i (ffirst known-nots)
           known-letters (second (first known-nots))
           word-letter (get word i)]
       (or (not (contains? known-letters
@@ -267,7 +267,7 @@
   ([bounds word-frequencies max-bound]
   (if (= bounds '())
     true
-    (let [letter (first (first bounds))
+    (let [letter (ffirst bounds)
           letter-bound (second (first bounds))
           upper-bound (get letter-bound :upper max-bound)
           lower-bound (get letter-bound :lower 0)
@@ -404,7 +404,7 @@
 
 (deftest test-optimal-guesses
   (let [optimals (optimal-guesses '("AA" "AC" "CC" "CD" "CX" "XC" "QQ" "AB")) ;;AC is best QQ is worst
-        best (first (first (sort-by val < optimals)))
-        worst (first (first (sort-by val > optimals)))]
+        best (ffirst (sort-by val < optimals))
+        worst (ffirst (sort-by val > optimals))]
     (is (= best "AC") "AC should be the BEST choice")
     (is (= worst "QQ") "QQ should be the WORST choice")))
