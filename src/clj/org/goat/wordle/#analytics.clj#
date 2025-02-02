@@ -288,7 +288,8 @@
          (word-matches-bounds? bounds "AXAZB")
          (word-matches-bounds? bounds "AABQX")
          (word-matches-bounds? bounds "AXABA")
-         (word-matches-bounds? bounds "ABNAX")))
+         (word-matches-bounds? bounds "ABNAX")
+         (word-matches-bounds? {} "POOPS")))
     (is (not (or
          (word-matches-bounds? bounds "AABBX")
          (word-matches-bounds? bounds "AXBBX")
@@ -308,3 +309,9 @@
   (and (word-matches-known? (:known facts) word)
        (word-matches-known-nots? (:known-nots facts) word)
        (word-matches-bounds? (:bounds facts) word )))
+
+
+;;OK, lets discover the perfect starting word.
+;;Pseudocode:
+;; For each word set it as the answer:
+;;    for 
