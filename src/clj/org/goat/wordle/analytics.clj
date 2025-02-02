@@ -1,8 +1,7 @@
 (ns org.goat.wordle.analytics
-  (:require [clojure.math :as math]
-            [org.goat.db.words :as words]
-            [org.goat.util.str :as strutil]
-            [clojure.string :as str]))
+  (:require [clojure.set :as set]
+            [clojure.string :as str]
+            [org.goat.util.str :as strutil]))
 
 ;; All the hardcore wordle logic goes here!
 ;; If you want to know:
@@ -288,7 +287,8 @@
          (word-matches-bounds? bounds "AXAZB")
          (word-matches-bounds? bounds "AABQX")
          (word-matches-bounds? bounds "AXABA")
-         (word-matches-bounds? bounds "ABNAX")))
+         (word-matches-bounds? bounds "ABNAX")
+         (word-matches-bounds? {} "POOPS")))
     (is (not (or
          (word-matches-bounds? bounds "AABBX")
          (word-matches-bounds? bounds "AXBBX")
@@ -308,3 +308,104 @@
   (and (word-matches-known? (:known facts) word)
        (word-matches-known-nots? (:known-nots facts) word)
        (word-matches-bounds? (:bounds facts) word )))
+
+
+;;OK, lets discover the perfect starting word.
+;; Worked example
+;; If possible "dicitonary" is AA, AC, CC or CD:
+;; Guess "AA" ->   25% chance right answer
+;;                 25% chance AC is revealed as right
+;;                 50% chance we reveal it is CC or CD potentially requiring another guess
+;; Guess "AC" ->   25% chance right answer
+;;                 75% chance one of AC, CC, or CD is revealed as right
+;; Therefore, AC is a superior guess to AA if we don't know what answer is.
+;; How to calcuate this via get-facts etc above?
+;; for each (AA, AC, CC, CD) set one as possible answer:
+;;    for each (AA, AC, CC, CD) set one as the guess:
+;;             Get the revealed "fact"
+;;             For each (AA, AC, CC, CD) test if it matches fact to get a count of matches
+;;                 add this up
+;;                 resulting map of word->count - one with lowest count wins
+
+;;(def mydict (map :word (words/get-word :normal 5 :all)))
+
+;; Precomputed data structures
+(defonce position-index (atom {}))
+(defonce word-freqs (atom {}))
+(defonce dict-set (atom #{}))
+
+(defn build-indexes!
+  "Build indexes for the dictionary to optimize filtering."
+  [dict]
+  (reset! dict-set (set dict))
+  (reset! position-index
+          (reduce (fn [index word]
+                    (reduce (fn [idx pos]
+                              (let [c (get word pos)]
+                                (update idx [pos c] (fnil conj #{}) word)))
+                            index
+                            (range (count word))))
+                  {}
+                  dict))
+  (reset! word-freqs
+          (zipmap dict (map frequencies dict))))
+
+(defn allowed-words-for-facts
+  "Compute the set of words allowed by the given facts using precomputed indexes."
+  [facts]
+  (let [{:keys [known known-nots bounds]} facts
+        ;; Apply known positions
+        known-words (if (empty? known)
+                      @dict-set
+                      (apply set/intersection
+                             (map (fn [[pos c]] (get @position-index [pos c] #{}))
+                                  known)))
+        ;; Apply known-nots
+        without-known-nots (reduce (fn [allowed [pos excluded-chars]]
+                                     (let [excluded (apply set/union
+                                                           (map #(get @position-index [pos %] #{})
+                                                                excluded-chars))]
+                                       (set/difference allowed excluded)))
+                                   known-words
+                                   known-nots)
+        ;; Apply bounds
+        bounds-words (filter (fn [word]
+                               (let [freq (@word-freqs word)]
+                                 (every? (fn [[c {:keys [lower upper]}]]
+                                           (let [cnt (get freq c 0)]
+                                             (and (>= cnt (or lower 0))
+                                                  (<= cnt (or upper Integer/MAX_VALUE)))))
+                                         bounds)))
+                             without-known-nots)]
+    (set bounds-words)))
+
+;; Takes 30 seconds on an 8 core ryzen for a dict size of 5800 words
+;; But should be good enough for analysis after first guess when possible dict size is massively reduced
+(defn optimal-guesses
+  "Return map of possible guesses->match counts, optimised with indexes."
+  [dict]
+   (build-indexes! dict)
+   (let [dict-vec (vec dict)
+         ;; Precompute to avoid recalculating
+         process-guess (fn [guess]
+                         (let [pattern-groups (->> dict-vec
+                                                   (pmap #(vector (compare-guess-to-answer guess %) %))
+                                                   (group-by first))
+                               total (reduce-kv (fn [acc pattern answers]
+                                                  (let [facts (get-facts pattern guess)
+                                                        allowed (allowed-words-for-facts facts)
+                                                        cnt (* (count answers) (count allowed))]
+                                                    (+ acc cnt)))
+                                                0
+                                                pattern-groups)]
+                           {guess total}))]
+     (->> dict-vec
+          (pmap process-guess)
+          (into {}))))
+
+(deftest test-optimal-guesses
+  (let [optimals (optimal-guesses '("AA" "AC" "CC" "CD" "CX" "XC" "QQ" "AB")) ;;AC is best QQ is worst
+        best (first (first (sort-by val < optimals)))
+        worst (first (first (sort-by val > optimals)))]
+    (is (= best "AC") "AC should be the BEST choice")
+    (is (= worst "QQ") "QQ should be the WORST choice")))
