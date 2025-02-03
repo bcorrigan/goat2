@@ -351,7 +351,7 @@
           (zipmap dict (map frequencies dict))))
 
 ;;populate the indexes
-(build-indexes! (words/get-word :all 5 :all))
+(build-indexes! (map :word (words/get-word :all 5 :all)))
 
 (defn allowed-words-for-facts
   "Compute the set of words allowed by the given facts using precomputed indexes."
