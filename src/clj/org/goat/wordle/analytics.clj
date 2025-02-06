@@ -2,7 +2,8 @@
   (:require [clojure.set :as set]
             [clojure.string :as str]
             [org.goat.util.str :as strutil]
-            [org.goat.db.words :as words]))
+            [org.goat.db.words :as words])
+  (:use [clojure.test]))
 
 ;; All the hardcore wordle logic goes here!
 ;; If you want to know:
@@ -12,8 +13,6 @@
 ;;   - How many "mistakes" and errors in a sequence of guesses?
 ;;   - how optimal (or suboptimal) are a sequence of guesses?
 ;; Well my friend, this is the namespace for you! Let's begin with the basic letter classification code that is core to wordle:
-
-(use 'clojure.test)
 
 (defn mask-answer
   [guess answer]
@@ -309,35 +308,14 @@
        (word-matches-known-nots? (:known-nots facts) word)
        (word-matches-bounds? (:bounds facts) word )))
 
-
-;;OK, lets discover the perfect starting word.
-;; Worked example
-;; If possible "dicitonary" is AA, AC, CC or CD:
-;; Guess "AA" ->   25% chance right answer
-;;                 25% chance AC is revealed as right
-;;                 50% chance we reveal it is CC or CD potentially requiring another guess
-;; Guess "AC" ->   25% chance right answer
-;;                 75% chance one of AC, CC, or CD is revealed as right
-;; Therefore, AC is a superior guess to AA if we don't know what answer is.
-;; How to calcuate this via get-facts etc above?
-;; for each (AA, AC, CC, CD) set one as possible answer:
-;;    for each (AA, AC, CC, CD) set one as the guess:
-;;             Get the revealed "fact"
-;;             For each (AA, AC, CC, CD) test if it matches fact to get a count of matches
-;;                 add this up
-;;                 resulting map of word->count - one with lowest count wins
-
-;;(def mydict (map :word (words/get-word :normal 5 :all)))
-
 ;; Precomputed data structures
 (defonce position-index (atom {}))
 (defonce word-freqs (atom {}))
-(defonce dict-set (atom #{}))
+(def dict-set (set (map :word (words/get-word :all 5 :all))))
 
 (defn build-indexes!
   "Build indexes for the dictionary to optimize filtering."
-  [dict]
-  (reset! dict-set (set dict))
+  []
   (reset! position-index
           (reduce (fn [index word]
                     (reduce (fn [idx pos]
@@ -346,12 +324,11 @@
                             index
                             (range (count word))))
                   {}
-                  dict))
+                  dict-set))
   (reset! word-freqs
-          (zipmap dict (map frequencies dict))))
+          (zipmap dict-set (map frequencies dict-set))))
 
-;;populate the indexes
-(build-indexes! (map :word (words/get-word :all 5 :all)))
+(build-indexes!)
 
 (defn allowed-words-for-facts
   "Compute the set of words allowed by the given facts using precomputed indexes."
@@ -359,7 +336,7 @@
   (let [{:keys [known known-nots bounds]} facts
         ;; Apply known positions
         known-words (if (empty? known)
-                      @dict-set
+                      dict-set
                       (apply set/intersection
                              (map (fn [[pos c]] (get @position-index [pos c] #{}))
                                   known)))
@@ -407,13 +384,100 @@
           (into {}))))
 
 (deftest test-optimal-guesses
-  (let [dict '("AA" "AC" "CC" "CD" "CX" "XC" "QQ" "AB")]
-    (build-indexes! dict)
-    (let [optimals (optimal-guesses dict) ;;AC is best QQ is worst
-          best (ffirst (sort-by val < optimals))
-          worst (ffirst (sort-by val > optimals))]
-      (is (= best "AC") "AC should be the BEST choice")
-      (is (= worst "QQ") "QQ should be the WORST choice"))))
+  (def dict-set (set '("AA" "AC" "CC" "CD" "CX" "XC" "QQ" "AB")))
+  (build-indexes!)
+  (let [optimals (optimal-guesses dict-set) ;;AC is best QQ is worst
+        best (ffirst (sort-by val < optimals))
+        worst (ffirst (sort-by val > optimals))]
+    (is (= best "AC") "AC should be the BEST choice")
+    (is (= worst "QQ") "QQ should be the WORST choice")))
 
+(defn add-to-facts
+  "Given a guess and facts, add additional facts"
+  [facts guess answer]
+  (get-facts (classify-letters guess answer) guess facts 0))
+
+(defn valid-guess-words
+  "Given a set of facts and an answer, return all possible guess words that would meaningfully reduce the possible answers.
+   A guess is valid if it results in new facts that strictly reduce the set of allowed words."
+  [facts answer]
+  (let [original-allowed (allowed-words-for-facts facts)
+        original-count (count original-allowed)] ;; 4
+    (if (zero? original-count)
+      ;; No possible words left; avoid division by zero
+      []
+      (filter (fn [guess-word]
+                (let [new-facts (add-to-facts facts guess-word answer)
+                      new-allowed (count (allowed-words-for-facts new-facts))]
+                  (and (not= original-allowed new-allowed)
+                       (< new-allowed original-count))))
+              dict-set))))
+
+(defn valid-guess-words
+  "Return guess words that meaningfully reduce possible answers - these are words that reveal new information somehow.
+  Any word NOT in this set can be considered a bad mistake
+  Surprisingly, even when you know a lot of information, *most* words that remain still reveal information.
+  For example, support the answer is MOPER and you have guessed HOPER. LOPER DOPER ROPER and MOPER are the 4 possible correct
+  answers. Yet, out of 5800 words in the dict, 3169 of them reveal new information for this set. e.g. guessing TOADY or WRYER or LAITY all reveal enough to exclude down to 3 possible words. And any word with an M in it will exclude down to 1 possible word!"
+  [facts answer]
+  (let [original-allowed (allowed-words-for-facts facts)
+        original-count (count original-allowed)]
+    (if (zero? original-count)
+      []
+      (->> dict-set
+           (pmap (fn [guess-word]
+                   (let [new-facts (add-to-facts facts guess-word answer)
+                         new-allowed (allowed-words-for-facts new-facts)]
+                     (when (and (not= original-allowed new-allowed)
+                                (< (count new-allowed) original-count))
+                       guess-word))))
+           (doall)  ; Realize the pmap
+           (remove nil?)))))
+
+;; Thank you 3blue1brown!
+(defn evaluate-guess-quality
+  "Calculate the quality score for a guess based on how it partitions possible answers.
+   Higher scores are better (indicate more information gain)."
+  [possible-answers guess]
+  (let [total (count possible-answers)
+        ;; Group answers by the classification pattern they would produce
+        pattern-groups (group-by (fn [answer] 
+                                   (compare-guess-to-answer guess answer)) 
+                                 possible-answers)
+        
+        ;; Calculate entropy for this partitioning
+        entropy (reduce (fn [acc [pattern answers]]
+                          (let [p (/ (count answers) total)
+                                information (- (* p (Math/log p)))]
+                            (+ acc information)))
+                        0
+                        pattern-groups)]
+    
+    ;; Return tuple of [guess score] where higher score = better
+    [guess entropy]))
+
+
+(defn rank-guesses
+  "Rank potential guesses by their information gain against possible answers"
+  [possible-answers guesses]
+  (->> guesses
+       (pmap (partial evaluate-guess-quality possible-answers))
+       (sort-by second)))
+
+;;(rank-guesses (allowed-words-for-facts new-facts) (valid-guess-words new-facts "MOPER"))
+
+(deftest test-ranking-guesses
+  (let [answer "MOPER"
+        guess "HOPER"
+        facts (get-facts (classify-letters guess answer) guess)
+        allowed-words (allowed-words-for-facts facts)
+        valid-guesses (valid-guess-words facts answer)
+        ranked-guesses (rank-guesses allowed-words valid-guesses)]
+    (is (= 5 (count allowed-words)) "There should be 5 possible answer words.")
+    (is (= 4111 (count valid-guesses)) "There should be 4111 information-revealing guesses possible")
+    (is (= 4111 (count ranked-guesses)) "So there should also be 4111 ranked guesses")
+    (is (= 52 (count (filter #(> (second %) 1.33) ranked-guesses))) "There should be 52 best possible guesses")
+    (is (contains? (set (map first (filter #(> (second %) 1.33) ranked-guesses))) "MELTS") "MELTS should be a best possible guess")
+    (is (not (contains? (set (map first (filter #(> (second %) 1.33) ranked-guesses))) answer)) "The correct answer is NOT a best possible guess")))
 
 ;; (def mydict (map :word (words/get-word :all 5 :all)))

@@ -13,9 +13,7 @@
    (org.goat.core BotStats Module))
   (:gen-class
    :extends org.goat.core.Module
-   :exposes undefined))
-
-(use 'clojure.test)
+   :exposes {WANT_ALL_MESSAGES {:get WANT_ALL_MESSAGES}}))
 
 (def max-guesses 6)
 (def A-Z (set (map char (concat (range 65 91)))))
