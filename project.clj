@@ -2,6 +2,7 @@
   :description "A telegram bot for fun and hijinx"
   :java-source-paths ["src/java"]
   :source-paths ["src/clj"]
+  :test-paths ["test/clj"] 
   :javac-options ["--release" "23"]
   
   ;; Add manifest configuration

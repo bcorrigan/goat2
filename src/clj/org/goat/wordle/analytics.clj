@@ -2,8 +2,7 @@
   (:require [clojure.set :as set]
             [clojure.string :as str]
             [org.goat.util.str :as strutil]
-            [org.goat.db.words :as words])
-  (:use [clojure.test]))
+            [org.goat.db.words :as words]))
 
 ;; All the hardcore wordle logic goes here!
 ;; If you want to know:
@@ -54,19 +53,6 @@
     A vec of these keywords is returned for each letter in the supplied guess."
   [guess answer]
   (vec (classify-letters guess answer)))
-
-;; This was a tricky fn so lets have a test for once
-(deftest test-compare-guess-to-answer
-  (is (= [:wrong :semiknown :wrong :semiknown :revealed]
-         (compare-guess-to-answer "FEELS" "PALES")))
-  (is (= [:wrong :semiknown :wrong :revealed :revealed]
-         (compare-guess-to-answer "FLEES" "PALES")))
-  (is (= [:wrong :revealed :revealed :revealed :wrong]
-         (compare-guess-to-answer "GLEES" "FLEET")))
-  (is (= [:semiknown :semiknown :revealed :wrong :wrong]
-         (compare-guess-to-answer "EELSY" "AGLEE")))
-  (is (= [:semiknown :semiknown :wrong :wrong :wrong]
-         (compare-guess-to-answer "EEESY" "AGLEE"))))
 
 (defn get-facts
   "Given classifications and guess, returns facts with:
@@ -148,63 +134,6 @@
                       (assoc :bounds new-bounds))
                   (inc index))))))))
 
-
-(deftest test-get-facts-basic
-  (let [classfns '(:wrong :wrong :wrong :wrong :revealed)
-        facts (get-facts classfns "ABCDE")]
-    (is (= {\A {:upper 0},
-            \B {:upper 0},
-            \C {:upper 0},
-            \D {:upper 0},
-            \E {:lower 1}}
-           (:bounds facts))
-        "A-D should have an upper bound of 0, E should have an unknown upper bound and a lower bound of 1")
-    (is (= {4 \E}
-           (:known facts))
-        "E is known at position 4 and nothing else")
-    (is (= {0 #{\A}, 1 #{\B}, 2 #{\C}, 3 #{\D}}
-           (:known-nots facts))
-        "A is known to not be at pos 0, B is known to not be at pos 1 etc.")))
-
-(deftest test-get-facts-semiknown
-  (let [classfns '(:wrong :wrong :semiknown :semiknown :revealed)
-        facts (get-facts classfns "EBCDE")]
-
-    (is (= {\E {:upper 1 :lower 1},
-            \B {:upper 0},
-            \C {:lower 1},
-            \D {:lower 1}}
-           (:bounds facts))
-        "E should have an upper and lower bound of 1. B should have upper bound 0. C and D should have lower bound of 1.")
-    (is (= {4 \E}
-           (:known facts))
-        "E is known at position 4 and nothing else")
-    (is (= {0 #{\E}, 1 #{\B}, 2 #{\C}, 3 #{\D} }
-           (:known-nots facts))
-        "E is known to not be at pos 0, B is known to not be at pos 1, and C&D as semiknown are known to not be at 2 and 3")))
-
-(deftest test-get-more-facts
-  (let [classfns1 '(:wrong :wrong :semiknown :semiknown :revealed)
-        facts1 (get-facts classfns1 "EBCDE")
-        classfns2 '(:wrong :revealed :semiknown :wrong :revealed)
-        facts2 (get-facts classfns2 "XCDXE" facts1 0)]
-    (is (= {4 \E, 1 \C} ; Position 1 maps to C, position 4 to E
-           (:known facts2))
-        "C added at pos 1, E remains at pos 4")
-    ;; fails because both \C and \D are incorrectly bounded as {:lower 1 :upper 2147483647} suggesting an overflow!
-    ;; other letters are correct
-    (is (= {\E { :upper 1 :lower 1 },
-            \B { :upper 0 },
-            \C { :lower 1 },
-            \D { :lower 1 },
-            \X { :upper 0 }}
-           (:bounds facts2))
-        "C and D are still lower 1, X is resolved to upper 0, E remains are upper 1 lower 1")
-    (is (= {0 #{\E \X}, 1 #{\B}, 2 #{\C \D}, 3 #{\D \X}}
-           (:known-nots facts2))
-        ":known-nots should be as listed")
-    ))
-
 (defn word-matches-known?
   "test word matches given known letter positions"
   [known-letters word]
@@ -217,23 +146,6 @@
               word-letter)
            (recur (rest known-letters) word)))))
 
-(deftest test-word-matches-known?
-  (is (and
-       (word-matches-known? {0 \A 4 \A} "AXXXA")
-       (word-matches-known? {0 \A 2 \A 3 \X} "AXAXA")
-       (word-matches-known? {1 \X 4 \A} "AXXXA")
-       (word-matches-known? {3 \Q 4 \M 0 \X 2 \Z 1 \Y} "XYZQM")
-       (word-matches-known? {} "AXXXA"))
-      "These should all match correctly.")
-  (is (not
-       (or
-        (word-matches-known? {0 \A 3 \A} "AXXXA")
-        (word-matches-known? {0 \A 2 \A 4 \X} "AXAXA")
-        (word-matches-known? {0 \X 4 \A} "AXXXA")
-        (word-matches-known? {3 \Q 4 \Q 0 \X 2 \Z 1 \Y} "XYZQM")
-        (word-matches-known? {4 \X} "AXXXA")))
-      "None of these should match"))
-
 (defn word-matches-known-nots?
   "Test word does not have letter in these positions"
   [known-nots word]
@@ -245,20 +157,6 @@
       (or (not (contains? known-letters
               word-letter))
            (recur (rest known-nots) word)))))
-
-(deftest test-word-matches-known-nots?
-  (is (and
-       (word-matches-known-nots? {0 #{\Z \B} 4 #{\B \C}} "AXXXA")
-       (word-matches-known-nots? {1 #{\A \C \D \E} 4 #{\A \B \C \D}} "ABCDE")
-       (word-matches-known-nots? {0 #{\X} 4 #{\B \C} 1 #{\Z} 2 #{\Q} 3 #{\M} } "AXXXA")
-       (word-matches-known-nots? {4 #{\X}} "AXXXA"))
-      "These should all match correctly.")
-  (is (not
-       (or
-        (word-matches-known-nots? {4 #{\A}} "AXXXA")
-        (word-matches-known-nots? {0 #{\A} 1 #{\X} 2 #{\X} 3 #{\X} 4 #{\A} } "AXXXA")
-        (word-matches-known-nots? {0 #{\A \B} 1 #{\B \C \D} 2 #{\B \C} 3 #{\M \D} 4 #{\E \F \B} } "ABCDE")))
-      "None of these should match"))
 
 (defn word-matches-bounds?
   "Test if given word matches given bounds - the bounds being letter frequencies"
@@ -278,24 +176,6 @@
               lower-bound)
            (recur (rest bounds) word-frequencies max-bound ))))))
 
-(deftest test-word-matches-bounds?
-  (let [classfns (classify-letters "AABBX" "AXAZB") ;;rvd smi smi wrg smi
-        facts (get-facts classfns "AABBX")
-        bounds (:bounds facts)]
-    (is (and
-         (word-matches-bounds? bounds "AXAZB")
-         (word-matches-bounds? bounds "AABQX")
-         (word-matches-bounds? bounds "AXABA")
-         (word-matches-bounds? bounds "ABNAX")
-         (word-matches-bounds? {} "POOPS")))
-    (is (not (or
-         (word-matches-bounds? bounds "AABBX")
-         (word-matches-bounds? bounds "AXBBX")
-         (word-matches-bounds? bounds "AXBBA")
-         (word-matches-bounds? bounds "AXQQA")
-         (word-matches-bounds? bounds "AZBBA"))))))
-
-
 (defn word-matches-facts?
   "Test the given word matches all the given facts.
    Facts look like e.g.
@@ -311,7 +191,7 @@
 ;; Precomputed data structures
 (defonce position-index (atom {}))
 (defonce word-freqs (atom {}))
-(def dict-set (set (map :word (words/get-word :all 5 :all))))
+(def ^:dynamic *dict-set* (set (map :word (words/get-word :all 5 :all))))
 
 (defn build-indexes!
   "Build indexes for the dictionary to optimize filtering."
@@ -324,9 +204,9 @@
                             index
                             (range (count word))))
                   {}
-                  dict-set))
+                  *dict-set*))
   (reset! word-freqs
-          (zipmap dict-set (map frequencies dict-set))))
+          (zipmap *dict-set* (map frequencies *dict-set*))))
 
 (build-indexes!)
 
@@ -336,7 +216,7 @@
   (let [{:keys [known known-nots bounds]} facts
         ;; Apply known positions
         known-words (if (empty? known)
-                      dict-set
+                      *dict-set*
                       (apply set/intersection
                              (map (fn [[pos c]] (get @position-index [pos c] #{}))
                                   known)))
@@ -383,35 +263,10 @@
           (pmap process-guess)
           (into {}))))
 
-(deftest test-optimal-guesses
-  (def dict-set (set '("AA" "AC" "CC" "CD" "CX" "XC" "QQ" "AB")))
-  (build-indexes!)
-  (let [optimals (optimal-guesses dict-set) ;;AC is best QQ is worst
-        best (ffirst (sort-by val < optimals))
-        worst (ffirst (sort-by val > optimals))]
-    (is (= best "AC") "AC should be the BEST choice")
-    (is (= worst "QQ") "QQ should be the WORST choice")))
-
 (defn add-to-facts
   "Given a guess and facts, add additional facts"
   [facts guess answer]
   (get-facts (classify-letters guess answer) guess facts 0))
-
-(defn valid-guess-words
-  "Given a set of facts and an answer, return all possible guess words that would meaningfully reduce the possible answers.
-   A guess is valid if it results in new facts that strictly reduce the set of allowed words."
-  [facts answer]
-  (let [original-allowed (allowed-words-for-facts facts)
-        original-count (count original-allowed)] ;; 4
-    (if (zero? original-count)
-      ;; No possible words left; avoid division by zero
-      []
-      (filter (fn [guess-word]
-                (let [new-facts (add-to-facts facts guess-word answer)
-                      new-allowed (count (allowed-words-for-facts new-facts))]
-                  (and (not= original-allowed new-allowed)
-                       (< new-allowed original-count))))
-              dict-set))))
 
 (defn valid-guess-words
   "Return guess words that meaningfully reduce possible answers - these are words that reveal new information somehow.
@@ -424,7 +279,7 @@
         original-count (count original-allowed)]
     (if (zero? original-count)
       []
-      (->> dict-set
+      (->> *dict-set*
            (pmap (fn [guess-word]
                    (let [new-facts (add-to-facts facts guess-word answer)
                          new-allowed (allowed-words-for-facts new-facts)]
@@ -466,18 +321,32 @@
 
 ;;(rank-guesses (allowed-words-for-facts new-facts) (valid-guess-words new-facts "MOPER"))
 
-(deftest test-ranking-guesses
-  (let [answer "MOPER"
-        guess "HOPER"
-        facts (get-facts (classify-letters guess answer) guess)
-        allowed-words (allowed-words-for-facts facts)
-        valid-guesses (valid-guess-words facts answer)
-        ranked-guesses (rank-guesses allowed-words valid-guesses)]
-    (is (= 5 (count allowed-words)) "There should be 5 possible answer words.")
-    (is (= 4111 (count valid-guesses)) "There should be 4111 information-revealing guesses possible")
-    (is (= 4111 (count ranked-guesses)) "So there should also be 4111 ranked guesses")
-    (is (= 52 (count (filter #(> (second %) 1.33) ranked-guesses))) "There should be 52 best possible guesses")
-    (is (contains? (set (map first (filter #(> (second %) 1.33) ranked-guesses))) "MELTS") "MELTS should be a best possible guess")
-    (is (not (contains? (set (map first (filter #(> (second %) 1.33) ranked-guesses))) answer)) "The correct answer is NOT a best possible guess")))
+;;this is borked
+(defn rate-guess
+  "Rate a guess against possible answers with fun categories.
+   Returns map with :rating and :commentary."
+  [guess possible-answers]
+  (let [answers-count (count possible-answers)
+        ;; Calculate quality metrics
+        [entropy] (evaluate-guess-quality possible-answers guess)
+        sorted-guesses (sort-by second (map #(evaluate-guess-quality possible-answers %) possible-answers))
+        percentile (->> sorted-guesses
+                        (map-indexed (fn [idx [word score]] [word idx]))
+                        (filter #(= guess (first %)))
+                        ffirst
+                        (#(/ (double %) (count sorted-guesses)))
+                        (* 100))]
+        
+        ;; Classification logic
+    (cond
+      (= 1 answers-count) (if (= guess (first possible-answers))
+                            :excellent
+                            :mistake)
+      (contains? possible-answers guess) :good  ; Always rate correct answers well
+      (= entropy (Math/log answers-count)) :mistake  ; No information gain
+      (<= percentile 5) :excellent
+      (<= percentile 20) :good
+      (<= percentile 50) :average
+      :else :poor)))
 
 ;; (def mydict (map :word (words/get-word :all 5 :all)))
