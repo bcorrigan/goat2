@@ -283,8 +283,7 @@
            (pmap (fn [guess-word]
                    (let [new-facts (add-to-facts facts guess-word answer)
                          new-allowed (allowed-words-for-facts new-facts)]
-                     (when (and (not= original-allowed new-allowed)
-                                (< (count new-allowed) original-count))
+                     (when (< (count new-allowed) original-count)
                        guess-word))))
            (doall)  ; Realize the pmap
            (remove nil?)))))
@@ -319,34 +318,37 @@
        (pmap (partial evaluate-guess-quality possible-answers))
        (sort-by second)))
 
-;;(rank-guesses (allowed-words-for-facts new-facts) (valid-guess-words new-facts "MOPER"))
+(defn count-from-threshold [freq-map threshold]
+  (reduce (fn [sum [value count]]
+            (if (>= value threshold)
+              (+ sum count)
+              sum))
+          0
+          freq-map))
 
-;;this is borked
+;;(def new-facts (get-facts (classify-letters "MOPER" "DOPER") "MOPER"))
+;;(def guesses-ranked (rank-guesses (allowed-words-for-facts new-facts) (valid-guess-words new-facts "DOPER")))
+;;(count (distinct (map second guesses-ranked)))
+
 (defn rate-guess
-  "Rate a guess against possible answers with fun categories.
-   Returns map with :rating and :commentary."
-  [guess possible-answers]
-  (let [answers-count (count possible-answers)
-        ;; Calculate quality metrics
-        [entropy] (evaluate-guess-quality possible-answers guess)
-        sorted-guesses (sort-by second (map #(evaluate-guess-quality possible-answers %) possible-answers))
-        percentile (->> sorted-guesses
-                        (map-indexed (fn [idx [word score]] [word idx]))
-                        (filter #(= guess (first %)))
-                        ffirst
-                        (#(/ (double %) (count sorted-guesses)))
-                        (* 100))]
-        
-        ;; Classification logic
-    (cond
-      (= 1 answers-count) (if (= guess (first possible-answers))
-                            :excellent
-                            :mistake)
-      (contains? possible-answers guess) :good  ; Always rate correct answers well
-      (= entropy (Math/log answers-count)) :mistake  ; No information gain
-      (<= percentile 5) :excellent
-      (<= percentile 20) :good
-      (<= percentile 50) :average
-      :else :poor)))
+  "Return an integer representing the quality of the users guess, given their known information, from 0-5. 5 is a *perfect* guess, that is, reveals the maximum possible information. 0 means no new informaiton was revealed."
+  [guess answer facts]
+  (let [possible-answers (allowed-words-for-facts facts) ;;usually a few of these
+		possible-guesses (valid-guess-words facts answer) ;;MANY of these
+		guesses-ranked (rank-guesses possible-answers possible-guesses) ;;list of tuple of guess-score
+		freqs (frequencies (map second guesses-ranked))
+		guess-score (second (first (filter #(= (first %) guess) guesses-ranked)))]
+	(if (nil? guess-score)
+	  0
+	  (let [score-count (count-from-threshold freqs guess-score)
+			total-count (count possible-guesses)
+			percentile (* 100 (/ score-count total-count))
+			rating (int (clojure.math/floor (/ (- 100 percentile) 10.0)))
+			max-score (apply max (map first freqs))] 
+		(if (= guess-score max-score)
+		  10 ;; we always give 10 if the guess is as good as possible
+		  (if (= rating 0)
+			1 ;;if the score would be 0.. bump it up to 1.
+			rating))))))
 
 ;; (def mydict (map :word (words/get-word :all 5 :all)))
