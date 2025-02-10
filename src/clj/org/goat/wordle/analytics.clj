@@ -1,6 +1,7 @@
 (ns org.goat.wordle.analytics
   (:require [clojure.set :as set]
             [clojure.string :as str]
+			[clojure.math :as math]
             [org.goat.util.str :as strutil]
             [org.goat.db.words :as words]))
 
@@ -189,14 +190,14 @@
        (word-matches-bounds? (:bounds facts) word )))
 
 ;; Precomputed data structures
-(defonce position-index (atom {}))
-(defonce word-freqs (atom {}))
+;;(defonce position-index (atom {}))
+;;(defonce word-freqs (atom {}))
 (def ^:dynamic *dict-set* (set (map :word (words/get-word :all 5 :all))))
 
 (defn build-indexes!
   "Build indexes for the dictionary to optimize filtering."
   []
-  (reset! position-index
+  (defonce position-index
           (reduce (fn [index word]
                     (reduce (fn [idx pos]
                               (let [c (get word pos)]
@@ -205,7 +206,7 @@
                             (range (count word))))
                   {}
                   *dict-set*))
-  (reset! word-freqs
+  (defonce word-freqs
           (zipmap *dict-set* (map frequencies *dict-set*))))
 
 (build-indexes!)
@@ -218,19 +219,19 @@
         known-words (if (empty? known)
                       *dict-set*
                       (apply set/intersection
-                             (map (fn [[pos c]] (get @position-index [pos c] #{}))
+                             (map (fn [[pos c]] (get position-index [pos c] #{}))
                                   known)))
         ;; Apply known-nots
         without-known-nots (reduce (fn [allowed [pos excluded-chars]]
                                      (let [excluded (apply set/union
-                                                           (map #(get @position-index [pos %] #{})
+                                                           (map #(get position-index [pos %] #{})
                                                                 excluded-chars))]
                                        (set/difference allowed excluded)))
                                    known-words
                                    known-nots)
         ;; Apply bounds
         bounds-words (filter (fn [word]
-                               (let [freq (@word-freqs word)]
+                               (let [freq (word-freqs word)]
                                  (every? (fn [[c {:keys [lower upper]}]]
                                            (let [cnt (get freq c 0)]
                                              (and (>= cnt (or lower 0))
@@ -343,7 +344,7 @@
 	  (let [score-count (count-from-threshold freqs guess-score)
 			total-count (count possible-guesses)
 			percentile (* 100 (/ score-count total-count))
-			rating (int (clojure.math/floor (/ (- 100 percentile) 10.0)))
+			rating (int (math/floor (/ (- 100 percentile) 10.0)))
 			max-score (apply max (map first freqs))] 
 		(if (= guess-score max-score)
 		  10 ;; we always give 10 if the guess is as good as possible
