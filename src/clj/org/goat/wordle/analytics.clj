@@ -190,34 +190,33 @@
        (word-matches-bounds? (:bounds facts) word )))
 
 ;; Precomputed data structures
-;;(defonce position-index (atom {}))
-;;(defonce word-freqs (atom {}))
-(def ^:dynamic *dict-set* (set (map :word (words/get-word :all 5 :all))))
+(def dict-set (set (map :word (words/get-word :all 5 :all))))
 
-(defn build-indexes!
+(defn build-indexes
   "Build indexes for the dictionary to optimize filtering."
-  []
-  (defonce position-index
-          (reduce (fn [index word]
-                    (reduce (fn [idx pos]
-                              (let [c (get word pos)]
-                                (update idx [pos c] (fnil conj #{}) word)))
-                            index
-                            (range (count word))))
-                  {}
-                  *dict-set*))
-  (defonce word-freqs
-          (zipmap *dict-set* (map frequencies *dict-set*))))
+  [dict-set]
+  (let [position-index (reduce (fn [index word]
+                                 (reduce (fn [idx pos]
+                                           (let [c (get word pos)]
+                                             (update idx [pos c] (fnil conj #{}) word)))
+                                         index
+                                         (range (count word))))
+                               {}
+                               dict-set)
+        word-freqs (zipmap dict-set (map frequencies dict-set))]
+    {:position-index position-index
+     :word-freqs word-freqs}))
 
-(build-indexes!)
+(def indexes (build-indexes dict-set))
 
 (defn allowed-words-for-facts
   "Compute the set of words allowed by the given facts using precomputed indexes."
   [facts]
   (let [{:keys [known known-nots bounds]} facts
+		{:keys [position-index word-freqs]} indexes
         ;; Apply known positions
         known-words (if (empty? known)
-                      *dict-set*
+                      dict-set
                       (apply set/intersection
                              (map (fn [[pos c]] (get position-index [pos c] #{}))
                                   known)))
@@ -280,7 +279,7 @@
         original-count (count original-allowed)]
     (if (zero? original-count)
       []
-      (->> *dict-set*
+      (->> dict-set
            (pmap (fn [guess-word]
                    (let [new-facts (add-to-facts facts guess-word answer)
                          new-allowed (allowed-words-for-facts new-facts)]

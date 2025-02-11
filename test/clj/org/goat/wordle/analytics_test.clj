@@ -120,14 +120,14 @@
          (sut/word-matches-bounds? bounds "AZBBA"))))))
 
 (deftest test-optimal-guesses
-  (binding [sut/*dict-set* (set '("AA" "AC" "CC" "CD" "CX" "XC" "QQ" "AB"))]
-	(sut/build-indexes!)
-	(let [optimals (sut/optimal-guesses sut/*dict-set*) ;;AC is best QQ is worst
-          best (ffirst (sort-by val < optimals))
-          worst (ffirst (sort-by val > optimals))]
-      (is (= best "AC") "AC should be the BEST choice")
-      (is (= worst "QQ") "QQ should be the WORST choice")))
-   (sut/build-indexes!))
+  (testing "optimal-guesses with a custom dict-set"
+    (with-redefs [sut/dict-set (set '("AA" "AC" "CC" "CD" "CX" "XC" "QQ" "AB"))]
+      (with-redefs [sut/indexes (sut/build-indexes sut/dict-set)]
+        (let [optimals (sut/optimal-guesses sut/dict-set) ;; AC is best, QQ is worst
+              best (ffirst (sort-by val < optimals))
+              worst (ffirst (sort-by val > optimals))]
+          (is (= "AC" best) "AC should be the BEST choice")
+          (is (= "QQ" worst) "QQ should be the WORST choice"))))))
   
 (deftest test-ranking-guesses
   (let [answer "MOPER"
@@ -143,4 +143,21 @@
     (is (contains? (set (map first (filter #(> (second %) 1.33) ranked-guesses))) "MELTS") "MELTS should be a best possible guess")
     (is (not (contains? (set (map first (filter #(> (second %) 1.33) ranked-guesses))) answer)) "The correct answer is NOT a best possible guess")))
 
+(deftest bmark
+  (let [answer "DOPER"
+       guess "SLANT"
+       guess2 "GRIPE"
+       facts (sut/get-facts (sut/classify-letters guess answer) guess)
+       facts2 (sut/add-to-facts facts guess2 answer)
+       ]
 
+	(println "allowed-words-for-facts-count: " (count (sut/allowed-words-for-facts facts)))
+   (time (count (sut/allowed-words-for-facts facts)))
+   (println "allowed-words-for-facts2-count: " (count (sut/allowed-words-for-facts facts2)))
+   (time (count (sut/allowed-words-for-facts facts2)))
+	;;72 seconds for the LLM iterated version.. 7 seconds for hand crafted one
+	;;humans win?
+   (println "rate-guess timing:")
+   (time (sut/rate-guess guess2 answer facts))
+   )
+  )
