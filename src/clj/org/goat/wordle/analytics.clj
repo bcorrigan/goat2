@@ -209,52 +209,60 @@
 
 (def indexes (build-indexes dict-set))
 
+(defn apply_knowns [^clojure.lang.MapEntry e] 
+  (let [^int pos (key e)  
+        ^Character c (val e)
+		^clojure.lang.IPersistentMap position-index (:position-index indexes)
+		] 
+    (get position-index [(int pos) c] #{})))
+
+(defn apply_known_nots [^clojure.lang.IPersistentSet allowed
+	 ^clojure.lang.MapEntry e] 
+  (let [^int pos (key e)  
+		^clojure.lang.IPersistentMap position-index (:position-index indexes)
+		^clojure.lang.IPersistentSet excluded-chars (val e) 
+		^clojure.lang.IPersistentSet excluded (apply set/union
+													 (map (fn [^Character c] 
+															(get position-index [(int pos) c] #{}))
+														  excluded-chars))]
+	(set/difference allowed excluded)))
+
+(defn apply_bounds [^clojure.lang.IPersistentMap word-freqs
+					^clojure.lang.IPersistentMap bounds
+					^String word] 
+  (let [^clojure.lang.IPersistentMap freq (word-freqs word)] 
+    (every? (fn [^clojure.lang.MapEntry e] 
+              (let [^Character c (key e) 
+                    {:keys [^int lower
+							^int upper]} (val e)
+                    cnt (int (get freq c 0)) 
+                    lower-bound (int (or lower 0)) 
+                    upper-bound (int (or upper Integer/MAX_VALUE))] 
+                (and (>= cnt lower-bound)
+                     (<= cnt upper-bound))))
+            bounds)))
+
 (defn allowed-words-for-facts
   "Compute the set of words allowed by the given facts using precomputed indexes."
-  [^clojure.lang.IPersistentMap facts]  ; <--- Input type hint
+  [^clojure.lang.IPersistentMap facts] 
   (let [{:keys [^clojure.lang.IPersistentMap known
 				^clojure.lang.IPersistentMap known-nots
 				^clojure.lang.IPersistentMap bounds]} facts
-        {:keys [^clojure.lang.IPersistentMap position-index  ; <--- Index type hints
-                ^clojure.lang.IPersistentMap word-freqs]} indexes
+        {:keys [^clojure.lang.IPersistentMap word-freqs]} indexes
         
         ;; Apply known positions
-        ^clojure.lang.IPersistentMap known-words (if (empty? known)
+        ^clojure.lang.IPersistentSet known-words (if (empty? known)
                       dict-set
                       (apply set/intersection
-                             (map (fn [^clojure.lang.MapEntry e]  ; <--- Map entry hint
-                                    (let [^int pos (key e)  ; <--- Primitive position
-                                          ^Character c (val e)]  ; <--- Character hint
-                                  (get position-index [(int pos) c] #{})))
-                                known)))
+                             (map apply_knowns known)))
         ;; Apply known-nots
-        ^clojure.lang.IPersistentMap without-known-nots (reduce 
-														 (fn [^clojure.lang.IPersistentSet allowed
-															  ^clojure.lang.MapEntry e]  ; <--- Map entry hint
-														   (let [^int pos (key e)  ; <--- Primitive position
-																 ^clojure.lang.IPersistentSet excluded-chars (val e)  ; <--- Set hint
-																 ^clojure.lang.IPersistentSet excluded (apply set/union
-																				 (map (fn [^Character c]  ; <--- Character hint
-																						(get position-index [(int pos) c] #{}))
-																					  excluded-chars))]
-															 (set/difference allowed excluded)))
+        ^clojure.lang.IPersistentSet without-known-nots (reduce apply_known_nots
 														 known-words
 														 known-nots)
-
-		^clojure.lang.IPersistentMap bounds-words (filter (fn [^String word]  ; <--- String hint
-                               (let [^clojure.lang.IPersistentMap freq (word-freqs word)]  ; <--- Map hint
-                                 (every? (fn [^clojure.lang.MapEntry e]  ; <--- Map entry hint
-                                           (let [^Character c (key e)  ; <--- Character hint
-                                                 {:keys [^int lower
-														 ^int upper]} (val e)
-                                                 cnt (int (get freq c 0))  ; <--- Explicit cast to int
-                                                 lower-bound (int (or lower 0))  ; <--- Primitive
-                                                 upper-bound (int (or upper Integer/MAX_VALUE))]  ; <--- Primitive
-                                             (and (>= cnt lower-bound)
-                                                  (<= cnt upper-bound))))
-                                           bounds)))
+		;; Apply bounds
+		^clojure.lang.IPersistentSet bounds-words (filter (partial apply_bounds word-freqs bounds)
                                without-known-nots)]
-    (set bounds-words)))
+    bounds-words))
 
 ;; Takes 30 seconds on an 8 core ryzen for a dict size of 5800 words
 ;; But should be good enough for analysis after first guess when possible dict size is massively reduced
