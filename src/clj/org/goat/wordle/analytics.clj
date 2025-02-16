@@ -190,7 +190,7 @@
        (word-matches-bounds? (:bounds facts) word )))
 
 ;; Precomputed data structures
-(def ^clojure.lang.IPersistentSet dict-set (set (map :word (words/get-word :all 5 :all))))
+(def ^clojure.lang.PersistentHashSet dict-set (set (map :word (words/get-word :all 5 :all))))
 
 (defn build-indexes
   "Build indexes for the dictionary to optimize filtering."
@@ -209,28 +209,40 @@
 
 (def indexes (build-indexes dict-set))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; allowed-words-for-facts is a huge bottleneck for our use case.
+;; When we "rate guesses" we have to call it a *lot* and each time it has to apply
+;; the facts to every word in the dictionary! so if few facts are known, it
+;; has a huge impact on performance and profiler shows almost all time spend in that function.
+;;
+;; hence, the following helper functions are highly type hinted etc. This makes things a bit
+;; ugly looking but gets us a good 15% extra performance. We also utilise indexes / precomputation
+;; as much as possible to accellerate.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+
 (defn apply_knowns [^clojure.lang.MapEntry e] 
   (let [^int pos (key e)  
         ^Character c (val e)
-		^clojure.lang.IPersistentMap position-index (:position-index indexes)
+		^clojure.lang.PersistentHashMap position-index (:position-index indexes)
 		] 
     (get position-index [(int pos) c] #{})))
 
-(defn apply_known_nots [^clojure.lang.IPersistentSet allowed
+(defn apply_known_nots [^clojure.lang.PersistentHashSet allowed
 	 ^clojure.lang.MapEntry e] 
   (let [^int pos (key e)  
-		^clojure.lang.IPersistentMap position-index (:position-index indexes)
-		^clojure.lang.IPersistentSet excluded-chars (val e) 
-		^clojure.lang.IPersistentSet excluded (apply set/union
+		^clojure.lang.PersistentHashMap position-index (:position-index indexes)
+		^clojure.lang.PersistentHashSet excluded-chars (val e)
+		^clojure.lang.PersistentHashSet excluded (apply set/union
 													 (map (fn [^Character c] 
 															(get position-index [(int pos) c] #{}))
 														  excluded-chars))]
 	(set/difference allowed excluded)))
 
-(defn apply_bounds [^clojure.lang.IPersistentMap word-freqs
-					^clojure.lang.IPersistentMap bounds
+(defn apply_bounds [^clojure.lang.PersistentHashMap word-freqs
+					^clojure.lang.PersistentHashMap bounds
 					^String word] 
-  (let [^clojure.lang.IPersistentMap freq (word-freqs word)] 
+  (let [^clojure.lang.PersistentHashMap freq (word-freqs word)] 
     (every? (fn [^clojure.lang.MapEntry e] 
               (let [^Character c (key e) 
                     {:keys [^int lower
@@ -245,22 +257,22 @@
 (defn allowed-words-for-facts
   "Compute the set of words allowed by the given facts using precomputed indexes."
   [^clojure.lang.IPersistentMap facts] 
-  (let [{:keys [^clojure.lang.IPersistentMap known
-				^clojure.lang.IPersistentMap known-nots
-				^clojure.lang.IPersistentMap bounds]} facts
-        {:keys [^clojure.lang.IPersistentMap word-freqs]} indexes
-        
+  (let [{:keys [^clojure.lang.PersistentArrayMap known
+				^clojure.lang.PersistentArrayMap known-nots
+				^clojure.lang.PersistentHashMap bounds]} facts
+        {:keys [^clojure.lang.PersistentHashMap word-freqs]} indexes
         ;; Apply known positions
-        ^clojure.lang.IPersistentSet known-words (if (empty? known)
-                      dict-set
-                      (apply set/intersection
-                             (map apply_knowns known)))
+        ^clojure.lang.PersistentHashSet known-words (if (empty? known)
+													  dict-set
+													  (apply set/intersection
+															 (map apply_knowns known)))
+
         ;; Apply known-nots
-        ^clojure.lang.IPersistentSet without-known-nots (reduce apply_known_nots
-														 known-words
-														 known-nots)
+        ^clojure.lang.PersistentHashSet without-known-nots (reduce apply_known_nots
+																   known-words
+																   known-nots)
 		;; Apply bounds
-		^clojure.lang.IPersistentSet bounds-words (filter (partial apply_bounds word-freqs bounds)
+		^clojure.lang.PersistentHashSet bounds-words (filter (partial apply_bounds word-freqs bounds)
                                without-known-nots)]
     bounds-words))
 
