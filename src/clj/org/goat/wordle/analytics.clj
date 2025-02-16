@@ -190,7 +190,7 @@
        (word-matches-bounds? (:bounds facts) word )))
 
 ;; Precomputed data structures
-(def dict-set (set (map :word (words/get-word :all 5 :all))))
+(def ^clojure.lang.IPersistentSet dict-set (set (map :word (words/get-word :all 5 :all))))
 
 (defn build-indexes
   "Build indexes for the dictionary to optimize filtering."
@@ -211,32 +211,49 @@
 
 (defn allowed-words-for-facts
   "Compute the set of words allowed by the given facts using precomputed indexes."
-  [facts]
-  (let [{:keys [known known-nots bounds]} facts
-		{:keys [position-index word-freqs]} indexes
+  [^clojure.lang.IPersistentMap facts]  ; <--- Input type hint
+  (let [{:keys [^clojure.lang.IPersistentMap known
+				^clojure.lang.IPersistentMap known-nots
+				^clojure.lang.IPersistentMap bounds]} facts
+        {:keys [^clojure.lang.IPersistentMap position-index  ; <--- Index type hints
+                ^clojure.lang.IPersistentMap word-freqs]} indexes
+        
         ;; Apply known positions
-        known-words (if (empty? known)
+        ^clojure.lang.IPersistentMap known-words (if (empty? known)
                       dict-set
                       (apply set/intersection
-                             (map (fn [[pos c]] (get position-index [pos c] #{}))
-                                  known)))
+                             (map (fn [^clojure.lang.MapEntry e]  ; <--- Map entry hint
+                                    (let [^int pos (key e)  ; <--- Primitive position
+                                          ^Character c (val e)]  ; <--- Character hint
+                                  (get position-index [(int pos) c] #{})))
+                                known)))
         ;; Apply known-nots
-        without-known-nots (reduce (fn [allowed [pos excluded-chars]]
-                                     (let [excluded (apply set/union
-                                                           (map #(get position-index [pos %] #{})
-                                                                excluded-chars))]
-                                       (set/difference allowed excluded)))
-                                   known-words
-                                   known-nots)
-        ;; Apply bounds
-        bounds-words (filter (fn [word]
-                               (let [freq (word-freqs word)]
-                                 (every? (fn [[c {:keys [lower upper]}]]
-                                           (let [cnt (get freq c 0)]
-                                             (and (>= cnt (or lower 0))
-                                                  (<= cnt (or upper Integer/MAX_VALUE)))))
-                                         bounds)))
-                             without-known-nots)]
+        ^clojure.lang.IPersistentMap without-known-nots (reduce 
+														 (fn [^clojure.lang.IPersistentSet allowed
+															  ^clojure.lang.MapEntry e]  ; <--- Map entry hint
+														   (let [^int pos (key e)  ; <--- Primitive position
+																 ^clojure.lang.IPersistentSet excluded-chars (val e)  ; <--- Set hint
+																 ^clojure.lang.IPersistentSet excluded (apply set/union
+																				 (map (fn [^Character c]  ; <--- Character hint
+																						(get position-index [(int pos) c] #{}))
+																					  excluded-chars))]
+															 (set/difference allowed excluded)))
+														 known-words
+														 known-nots)
+
+		^clojure.lang.IPersistentMap bounds-words (filter (fn [^String word]  ; <--- String hint
+                               (let [^clojure.lang.IPersistentMap freq (word-freqs word)]  ; <--- Map hint
+                                 (every? (fn [^clojure.lang.MapEntry e]  ; <--- Map entry hint
+                                           (let [^Character c (key e)  ; <--- Character hint
+                                                 {:keys [^int lower
+														 ^int upper]} (val e)
+                                                 cnt (int (get freq c 0))  ; <--- Explicit cast to int
+                                                 lower-bound (int (or lower 0))  ; <--- Primitive
+                                                 upper-bound (int (or upper Integer/MAX_VALUE))]  ; <--- Primitive
+                                             (and (>= cnt lower-bound)
+                                                  (<= cnt upper-bound))))
+                                           bounds)))
+                               without-known-nots)]
     (set bounds-words)))
 
 ;; Takes 30 seconds on an 8 core ryzen for a dict size of 5800 words

@@ -54,6 +54,7 @@
         facts1 (sut/get-facts classfns1 "EBCDE")
         classfns2 '(:wrong :revealed :semiknown :wrong :revealed)
         facts2 (sut/get-facts classfns2 "XCDXE" facts1 0)]
+	(println facts2)
     (is (= {4 \E, 1 \C} ; Position 1 maps to C, position 4 to E
            (:known facts2))
         "C added at pos 1, E remains at pos 4")
@@ -158,6 +159,9 @@
 	;;72 seconds for the LLM iterated version.. 7 seconds for hand crafted one
 	;;humans win?
    (println "rate-guess timing:")
-   (time (sut/rate-guess guess2 answer facts))
+	(time (sut/rate-guess guess2 answer facts))
+	(time (sut/rate-guess guess2 answer facts))
+	(time (sut/rate-guess guess2 answer facts))
+	(time (sut/rate-guess guess2 answer facts))
    )
   )
