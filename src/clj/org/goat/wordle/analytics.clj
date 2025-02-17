@@ -351,10 +351,10 @@
 
 ;; Precompute log cache during namespace initialization
 (def ^:private max-log-cache-size 6000)  ; Cover typical maximum possible answer counts
-(def ^:private log-cache 
+(def ^double/1 log-cache 
   (let [arr (double-array max-log-cache-size)]
     (dotimes [i max-log-cache-size]
-      (aset arr i (Math/log (inc i))))  ; Store log(1) to log(20000)
+      (aset arr i (Math/log (inc i))))  ; Store log(1) to log(6000)
     arr))
 
 (defn- get-log [n]
@@ -366,14 +366,14 @@
   "Optimized version with precomputed logs and array access"
   [^java.util.HashMap possible-answers ^String guess]
   (let [total (count possible-answers)
-        arr-answers (object-array possible-answers)  ; Faster than vec for iteration
+        ^Object/1 arr-answers (object-array possible-answers)  ; Faster than vec for iteration
         ^java.util.HashMap pattern-counts (java.util.HashMap.)
         log-total (get-log total)]
     (dotimes [i (alength arr-answers)]
       (let [^String answer (aget arr-answers i)
             ^java.util.HashMap pattern-code (classify-letters-int guess answer)]
         (.put pattern-counts pattern-code (inc (.getOrDefault pattern-counts pattern-code 0)))))
-    (let [entropy (atom 0.0)]
+    (let [^clojure.lang.Atom entropy (atom 0.0)]
       (doseq [[_ cnt] pattern-counts]
         (let [p (/ cnt total)
               term (- (* p (- (get-log cnt) log-total)))]
