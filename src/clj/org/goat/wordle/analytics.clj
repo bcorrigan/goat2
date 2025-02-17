@@ -14,37 +14,40 @@
 ;;   - how optimal (or suboptimal) are a sequence of guesses?
 ;; Well my friend, this is the namespace for you! Let's begin with the basic letter classification code that is core to wordle:
 
-(defn mask-answer
-  [guess answer]
-  (vec (for [i (range (count guess))
-             :let [ges_let (get guess i)
-                   ans_let (get answer i)]]
-         (if (= ges_let ans_let) \. ans_let))))
-
-(defn mask-first
-  "Mask the first instance of c in answer"
-  [answer c]
-  (clojure.string/replace-first answer c "."))
-
-(defn classify-letters
-  "See compare-guess-to-answer. This is the main implementation. We \"mask\" the answer where letters are correct
+(defn classify-letters 
+    "See compare-guess-to-answer. This is the main implementation. We \"mask\" the answer where letters are correct
   first, then we simply compare letter by letter, if it matches it is :revealed, if it doesn't and is in masked_answer
-  then it is :semiknown, otherwise it is :wrong. Then we conj with recursive call for next letter."
-  ([guess answer] (classify-letters guess answer (mask-answer guess answer)))
-  ([guess answer masked-ans]
-   (if (empty? guess)
-     '()
-     (let [ges_let (first guess)
-           ans_let (first answer)
-           ans_rest (str/join (rest guess))
-           ges_rest (str/join (rest answer))]
-       (cond (= ges_let ans_let) (conj (classify-letters ans_rest ges_rest masked-ans)
-                                       :revealed)
-             (strutil/contains-char? masked-ans ges_let)
-             (conj
-              (classify-letters ans_rest ges_rest (mask-first masked-ans ges_let))
-              :semiknown)
-             :else (conj (classify-letters ans_rest ges_rest masked-ans) :wrong))))))
+	then it is :semiknown, otherwise it is :wrong. Then we conj with recursive call for next letter."
+  [guess answer]
+  (let [guess-vec (vec guess)
+        answer-vec (vec answer)
+        len (count guess)
+        exact-matches (boolean-array len)
+        freq-map (java.util.HashMap.)]
+    ;; Initialize frequency map with answer's characters
+    (doseq [c answer-vec]
+      (.put freq-map c (inc (.getOrDefault freq-map c 0))))
+    ;; First pass: mark exact matches and adjust frequencies
+    (dotimes [i len]
+      (let [g (get guess-vec i)
+            a (get answer-vec i)]
+        (when (= g a)
+          (aset exact-matches i true)
+          (.put freq-map a (dec (.get freq-map a))))))
+    ;; Second pass: determine semiknown and wrong
+    (let [classification (transient [])]
+      (dotimes [i len]
+        (if (aget exact-matches i)
+          (conj! classification :revealed)
+          (let [g (get guess-vec i)
+                cnt (.getOrDefault freq-map g 0)]
+            (if (pos? cnt)
+              (do
+                (conj! classification :semiknown)
+                (.put freq-map g (dec cnt)))
+              (conj! classification :wrong)))))
+      (persistent! classification))))
+
 
 (defn compare-guess-to-answer
   "Compare given guess to answer. For each letter:
@@ -327,25 +330,24 @@
 
 ;; Thank you 3blue1brown!
 (defn evaluate-guess-quality
-  "Calculate the quality score for a guess based on how it partitions possible answers.
+    "Calculate the quality score for a guess based on how it partitions possible answers.
    Higher scores are better (indicate more information gain)."
-  [possible-answers guess]
+  [^java.util.HashMap possible-answers ^java.lang.String guess]
   (let [total (count possible-answers)
-        ;; Group answers by the classification pattern they would produce
-        pattern-groups (group-by (fn [answer] 
-                                   (compare-guess-to-answer guess answer)) 
-                                 possible-answers)
-        
-        ;; Calculate entropy for this partitioning
-        entropy (reduce (fn [acc [pattern answers]]
-                          (let [p (/ (count answers) total)
-                                information (- (* p (Math/log p)))]
-                            (+ acc information)))
-                        0
-                        pattern-groups)]
-    
-    ;; Return tuple of [guess score] where higher score = better
-    [guess entropy]))
+        ^clojure.lang.PersistentVector possible-answers-vec (vec possible-answers) ;; Convert to vector for faster access
+        ^java.util.HashMap pattern-freqs (java.util.HashMap.)]
+    (dotimes [i (count possible-answers-vec)]
+      (let [^java.lang.String answer (get possible-answers-vec i)
+            ^clojure.lang.PersistentVector pattern (vec (classify-letters guess answer))]
+        (.put pattern-freqs pattern (inc (.getOrDefault pattern-freqs pattern 0)))))
+    (let [^java.util.HashMap freqs (into {} pattern-freqs)
+          entropy (reduce (fn [acc [^clojure.lang.PersistentVector pattern cnt]]
+                            (let [p (/ cnt total)
+                                  information (- (* p (Math/log p)))]
+                              (+ acc information)))
+                          0
+                          freqs)]
+      [guess entropy])))
 
 
 (defn rank-guesses
