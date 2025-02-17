@@ -15,47 +15,14 @@
 ;;   - how optimal (or suboptimal) are a sequence of guesses?
 ;; Well my friend, this is the namespace for you! Let's begin with the basic letter classification code that is core to wordle:
 
-;; (defn classify-letters 
-;;     "See compare-guess-to-answer. This is the main implementation. We \"mask\" the answer where letters are correct
-;;   first, then we simply compare letter by letter, if it matches it is :revealed, if it doesn't and is in masked_answer
-;; 	then it is :semiknown, otherwise it is :wrong. Then we conj with recursive call for next letter."
-;;   [guess answer]
-;;   (let [guess-vec (vec guess)
-;;         answer-vec (vec answer)
-;;         len (count guess)
-;;         exact-matches (boolean-array len)
-;;         freq-map (java.util.HashMap.)]
-;;     ;; Initialize frequency map with answer's characters
-;;     (doseq [c answer-vec]
-;;       (.put freq-map c (inc (.getOrDefault freq-map c 0))))
-;;     ;; First pass: mark exact matches and adjust frequencies
-;;     (dotimes [i len]
-;;       (let [g (get guess-vec i)
-;;             a (get answer-vec i)]
-;;         (when (= g a)
-;;           (aset exact-matches i true)
-;;           (.put freq-map a (dec (.get freq-map a))))))
-;;     ;; Second pass: determine semiknown and wrong
-;;     (let [classification (transient [])]
-;;       (dotimes [i len]
-;;         (if (aget exact-matches i)
-;;           (conj! classification :revealed)
-;;           (let [g (get guess-vec i)
-;;                 cnt (.getOrDefault freq-map g 0)]
-;;             (if (pos? cnt)
-;;               (do
-;;                 (conj! classification :semiknown)
-;;                 (.put freq-map g (dec cnt)))
-;;               (conj! classification :wrong)))))
-;;       (persistent! classification))))
 
 (defn classify-letters-int
   "Returns pattern as integer (2 bits per letter)"
   [^String guess ^String answer]
   (let [len (.length guess)
-        answer-chars (.toCharArray answer)
-        freq (java.util.HashMap.)
-        pattern (int-array len)]
+        ^char/1 answer-chars (.toCharArray answer)
+        ^java.util.HashMap freq (java.util.HashMap.)
+        ^int/1 pattern (int-array len)]
     ;; Initialize pattern array with -1
     (Arrays/fill pattern -1)
     ;; Initialize frequency map
