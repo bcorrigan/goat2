@@ -279,8 +279,11 @@
             bounds)))
 
 (defn allowed-words-for-facts
-  "Compute the set of words allowed by the given facts using precomputed indexes."
-  [^clojure.lang.IPersistentMap facts] 
+  "Compute the set of words allowed by the given facts using precomputed indexes.
+  Pass :count-only to return ONLY a count and not the allowed words themselves."
+  ([^clojure.lang.IPersistentMap facts]
+   (allowed-words-for-facts facts :no-count))
+  ([^clojure.lang.IPersistentMap facts count-only]
   (let [{:keys [^clojure.lang.PersistentArrayMap known
 				^clojure.lang.PersistentArrayMap known-nots
 				^clojure.lang.PersistentHashMap bounds]} facts
@@ -296,9 +299,17 @@
 																   known-words
 																   known-nots)
 		;; Apply bounds
-		^clojure.lang.PersistentHashSet bounds-words (filter (partial apply_bounds word-freqs bounds)
-                               without-known-nots)]
-    bounds-words))
+		bounds-words (if (= count-only :count)
+					   (reduce (fn [^Integer acc ^String word]
+								 (if (apply_bounds word-freqs bounds word)
+								   (inc acc)
+								   acc))
+							   0
+							   without-known-nots)
+					   (filter (partial apply_bounds word-freqs bounds)
+							   without-known-nots))]
+	
+    bounds-words)))
 
 ;; Takes 30 seconds on an 8 core ryzen for a dict size of 5800 words
 ;; But should be good enough for analysis after first guess when possible dict size is massively reduced
@@ -314,8 +325,8 @@
                                                    (group-by first))
                                total (reduce-kv (fn [acc pattern answers]
                                                   (let [facts (get-facts pattern guess)
-                                                        allowed (allowed-words-for-facts facts)
-                                                        cnt (* (count answers) (count allowed))]
+                                                        allowed (allowed-words-for-facts facts :count)
+                                                        cnt (* (count answers) allowed)]
                                                     (+ acc cnt)))
                                                 0
                                                 pattern-groups)]
@@ -336,15 +347,14 @@
   For example, support the answer is MOPER and you have guessed HOPER. LOPER DOPER ROPER and MOPER are the 4 possible correct
   answers. Yet, out of 5800 words in the dict, 3169 of them reveal new information for this set. e.g. guessing TOADY or WRYER or LAITY all reveal enough to exclude down to 3 possible words. And any word with an M in it will exclude down to 1 possible word!"
   [facts answer]
-  (let [original-allowed (allowed-words-for-facts facts)
-        original-count (count original-allowed)]
+  (let [original-count (allowed-words-for-facts facts :count)]
     (if (zero? original-count)
       []
       (->> dict-set
            (pmap (fn [guess-word]
                    (let [new-facts (add-to-facts facts guess-word answer)
-                         new-allowed (allowed-words-for-facts new-facts)]
-                     (when (< (count new-allowed) original-count)
+                         new-allowed (allowed-words-for-facts new-facts :count)]
+                     (when (< new-allowed original-count)
                        guess-word))))
            (doall)  ; Realize the pmap
            (remove nil?)))))

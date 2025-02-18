@@ -4,7 +4,7 @@
   :source-paths ["src/clj"]
   :test-paths ["test/clj"] 
   :javac-options ["--release" "23"]
-  
+  :jvm-opts ["-server"]  
   ;; Add manifest configuration
   :manifest {"Main-Class" "org.goat.Goat"}
   
