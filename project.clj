@@ -33,7 +33,7 @@
                              com.google.guava/guava]]
                 [quil "4.3.1563"]
                 [org.clojure/java.jdbc "0.7.12"]
-                [org.xerial/sqlite-jdbc "3.48.0.0"]]
+                [org.xerial/sqlite-jdbc "3.49.1.0"]]
 
   :profiles {:dev {:dependencies [[nrepl/nrepl "1.3.1"]]}
              :uberjar {:aot :all}}
