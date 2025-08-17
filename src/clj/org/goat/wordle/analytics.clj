@@ -430,4 +430,15 @@
 			1 ;;if the score would be 0.. bump it up to 1.
 			rating))))))
 
+
+(defn work-level
+  "How much work (ie cpu time) is required to call rate-guess?"
+  [facts]
+  (let [work-needed (allowed-words-for-facts facts :count)]
+	 (cond
+		(> work-needed 500) 
+		    :hard 
+	   :else
+	        :easy)))
+
 ;; (def mydict (map :word (words/get-word :all 5 :all)))

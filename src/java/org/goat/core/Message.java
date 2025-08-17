@@ -98,6 +98,9 @@ public class Message {
 
     public Message(org.telegram.telegrambots.meta.api.objects.message.Message tmsg) {
         this(tmsg.getChatId(), tmsg.getText(), tmsg.isUserMessage(), tmsg.getFrom().getFirstName());
+		if (tmsg.isGroupMessage()) {
+			chatname = tmsg.getChat().getTitle();
+		}
     }
 
     //private - only used to construct outgoing messages for now
