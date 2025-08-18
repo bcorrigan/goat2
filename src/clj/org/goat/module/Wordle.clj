@@ -183,7 +183,7 @@
   (let [elspeth (re-find #"elspeth" s)
         difficulty (re-find #"hard" s)]
     (if (nil? elspeth)
-      (if (nil? difficulty) :all :hard)
+      (if (nil? difficulty) :easy :hard)
       :veasy)))
 
 (defn get-challenge
