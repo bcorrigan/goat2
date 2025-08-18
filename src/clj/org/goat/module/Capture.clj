@@ -3,7 +3,8 @@
               :exposes {WANT_ALL_MESSAGES {:get WANT_ALL_MESSAGES}})
   (:import
    (org.goat.core Module))
-  (:require [org.goat.db.urls :as urls]))
+  (:require [org.goat.db.urls :as urls]
+            [clojure.string :as str]))
 
 (defn extract-url
   "If there's a url in the msg, extract it and also return original msg & timestamp too"
@@ -23,9 +24,17 @@
 ;; along with timestamp, chat it was on etc.
 (defn -processChannelMessage
   [_ m]
-  (let [urlinfo  (extract-url m)]
-    (when urlinfo
-      (urls/save-url urlinfo))))
+  (let [urlinfo  (extract-url m)
+        note (= "note" (str/lower-case (.getModCommand m)))]
+    (if urlinfo
+      (urls/save-url urlinfo)
+      (when note
+        (urls/save-url {:url nil
+                        :msg (.getText m)
+                        :chatname (.getChatname m)
+                        :chatid (.getChatId m)
+                        :sender (.getSender m)
+                        :time (System/currentTimeMillis)})))))
 
 (defn -processPrivateMessage [this m] (-processChannelMessage this m))
 
