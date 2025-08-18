@@ -1,6 +1,8 @@
 (ns org.goat.module.Capture
   (:gen-class :extends org.goat.core.Module
               :exposes {WANT_ALL_MESSAGES {:get WANT_ALL_MESSAGES}})
+  (:import
+   (org.goat.core Module))
   (:require [org.goat.db.urls :as urls]))
 
 (defn extract-url
@@ -29,3 +31,5 @@
 
 (defn -getCommands [_] (into-array String '()))
 
+(defn -messageType [_]
+  Module/WANT_ALL_MESSAGES)

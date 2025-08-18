@@ -16,7 +16,6 @@
                          (create-table-ddl :urls
                                            [[:url :text]
                                             [:msg :text]
-                                            [:channel :text]
                                             [:chatid :int]
                                             [:chatname :text]
                                             [:sender :text]
@@ -36,14 +35,6 @@
   :chatname - the name of the chat it was in
   :sender - the sender"
   [urlinfo]
-    (sql/execute! db ["insert into users (username, chatid)
-                     values(?,?,?,?,?,?,?)"
-                      (:url urlinfo)
-                      (:msg urlinfo)
-                      (:channel urlinfo)
-                      (:chatid urlinfo)
-                      (:chatname urlinfo)
-                      (:sender urlinfo)
-                      (:time urlinfo)]))
+  (sql/insert! db :urls urlinfo))
 
 (create-db)
