@@ -30,11 +30,18 @@
   "Save url info down to DB. We expect:
   :url - the url
   :msg - the full original message
-  :channel - the channel it was in
   :chatid - the chat it was in
   :chatname - the name of the chat it was in
-  :sender - the sender"
+  :sender - the sender
+  :time - the time in seconds since epoch"
   [urlinfo]
   (sql/insert! db :urls urlinfo))
+
+(defn get-urls
+  "Find all urls matching search otherwise just all urls to limit/offset"
+  ([limit] (get-urls limit 0 "%"))
+  ([limit offset] (get-urls limit offset "%") )
+  ([limit offset search]
+   (sql/query db ["select * from urls where url like ? order by time desc limit ?,?" search (str offset) (str limit)])))
 
 (create-db)
