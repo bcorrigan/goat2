@@ -253,7 +253,9 @@
         results-won (filter #(= true (get % :won)) results-n)
         num-results (count results-won)
         total-guesses (reduce #(+ %1 (get %2 :guesses)) 0 results-won )]
-      (double (/ total-guesses num-results ))
+      (if (zero? num-results)
+        6.0
+        (double (/ total-guesses num-results)))
     ))
 
 
@@ -286,15 +288,17 @@
           games-won-150 (games-won-n user 150)
           games-lost-150 (games-lost-n user 150)
           games-played-150 (+ games-won-150 games-lost-150)
-          won-rate-150 (double (/ games-won-150 games-played-150))
+          won-rate-150 (if (zero? games-played-150)
+                         0.0
+                         (double (/ games-won-150 games-played-150)))
           guess-rate-20 (get-guess-rate user 20)
           max-won-rate-150 (or (get-record user :won-rate-150 ) 0 )
           max-guess-rate-20 (or (get-record user :guess-rate-20) 6 ) ]
-      (if (> streak max-streak)
+      (when (> streak max-streak)
         (save-record user :streak streak (match :endtime)))
-      (if (> won-rate-150 max-won-rate-150)
+      (when (> won-rate-150 max-won-rate-150)
         (save-record user :won-rate-150 won-rate-150 (match :endtime)))
-      (if (< guess-rate-20 max-guess-rate-20)
+      (when (< guess-rate-20 max-guess-rate-20)
         (save-record user :guess-rate-20 guess-rate-20 (get match :endtime))))
     (get-records-set-at (match :user) (match :endtime)))
 
