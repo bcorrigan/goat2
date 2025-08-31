@@ -14,7 +14,7 @@
   :jar-name ~(format "goat-%s.jar" (.format (java.text.SimpleDateFormat. "yyyyMMdd") (java.util.Date.)))
   :uberjar-name ~(format "goat-%s-standalone.jar" (.format (java.text.SimpleDateFormat. "yyyyMMdd") (java.util.Date.)))  
   
-  :dependencies [[org.clojure/clojure "1.12.1"]
+  :dependencies [[org.clojure/clojure "1.12.2"]
                  [org.telegram/telegrambots-longpolling "9.0.0"]
                  [org.telegram/telegrambots-webhook "9.0.0"]
                  [com.google.jimfs/jimfs "1.3.1"]
@@ -35,7 +35,10 @@
                  [org.xerial/sqlite-jdbc "3.50.3.0"]
                  [http-kit "2.9.0-beta2"]
                  [compojure "1.7.1"]
-                 [ring/ring-json "0.5.0"]]
+                ;; attempt to force ring-json to use updated cheshire and avoid it pulling in ancient jackson dep?
+                 [cheshire "6.0.0"]
+                 [ring/ring-json "0.5.1"]
+                ]
 
   :profiles {:dev {:dependencies [[nrepl/nrepl "1.3.1"]]}
              :uberjar {:aot :all}}
