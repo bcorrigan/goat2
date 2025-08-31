@@ -8,7 +8,7 @@
 
 (defroutes url-routes
            (GET "/urls/" [] (response (urls/get-urls 200)))
-           (GET "/urls/:search" [search] (response (urls/get-urls 200 0 search)))
+           (GET "/urls/:search" [search] (response (urls/get-urls 200 0 (str "%" search "%"))))
            (route/not-found {:error "Not found" :status "error"}))
 
 ;; middleware stack
@@ -22,18 +22,22 @@
 
 (defn start-server [port]
   (reset! server
-    (server/run-server app {:port port}))
+    (server/run-server app {:port port :legacy-return-value? false}))
   (println (str "Server started on port " port)))
 
 (defn stop-server []
-  (when-let [stop-fn @server]
-    (stop-fn)
-    (reset! server nil)
-    (println "Server stopped")))
+  (server/server-stop! @server)
+  (reset! server nil)
+  (println "Server stopped"))
 
 (comment
   (start-server 60000)
 
   (stop-server)
-  )
 
+  (urls/get-urls 200)
+
+  (urls/get-urls 200 0 (str "%" "c" "%"))
+)
+
+;(start-server 60000)
