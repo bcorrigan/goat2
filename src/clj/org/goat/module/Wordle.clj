@@ -373,6 +373,10 @@
   (clear-game! chat-key m))
 
 (defn handle-game-end [m chat-key]
+  ;; Cache the final board image before clearing the game
+  ;; This is needed for challenge games where the image will be retrieved later
+  (set-gameprop chat-key :img (get-board-img chat-key))
+  
   (if (won? chat-key)
     (handle-win m chat-key)
     (handle-loss m chat-key)))
