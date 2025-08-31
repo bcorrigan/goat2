@@ -18,7 +18,7 @@
   "If no DB file found, create the user db and table"
   []
   (try (sql/db-do-commands db
-           (if (not (util/tbl-exists? db :wordlegames))
+           (when (not (util/tbl-exists? db :wordlegames))
                        (sql/create-table-ddl :wordlegames
                                          [[:type :text]
                                           [:chatid :int]
@@ -40,7 +40,7 @@
        (when-not (util/tbl-exists? db :wordlegames) (sql/db-do-commands db (sql/create-table-ddl :records [[:username :text] [:record :text] [:recordval :text] [:recordtime :datetime]])) (sql/execute! db "create unique index recidx on records(username, record)"))
        (when-not (util/tbl-exists? db :users) (sql/db-do-commands db (sql/create-table-ddl :users [[:username :text] [:chatid :int]])) (sql/execute! db "create unique index usridx on users(username)"))
 
-       (if (not (util/tbl-exists? db :challenges))
+       (when (not (util/tbl-exists? db :challenges))
          (sql/db-do-commands db (sql/create-table-ddl :challenges
                                                       [[:user1 :text]
                                                        [:user2 :text]
@@ -201,7 +201,7 @@
                                 where lower(user1)=lower(?)
                                 and lower(user2)=lower(?)
                                 and user1_won=true
-                                and user1_guesses<user2_guesses
+                                and (user1_guesses<user2_guesses OR (user1_guesses=user2_guesses AND user2_won=false))
                                 and datetime(endtime / 1000, 'unixepoch') > datetime('now', ?)" winner loser days-param])
              first
              :count)
@@ -210,7 +210,7 @@
                                  where lower(user1)=lower(?)
                                  and lower(user2)=lower(?)
                                  and user2_won=true
-                                 and user2_guesses<user1_guesses
+                                 and (user2_guesses<user1_guesses OR (user2_guesses=user1_guesses AND user1_won=false))
                                  and datetime(endtime / 1000, 'unixepoch') > datetime('now', ?)" loser winner days-param])
              first
              :count))))
@@ -225,6 +225,7 @@
                                 where lower(user1)=lower(?)
                                 and lower(user2)=lower(?)
                                 and user1_guesses=user2_guesses
+                                and user1_won=user2_won
                                 and datetime(endtime / 1000, 'unixepoch') > datetime('now', ?)" p1 p2 days-param])
          first
          :count)
@@ -233,6 +234,7 @@
                                  where lower(user1)=lower(?)
                                  and lower(user2)=lower(?)
                                  and user2_guesses=user1_guesses
+                                 and user1_won=user2_won
                                  and datetime(endtime / 1000, 'unixepoch') > datetime('now', ?)" p2 p1 days-param])
          first
          :count))))
@@ -317,12 +319,12 @@
   win ratio last 10, avg guesses-to-win, avg guesses-to-win last 10,
   current streak, best ever streak."
   [user]
-  { :games-won (games-won user)
-     :games-won-20 (games-won-n user 20)
-     :games-lost (games-lost user)
+  {:games-won (games-won user)
+   :games-won-20 (games-won-n user 20)
+   :games-lost (games-lost user)
    :games-lost-20 (games-lost-n user 20)
    :games-won-150 (games-won-n user 150)
    :games-lost-150 (games-lost-n user 150)
    :guess-rate-150 (get-guess-rate user 150)
    :guess-rate-20 (get-guess-rate user 20)
-     :results-150 (reverse (results-n user 150))})
+   :results-150 (reverse (results-n user 150))})
