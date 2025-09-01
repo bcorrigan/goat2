@@ -302,3 +302,137 @@
              "Make it or break it!"
              "The final countdown!"
              "One last shot!"]))
+
+;; Analytics-based feedback messages
+
+(def mistake-messages
+  "Messages for guesses that reveal no new information (rating 0)"
+  ["That guess revealed no new information!"
+   "Hmm, that wasn't very helpful..."
+   "You might want to think more strategically!"
+   "Consider what you already know before guessing."
+   "That guess didn't narrow things down at all."
+   "Try to choose words that eliminate possibilities!"
+   "Think about what letters you've already ruled out."
+   "Strategy tip: pick words that test new letters!"
+   "That guess was a bit wasteful of your limited tries."
+   "Remember, every guess should teach you something new!"])
+
+(def poor-messages
+  "Messages for low-quality guesses (rating 1-3)"
+  ["There might be better strategic options..."
+   "That's not your strongest guess today."
+   "Could be more efficient, but you're trying!"
+   "Room for improvement on that one."
+   "Next time, think about information theory!"
+   "Consider which letters would be most informative."
+   "That guess was okay, but not optimal."
+   "Try to maximize what you learn from each guess!"
+   "Strategic thinking could help here."
+   "Keep working on your word selection strategy!"])
+
+(def good-messages
+  "Messages for decent guesses (rating 4-6)"
+  ["Not bad! Solid strategic thinking."
+   "Good guess! You're making progress."
+   "Nice work! That revealed useful information."
+   "Decent choice! You're on the right track."
+   "That's a reasonable approach to the puzzle."
+   "Good strategy! You're thinking analytically."
+   "Well chosen! That helps narrow things down."
+   "Smart guess! You're learning as you go."
+   "That's the kind of thinking that wins games!"
+   "Good job considering your options!"])
+
+(def excellent-messages
+  "Messages for high-quality guesses (rating 7-10)"
+  ["Excellent guess! Very strategic!"
+   "That was a brilliant deduction!"
+   "Perfect information gathering!"
+   "Outstanding analytical thinking!"
+   "Superb strategic choice!"
+   "That's exactly what a Wordle expert would guess!"
+   "Brilliant! You're playing like a pro!"
+   "Masterful strategy! That was optimal."
+   "Phenomenal guess! Maximum information gained!"
+   "You're thinking like a true Wordle strategist!"
+   "That guess was mathematically beautiful!"
+   "Perfect! That's how you maximize entropy!"
+   "Exceptional analytical play!"
+   "That's the gold standard of Wordle guesses!"
+   "Absolutely stellar strategic thinking!"])
+
+(defn get-feedback-message
+  "Get appropriate feedback message based on guess quality rating.
+   
+   Args:
+   - rating: Integer from 0-10 representing guess quality
+   - is-mistake?: Boolean indicating if guess reveals no new information
+   
+   Returns: Random appropriate feedback message string"
+  [rating is-mistake?]
+  (cond
+    is-mistake?
+    (rand-nth mistake-messages)
+    
+    (<= rating 3)
+    (rand-nth poor-messages)
+    
+    (<= rating 6)
+    (rand-nth good-messages)
+    
+    :else ; rating >= 7
+    (rand-nth excellent-messages)))
+
+(def performance-messages
+  "Post-game performance feedback templates"
+  {:skilled-win 
+   ["Masterfully played! Your analytical approach paid off!"
+    "You dominated that puzzle with superior strategy!"
+    "Excellent strategic play throughout the game!"
+    "Your analytical thinking was spot on!"
+    "That's how you play Wordle at the highest level!"
+    "Outstanding performance! You've mastered the art of Wordle!"]
+   
+   :lucky-win
+   ["You won, but it was more luck than skill..."
+    "Victory through fortune rather than strategy!"
+    "The wordle gods smiled upon you today!"
+    "Sometimes it's better to be lucky than good!"
+    "Your luck compensated for some questionable guesses."
+    "Fortune favored you despite the analytical shortcomings!"]
+   
+   :skilled-loss  
+   ["Unlucky! You played very well analytically."
+    "Great strategy, just didn't work out this time."
+    "Your analytical approach was sound, just unlucky!"
+    "Excellent strategic thinking, but the word was tricky."
+    "You played like a pro, sometimes the answer is just hard."
+    "Superior analytical play, but the puzzle got you this time."]
+   
+   :poor-performance
+   ["Room for improvement in your strategy."
+    "Consider thinking more analytically next time."
+    "Try focusing on information theory in your guesses."
+    "Strategic thinking could elevate your game."
+    "Work on maximizing information from each guess."
+    "Consider learning some Wordle strategy fundamentals."]})
+
+(defn format-performance-message
+  "Format a post-game performance message.
+   
+   Args:
+   - performance: Map with :avg-rating, :num-guesses, :luck-factor, :overall-grade
+   - user: Player name
+   - won?: Whether the player won
+   
+   Returns: Formatted performance message string"
+  [performance user won?]
+  (let [grade (:overall-grade performance)
+        message-key (cond
+                      (and won? (#{:skilled :excellent} grade)) :skilled-win
+                      (and won? (= grade :lucky)) :lucky-win
+                      (and (not won?) (#{:skilled :excellent} grade)) :skilled-loss
+                      :else :poor-performance)
+        base-message (rand-nth (get performance-messages message-key))]
+    (format "%s %s" user base-message)))

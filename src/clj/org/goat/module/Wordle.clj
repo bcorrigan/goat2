@@ -93,7 +93,10 @@
             :challenge challenge
             :challenge-key challenge-key
             :drawing (atom false)
-            :hits hits})))
+            :hits hits
+            :facts-history []  ;; Track accumulated facts after each guess
+            :ratings-history []  ;; Track guess ratings from analytics
+            })))
 
 (defn new-challenge!
   "Add state for a new challenge"
@@ -141,6 +144,16 @@
   (apply =
          (mapv #(analytics/compare-guess-to-answer % (get-gameprop chat-key :answer))
                (take-last 3 (get-gameprop chat-key :guesses)))))
+
+(defn calculate-facts-so-far
+  "Calculate accumulated facts from all guesses made so far"
+  [chat-key]
+  (let [guesses (get-gameprop chat-key :guesses)
+        answer (get-gameprop chat-key :answer)]
+    (reduce (fn [facts guess]
+              (analytics/add-to-facts facts guess answer))
+            {}
+            guesses)))
 
 (defn add-guess!
   "Append the given guess to the state map.
@@ -329,18 +342,43 @@
     (.replyWithImage m (get-board-img chat-key))))
 
 (defn handle-guess [m chat-key guess user]
-  (add-guess! chat-key guess user)
-  (.replyWithImage m (get-board-img chat-key))
+  ;; Calculate analytics before adding the guess
+  (let [current-facts (calculate-facts-so-far chat-key)
+        answer (get-gameprop chat-key :answer)
+        work-required (analytics/work-level current-facts)]
+    
+    ;; Add the guess to state
+    (add-guess! chat-key guess user)
+    (.replyWithImage m (get-board-img chat-key))
 
-  (when (and (not (won? chat-key))
-             (< (guesses-made chat-key) max-guesses))
-    (.reply m (letter-help chat-key))
-    (when (= (guesses-made chat-key) (dec max-guesses))
-      (.reply m (msg/last-chance-message)))
+    ;; Provide analytics feedback if computationally feasible
+    (when (= work-required :easy)
+      (try
+        (let [rating (analytics/rate-guess guess answer current-facts)
+              valid-words (set (analytics/valid-guess-words current-facts answer))
+              is-mistake? (not (contains? valid-words guess))
+              feedback-msg (msg/get-feedback-message rating is-mistake?)]
+          
+          ;; Store rating for potential post-game analysis
+          (add-to-col! chat-key :ratings-history rating)
+          
+          ;; Provide feedback for notable guesses (mistakes or excellent plays)
+          (when (or is-mistake? (>= rating 7) (<= rating 3))
+            (.reply m feedback-msg)))
+        (catch Exception e
+          ;; If analytics fail, just log and continue - don't break the game
+          (println (str "Analytics error: " (.getMessage e))))))
 
-    (when (and (> (guesses-made chat-key) 2)
-               (no-progress? chat-key))
-      (.reply m (rand-nth msg/no-progress-responses)))))
+    ;; Continue with existing game logic
+    (when (and (not (won? chat-key))
+               (< (guesses-made chat-key) max-guesses))
+      (.reply m (letter-help chat-key))
+      (when (= (guesses-made chat-key) (dec max-guesses))
+        (.reply m (msg/last-chance-message)))
+
+      (when (and (> (guesses-made chat-key) 2)
+                 (no-progress? chat-key))
+        (.reply m (rand-nth msg/no-progress-responses))))))
 
 (defn handle-win [m chat-key]
   (set-gameprop chat-key :won true)
