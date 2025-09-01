@@ -342,32 +342,40 @@
     (.replyWithImage m (get-board-img chat-key))))
 
 (defn handle-guess [m chat-key guess user]
-  ;; Calculate analytics before adding the guess
+  ;; CRITICAL: Calculate analytics BEFORE adding the guess to game state
+  ;; We need to evaluate the guess against the facts from previous guesses only
   (let [current-facts (calculate-facts-so-far chat-key)
         answer (get-gameprop chat-key :answer)
-        work-required (analytics/work-level current-facts)]
+        work-required (analytics/work-level current-facts)
+        
+        ;; Calculate analytics for the current guess before state changes
+        analytics-feedback (when (= work-required :easy)
+                            (try
+                              (let [rating (analytics/rate-guess guess answer current-facts)
+                                    valid-words (set (analytics/valid-guess-words current-facts answer))
+                                    is-mistake? (not (contains? valid-words guess))]
+                                {:rating rating
+                                 :is-mistake? is-mistake?
+                                 :feedback-msg (msg/get-feedback-message rating is-mistake?)})
+                              (catch Exception e
+                                ;; If analytics fail, just log and continue
+                                (println (str "Analytics error: " (.getMessage e)))
+                                nil)))]
     
-    ;; Add the guess to state
+    ;; Now add the guess to state (this changes the facts!)
     (add-guess! chat-key guess user)
     (.replyWithImage m (get-board-img chat-key))
 
-    ;; Provide analytics feedback if computationally feasible
-    (when (= work-required :easy)
-      (try
-        (let [rating (analytics/rate-guess guess answer current-facts)
-              valid-words (set (analytics/valid-guess-words current-facts answer))
-              is-mistake? (not (contains? valid-words guess))
-              feedback-msg (msg/get-feedback-message rating is-mistake?)]
-          
-          ;; Store rating for potential post-game analysis
-          (add-to-col! chat-key :ratings-history rating)
-          
-          ;; Provide feedback for notable guesses (mistakes or excellent plays)
-          (when (or is-mistake? (>= rating 7) (<= rating 3))
-            (.reply m feedback-msg)))
-        (catch Exception e
-          ;; If analytics fail, just log and continue - don't break the game
-          (println (str "Analytics error: " (.getMessage e))))))
+    ;; Provide analytics feedback if we calculated it successfully
+    (when analytics-feedback
+      ;; Store rating for potential post-game analysis
+      (add-to-col! chat-key :ratings-history (:rating analytics-feedback))
+      
+      ;; Provide feedback for notable guesses (mistakes or excellent plays)
+      (when (or (:is-mistake? analytics-feedback) 
+                (>= (:rating analytics-feedback) 7) 
+                (<= (:rating analytics-feedback) 3))
+        (.reply m (:feedback-msg analytics-feedback))))
 
     ;; Continue with existing game logic
     (when (and (not (won? chat-key))
