@@ -349,13 +349,21 @@
         work-required (analytics/work-level current-facts)
         
         ;; Calculate analytics for the current guess before state changes
+        ;; Using proper information theory without cheating!
         analytics-feedback (when (= work-required :easy)
                             (try
-                              (let [rating (analytics/rate-guess guess answer current-facts)
-                                    valid-words (set (analytics/valid-guess-words current-facts answer))
-                                    is-mistake? (not (contains? valid-words guess))]
+                              (let [possible-answers (analytics/allowed-words-for-facts current-facts)
+                                    guess-entropy (if (empty? possible-answers)
+                                                   0.0
+                                                   (second (analytics/evaluate-guess-quality possible-answers guess)))
+                                    ;; Use the new non-cheating rate-guess function
+                                    rating (analytics/rate-guess guess current-facts)
+                                    ;; A guess is a "mistake" if it has very low information gain
+                                    is-mistake? (< guess-entropy 0.01)]  ; Very low entropy threshold
                                 {:rating rating
                                  :is-mistake? is-mistake?
+                                 :entropy guess-entropy
+                                 :possible-answers-count (count possible-answers)
                                  :feedback-msg (msg/get-feedback-message rating is-mistake?)})
                               (catch Exception e
                                 ;; If analytics fail, just log and continue

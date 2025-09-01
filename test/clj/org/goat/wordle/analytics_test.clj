@@ -159,9 +159,9 @@
 	;;72 seconds for the LLM iterated version.. 7 seconds for hand crafted one
 	;;humans win?
    (println "rate-guess timing:")
-	(time (sut/rate-guess guess2 answer facts))
-	(time (sut/rate-guess guess2 answer facts))
-	(time (sut/rate-guess guess2 answer facts))
-	(time (sut/rate-guess guess2 answer facts))
+	(time (sut/rate-guess guess2 facts))
+	(time (sut/rate-guess guess2 facts))
+	(time (sut/rate-guess guess2 facts))
+	(time (sut/rate-guess guess2 facts))
    )
   )

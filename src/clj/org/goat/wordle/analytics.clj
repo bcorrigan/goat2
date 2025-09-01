@@ -409,8 +409,9 @@
 ;;(def guesses-ranked (rank-guesses (allowed-words-for-facts new-facts) (valid-guess-words new-facts "DOPER")))
 ;;(count (distinct (map second guesses-ranked)))
 
-(defn rate-guess
-  "Return an integer representing the quality of the users guess, given their known information, from 0-5. 5 is a *perfect* guess, that is, reveals the maximum possible information. 0 means no new informaiton was revealed."
+(defn rate-guess-old-cheating
+  "OLD VERSION - Return an integer representing the quality of the users guess, given their known information, from 0-5. 5 is a *perfect* guess, that is, reveals the maximum possible information. 0 means no new informaiton was revealed.
+   WARNING: This function CHEATS by using the actual answer, kept for backwards compatibility only."
   [guess answer facts]
   (let [possible-answers (allowed-words-for-facts facts) ;;usually a few of these
 		possible-guesses (valid-guess-words facts answer) ;;MANY of these
@@ -429,6 +430,22 @@
 		  (if (= rating 0)
 			1 ;;if the score would be 0.. bump it up to 1.
 			rating))))))
+
+(defn rate-guess
+  "Return an integer representing the quality of the users guess, given their known information, from 0-10.
+   10 is a perfect guess that maximally reduces uncertainty. 0 means no meaningful information was revealed.
+   This version uses proper information theory without cheating (knowing the answer)."
+  [guess facts]
+  (let [possible-answers (allowed-words-for-facts facts)]
+    (if (empty? possible-answers)
+      5  ; Neutral rating when no analysis is possible
+      (let [guess-entropy (second (evaluate-guess-quality possible-answers guess))
+            max-possible-entropy (Math/log (count possible-answers))
+            rating (if (zero? max-possible-entropy)
+                    5  ; Neutral when max entropy is 0
+                    (int (Math/round (* 10 (/ guess-entropy max-possible-entropy)))))]
+        ;; Clamp rating between 0 and 10
+        (max 0 (min 10 rating))))))
 
 
 (defn work-level
