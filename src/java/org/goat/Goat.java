@@ -13,6 +13,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 
 public class Goat {
     private static boolean showhelp;
+    private static boolean testMode;
     public static LinkedBlockingQueue<Message> inqueue = new LinkedBlockingQueue<Message>();
     public static LinkedBlockingQueue<Message> outqueue = new LinkedBlockingQueue<Message>();
     public static ModuleController modController = new ModuleController() ;
@@ -36,9 +37,17 @@ public class Goat {
             showHelp();
             System.exit(0);
         }
-        System.out.print("Connecting to telegram... ");
-        sc = new ServerConnection(); //lets init the connection..
-        System.out.println("We appear to be connected.\n");
+
+        if (testMode) {
+            // CLI test mode - use stdin/stdout
+            new CLIConnection();
+        } else {
+            // Normal mode - connect to Telegram
+            System.out.print("Connecting to telegram... ");
+            sc = new ServerConnection(); //lets init the connection..
+            System.out.println("We appear to be connected.\n");
+        }
+
         loadDefaultModules(modController);
         try {
             Thread.sleep(100);   //lets give the logon a chance to progress before adding messages to queues
@@ -63,6 +72,8 @@ public class Goat {
                         state = 3;
                     } else if (arg.equals("-help")) {
                         showhelp = true;
+                    } else if (arg.equals("-test")) {
+                        testMode = true;
                     } else {
                         System.out.println("Illegal argument.");
                         showhelp = true;
@@ -94,12 +105,13 @@ public class Goat {
     }
 
     private static void showHelp() {
-        System.out.println("Usage: java Goat [-name <name>][-host <host>][-channel <channel>]");
+        System.out.println("Usage: java Goat [-name <name>][-host <host>][-channel <channel>][-test]");
         System.out.println();
         System.out.println("Options:");
         System.out.println("  -name <name>         Changes the bot's default name [default: goat]");
         System.out.println("  -channel <#channel>  Changes the bot's default channel [default: #jism]");
         System.out.println("  -host <host>         Sets which host to connect to [default: irc.slashnet.org]");
+        System.out.println("  -test                Run in CLI test mode (stdin/stdout instead of Telegram)");
     }
 
     private void loadDefaultModules(ModuleController modController) {

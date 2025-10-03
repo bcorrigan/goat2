@@ -47,7 +47,7 @@ public class Message {
      */
     private static LinkedBlockingQueue<Message> outqueue = Goat.outqueue;
 
-    private TelegramClient tclient;
+    private TelegramClient tclient; // nullable in CLI mode
 
     public String getModCommand() {
         return modCommand;
