@@ -54,7 +54,7 @@
 
 (defmodule CoreCommands
   :commands [:gc :mem :uptime :goat :version :setchat]
-  :message-type org.goat.core.Module/WANT_ALL_MESSAGES
+  :receive-messages :all
 
   (defn process-channel-message [m]
     (case (msg/command m)

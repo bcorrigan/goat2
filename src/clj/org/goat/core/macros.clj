@@ -1,7 +1,8 @@
 (ns org.goat.core.macros
   "Macros for simplifying Goat module creation"
   (:require [org.goat.core.message :as msg]
-            [clojure.string :as str]))
+            [clojure.string :as str])
+  (:import [org.goat.core Module]))
 
 (defn- extract-options
   "Extract options from defmodule body, returning [options remaining-body]"
@@ -47,7 +48,7 @@
   (defmodule ModuleName
     :commands [:cmd1 :cmd2]
     :wants-private true
-    :message-type WANT_ALL_MESSAGES
+    :receive-messages :all  ; or :unclaimed or :commands (default)
 
     (defn process-channel-message [m]
       ; m is automatically wrapped - use (get-command m), (reply m text), etc.
@@ -61,7 +62,12 @@
   (let [[options remaining-body] (extract-options body)
         commands (or (:commands options) [])
         wants-private (get options :wants-private true)
-        message-type (get options :message-type 'Module/WANT_COMMAND_MESSAGES)
+        ; Map Clojure-style keywords to Java constants
+        receive-messages (or (:receive-messages options) :commands)
+        message-type (case receive-messages
+                       :all 'org.goat.core.Module/WANT_ALL_MESSAGES
+                       :unclaimed 'org.goat.core.Module/WANT_UNCLAIMED_MESSAGES
+                       :commands 'org.goat.core.Module/WANT_COMMAND_MESSAGES)
 
         ; Find function definitions
         channel-fn (find-defn-by-name remaining-body 'process-channel-message)
@@ -103,7 +109,7 @@
          (into-array String ~(mapv name commands)))
 
        ; Generate messageType method if specified
-       ~(when (not= message-type 'Module/WANT_COMMAND_MESSAGES)
+       ~(when (not= message-type 'org.goat.core.Module/WANT_COMMAND_MESSAGES)
           `(defn ~'-messageType [~'_]
              ~message-type))
 
