@@ -1,9 +1,10 @@
 (ns org.goat.wordle.gfx
-  (:require [quil.core :as q :include-macros true]
-            [clojure.math :as math]
-            [org.goat.db.users :as users])
+  "Wordle-specific graphics rendering using generic gfx package"
+  (:require [clojure.math :as math]
+            [org.goat.db.users :as users]
+            [org.goat.gfx.core :as gfx])
   (:import  [java.awt.image BufferedImage]
-            [java.awt Color Font RenderingHints]))
+            [java.awt Color Font RenderingHints Graphics2D]))
 
 (def letter-size "How many px wide is a letter box" 60)
 (def letter-border "How many px between letter boxes on all sides" 10)
@@ -24,87 +25,64 @@
 (def pie-width "Width of pie chart" 600)
 (def pie-height "Height of pie chart" 600)
 
-(def img-state
-  "A temporary image cache - quil runs in a different thread to the main thread, this is essentially a simple means to communicate an image from the quil applet thread back to the main thread, which waits for this to be populated."
-  (atom {}))
-
-(defn get-img
-  "Get stats image for a given chat"
-  [chat-key img-key]
-  (get-in @img-state [img-key chat-key :img]))
-
-(defn set-img
-  "Set stats image for a given chat"
-  [chat-key img-key img]
-  (swap! img-state assoc-in [img-key chat-key :img] img))
-
-(defn remove-img!
-  "Remove image associated with given chat"
-  [chat-key img-key]
-  (swap! img-state assoc-in
-         [img-key]
-         (dissoc (get-in @img-state [img-key]) chat-key)))
-
-(defn pgraphics-to-bufferedimage
-  "Go under the hood of quil to get the underlying BufferedImage. Bizarrely quil API itself has no way to get this."
-  [pg]
-  (let [w   (.width pg)
-        h   (.height pg)
-        bi  (BufferedImage. w h BufferedImage/TYPE_INT_ARGB)
-        g2d (.createGraphics bi)]
-    (.drawImage g2d (.getImage pg) 0 0 nil)
-    (.dispose g2d)
-    bi))
-
 (defn draw-letter
   "Draw the given letter on the board at position x,y.
     The style is :revealed, :wrong or :semiknown."
-  [c x y style]
-  (cond (= :revealed style)  (q/fill 83 140 78)
-        (= :wrong style)     (q/fill 58 58 60)
-        (= :semiknown style) (q/fill 180 158 59))
-                                        ;(q/fill "#b49e3b")
-  (q/stroke 17 17 18)
-  (q/rect x y (- letter-size letter-border) (- letter-size letter-border))
-  (q/fill 248 248 248)
-  (q/text-align :center)
-  (q/text-font (q/create-font "Source Code Pro"
-                              (- letter-size (* 2 letter-border))))
-                                        ;(q/text-size 40)
-  (q/text (str c)
-          (+ (/ (- letter-size letter-border) 2) x)
-          (+ (- letter-size (* 2 letter-border)) y)))
+  [g2d c x y style]
+  ;; Set box color based on style
+  (cond (= :revealed style)  (gfx/fill! g2d 83 140 78)
+        (= :wrong style)     (gfx/fill! g2d 58 58 60)
+        (= :semiknown style) (gfx/fill! g2d 180 158 59))
+
+  ;; Draw filled rectangle (box background)
+  (gfx/rect! g2d x y (- letter-size letter-border) (- letter-size letter-border))
+
+  ;; Draw box border
+  (gfx/stroke! g2d 17 17 18)
+  (gfx/rect-outline! g2d x y (- letter-size letter-border) (- letter-size letter-border))
+
+  ;; Draw letter text
+  (gfx/fill! g2d 248 248 248)
+  (gfx/set-font! g2d "Source Code Pro" Font/PLAIN (- letter-size (* 2 letter-border)))
+  (gfx/text! g2d (str c)
+             (+ (/ (- letter-size letter-border) 2) x)
+             (+ (- letter-size (* 2 letter-border)) y)
+             :align-x :center))
 
 (defn draw-unrevealed
   "Draw an unrevealed letterbox at x,y."
-  [x y]
-  (q/fill 26 26 28)
-  (q/stroke 168 168 168)
-  (q/rect x y (- letter-size letter-border) (- letter-size letter-border)))
+  [g2d x y]
+  (gfx/fill! g2d 26 26 28)
+  (gfx/rect! g2d x y (- letter-size letter-border) (- letter-size letter-border))
+  (gfx/stroke! g2d 168 168 168)
+  (gfx/rect-outline! g2d x y (- letter-size letter-border) (- letter-size letter-border)))
 
 (defn draw-board-gr
   "Draws the board letter by letter according to the chat's guesses array"
-  [gr guesses-classified size max-guesses]
+  [g2d width height guesses-classified size max-guesses]
   (let [guesses (vec (keys guesses-classified))]
-    (q/with-graphics
-      gr
-      (q/background 17 17 18)
-      (doseq [i (range (count guesses))
-              j (range (count (get guesses i)))]
-        (let [guess (get guesses i)
-              letter (nth (seq guess) j)
-              sym (get (get guesses-classified guess) j)
-              y (+ letter-border (* letter-size i))
-              x (+ letter-border (* letter-size j))]
-          (draw-letter letter x y sym)))
-      (doseq [y (range (+ letter-border (* letter-size (count guesses)))
-                       (+ letter-border (* letter-size max-guesses))
-                       letter-size)
-              x (range letter-border
-                       (+ (* size letter-size)
-                          (* 2 letter-border))
-                       letter-size)]
-        (draw-unrevealed x y)))))
+    ;; Background
+    (gfx/background! g2d width height 17 17 18)
+
+    ;; Draw revealed letters
+    (doseq [i (range (count guesses))
+            j (range (count (get guesses i)))]
+      (let [guess (get guesses i)
+            letter (nth (seq guess) j)
+            sym (get (get guesses-classified guess) j)
+            y (+ letter-border (* letter-size i))
+            x (+ letter-border (* letter-size j))]
+        (draw-letter g2d letter x y sym)))
+
+    ;; Draw unrevealed boxes
+    (doseq [y (range (+ letter-border (* letter-size (count guesses)))
+                     (+ letter-border (* letter-size max-guesses))
+                     letter-size)
+            x (range letter-border
+                     (+ (* size letter-size)
+                        (* 2 letter-border))
+                     letter-size)]
+      (draw-unrevealed g2d x y))))
 
 (defn get-no-cols
   "Calculate the number of columns to draw.
@@ -126,17 +104,14 @@
   (+ (* (get-no-cols guesses) letter-size) letter-border))
 
 (defn draw-board
-  "Initiates all the drawing and puts the image onto img cache.
-   This method is called asynchronously in an applet context so it can't just return the image."
-  [chat-key guesses-classified size max-guesses]
-  (let [gr (q/create-graphics (board-width size)
-                              (board-height (count guesses-classified))
-                              :p2d)]
-    (q/with-graphics gr
-      (draw-board-gr gr guesses-classified size max-guesses)
-      (set-img chat-key :board (pgraphics-to-bufferedimage (q/current-graphics)))
-      (.dispose gr)
-      (q/exit))))
+  "Draw the Wordle board and return BufferedImage.
+   Returns the image directly - no longer async or using image cache."
+  [guesses-classified size max-guesses]
+  (let [width (board-width size)
+        height (board-height (count guesses-classified))
+        {:keys [canvas g2d]} (gfx/create-canvas width height)]
+    (draw-board-gr g2d width height guesses-classified size max-guesses)
+    (gfx/finalize-canvas {:canvas canvas :g2d g2d})))
 
 (defn get-wonbox-col
   "Get the colour of the box needed for stats image"
@@ -159,198 +134,166 @@
 
 (defn draw-stats-gr
   "Draw onto the given graphics our stats"
-  [gr user]
+  [g2d user]
   (let [stats (users/get-stats user)
         games (:results-150 stats)]
-    (q/with-graphics gr
-      (q/background 17 17 18) ;;black
-      (doseq [i (range (count games))]
-        (let [col (mod i 5)
-              row (int (math/floor (/ i 5)))
-              game (nth games i)
-              won (:won game)
-              guesses (:guesses game)
-              boxcol (get-wonbox-col won guesses)]
-          (q/fill (first boxcol) (second boxcol) (nth boxcol 2))
-          (q/stroke (first boxcol) (second boxcol) (nth boxcol 2))
-          (q/rect (* col stats-square-px)
-                  (* row stats-square-px)
-                  (- stats-square-px 4)
-                  (- stats-square-px 4))))
-      ;; Text
-      (let [games-played (+ (or (:games-won stats) 0) (or (:games-lost stats) 0))
-            games-played-150 (+ (or (:games-won-150 stats) 0) (or (:games-lost-150 stats) 0))
-            win-ratio (* 100 (double (/ (or (:games-won-150 stats) 0) games-played-150)))
-            win-ratio-fmt (format "%.3f" win-ratio)
-            guess-rate-150 (format "%.3f" (or (:guess-rate-150 stats) 0))
-            guess-rate-20 (format "%.3f" (or (:guess-rate-20 stats) 0))
-            games-played-20 (+ (or (:games-won-20 stats) 0) (or (:games-lost-20 stats) 0))
-            win-ratio-20 (* 100 (double (/ (or (:games-won-20 stats) 0) games-played-20)))
-            win-ratio-20-fmt (format "%.3f" win-ratio-20)
-            big-font  (q/create-font "Noto Sans" big-font-pt)
-            small-font (q/create-font "Noto Sans" small-font-pt)]
-        (q/text-font big-font)
-        (q/fill 248 248 248) ;; white
-        (q/text (str user "'s records:") text-indent (text-row-px 1))
-        (q/text (str "Games played: " games-played) text-indent (text-row-px 2))
-        (q/text (str "Streak: " (users/get-streak user)) text-indent (text-row-px 3))
-        (q/text-font small-font)
-        (q/fill 148 148 148) ;; grey
-        (q/text (str "        ---LAST 150---") text-indent (text-row-px 4))
-        (q/fill 248 248 248) ;; white
-        (q/text-font big-font)
-        (q/text (str "Win ratio: " win-ratio-fmt "%") text-indent (text-row-px 5))
-        (q/text (str "Guess rate: " guess-rate-150) text-indent (text-row-px 6))
-        (q/fill 148 148 148) ;; grey
-        (q/text-font small-font)
-        (q/text (str "        ---LAST 20---") text-indent (text-row-px 7))
-        (q/fill 248 248 248) ;; white
-        (q/text-font big-font)
-        (if (>= win-ratio-20 win-ratio)
-          (q/fill 123 177 114)  ;; green
-          (q/fill 255 167 255)) ;; pink
-        (q/text (str "Win ratio: " win-ratio-20-fmt "%") text-indent (text-row-px 8))
-        (if (<= (or (:guess-rate-20 stats) 0) (or (:guess-rate-150 stats) 0))
-          (q/fill 123 177 114)  ;; green
-          (q/fill 255 167 255)) ;; pink
-        (q/text (str "Guess rate: " guess-rate-20) text-indent (text-row-px 9))
-        (q/fill 148 148 148) ;; grey
-        (q/text-font small-font)
-        (q/text (str "        ---PERSONAL BESTS---") text-indent (text-row-px 10))
-        (q/fill 248 248 248) ;; white
-        (q/text-font big-font)
-        (q/text (str "Streak: " (or (users/get-record user :streak) 0)) text-indent (text-row-px 11))
-        (q/text (str "/150 Win ratio: " (format "%.3f" (* 100 (or (users/get-record user :won-rate-150) 0.0)))) text-indent (text-row-px 12))
-        (q/text (str "/20 Guess ratio: " (format "%.3f" (or (users/get-record user :guess-rate-20) 0.0))) text-indent (text-row-px 13))))))
+    ;; Background
+    (gfx/background! g2d stats-width stats-height 17 17 18)
+
+    ;; Draw game result squares
+    (doseq [i (range (count games))]
+      (let [col (mod i 5)
+            row (int (math/floor (/ i 5)))
+            game (nth games i)
+            won (:won game)
+            guesses (:guesses game)
+            boxcol (get-wonbox-col won guesses)]
+        (gfx/fill! g2d (first boxcol) (second boxcol) (nth boxcol 2))
+        (gfx/rect! g2d (* col stats-square-px)
+                       (* row stats-square-px)
+                       (- stats-square-px 4)
+                       (- stats-square-px 4))))
+
+    ;; Text rendering
+    (let [games-played (+ (or (:games-won stats) 0) (or (:games-lost stats) 0))
+          games-played-150 (+ (or (:games-won-150 stats) 0) (or (:games-lost-150 stats) 0))
+          win-ratio (* 100 (double (/ (or (:games-won-150 stats) 0) games-played-150)))
+          win-ratio-fmt (format "%.3f" win-ratio)
+          guess-rate-150 (format "%.3f" (or (:guess-rate-150 stats) 0))
+          guess-rate-20 (format "%.3f" (or (:guess-rate-20 stats) 0))
+          games-played-20 (+ (or (:games-won-20 stats) 0) (or (:games-lost-20 stats) 0))
+          win-ratio-20 (* 100 (double (/ (or (:games-won-20 stats) 0) games-played-20)))
+          win-ratio-20-fmt (format "%.3f" win-ratio-20)]
+
+      ;; Main stats
+      (gfx/set-font! g2d "Noto Sans" Font/PLAIN big-font-pt)
+      (gfx/fill! g2d 248 248 248) ;; white
+      (gfx/text! g2d (str user "'s records:") text-indent (text-row-px 1))
+      (gfx/text! g2d (str "Games played: " games-played) text-indent (text-row-px 2))
+      (gfx/text! g2d (str "Streak: " (users/get-streak user)) text-indent (text-row-px 3))
+
+      ;; Last 150 section
+      (gfx/set-font! g2d "Noto Sans" Font/PLAIN small-font-pt)
+      (gfx/fill! g2d 148 148 148) ;; grey
+      (gfx/text! g2d "        ---LAST 150---" text-indent (text-row-px 4))
+      (gfx/fill! g2d 248 248 248) ;; white
+      (gfx/set-font! g2d "Noto Sans" Font/PLAIN big-font-pt)
+      (gfx/text! g2d (str "Win ratio: " win-ratio-fmt "%") text-indent (text-row-px 5))
+      (gfx/text! g2d (str "Guess rate: " guess-rate-150) text-indent (text-row-px 6))
+
+      ;; Last 20 section
+      (gfx/set-font! g2d "Noto Sans" Font/PLAIN small-font-pt)
+      (gfx/fill! g2d 148 148 148) ;; grey
+      (gfx/text! g2d "        ---LAST 20---" text-indent (text-row-px 7))
+      (gfx/set-font! g2d "Noto Sans" Font/PLAIN big-font-pt)
+
+      ;; Win ratio 20 (colored based on improvement)
+      (if (>= win-ratio-20 win-ratio)
+        (gfx/fill! g2d 123 177 114)  ;; green
+        (gfx/fill! g2d 255 167 255)) ;; pink
+      (gfx/text! g2d (str "Win ratio: " win-ratio-20-fmt "%") text-indent (text-row-px 8))
+
+      ;; Guess rate 20 (colored based on improvement)
+      (if (<= (or (:guess-rate-20 stats) 0) (or (:guess-rate-150 stats) 0))
+        (gfx/fill! g2d 123 177 114)  ;; green
+        (gfx/fill! g2d 255 167 255)) ;; pink
+      (gfx/text! g2d (str "Guess rate: " guess-rate-20) text-indent (text-row-px 9))
+
+      ;; Personal bests section
+      (gfx/set-font! g2d "Noto Sans" Font/PLAIN small-font-pt)
+      (gfx/fill! g2d 148 148 148) ;; grey
+      (gfx/text! g2d "        ---PERSONAL BESTS---" text-indent (text-row-px 10))
+      (gfx/fill! g2d 248 248 248) ;; white
+      (gfx/set-font! g2d "Noto Sans" Font/PLAIN big-font-pt)
+      (gfx/text! g2d (str "Streak: " (or (users/get-record user :streak) 0)) text-indent (text-row-px 11))
+      (gfx/text! g2d (str "/150 Win ratio: " (format "%.3f" (* 100 (or (users/get-record user :won-rate-150) 0.0)))) text-indent (text-row-px 12))
+      (gfx/text! g2d (str "/20 Guess ratio: " (format "%.3f" (or (users/get-record user :guess-rate-20) 0.0))) text-indent (text-row-px 13)))))
 
 (defn draw-stats
-  "Draw the *stats* window"
-  [user chat-key]
-  (let [gr (q/create-graphics 800 1200 :p2d)]
-    (q/with-graphics gr
-      (draw-stats-gr gr user)
-      (set-img chat-key :stats  (pgraphics-to-bufferedimage (q/current-graphics)))
-      (q/exit))))
+  "Draw the stats window and return BufferedImage.
+   Returns the image directly - no longer async or using image cache."
+  [user]
+  (let [{:keys [canvas g2d]} (gfx/create-canvas stats-width stats-height)]
+    (draw-stats-gr g2d user)
+    (gfx/finalize-canvas {:canvas canvas :g2d g2d})))
 
 (defn draw-pie-chart-gr
   "Draw a pie chart in wordle coloring representing head2head combat stats.
   p1 and p2 are the names of p1 and p2, other params are number of wins and draws."
-  [gr player1-wins player2-wins draws p1 p2]
-  (q/with-graphics gr
-    (let [width            600
-          height           600
-          center-x         (/ width 2)
-          center-y         (- (/ height 2) 80)
-          radius           400
-          total            (+ player1-wins player2-wins draws)
-          to-radians       (fn [degrees] (/ (* degrees Math/PI) 180))
-          p1-color         [83 140 78]
-          p2-color         [180 158 59]
-          draw-color       [58 58 60]
-          draw-slice       (fn [start-angle end-angle color]
-                       (q/fill color)
-                       (q/arc center-x center-y radius radius
-                              (to-radians start-angle)
-                              (to-radians end-angle)
-                              :pie))
-          draw-legend-item (fn [text color x y]
-                             (q/fill color)
-                             (q/rect x y 60 30)
-                             (q/fill 248 248 248)
-                             (q/text-align :left :center)
-                             (q/text text (+ x 70) (+ y 15) ))]
+  [g2d player1-wins player2-wins draws p1 p2]
+  (let [width            600
+        height           600
+        center-x         (/ width 2)
+        center-y         (- (/ height 2) 80)
+        radius           400
+        total            (+ player1-wins player2-wins draws)
+        p1-color         [83 140 78]
+        p2-color         [180 158 59]
+        draw-color       [58 58 60]
+        draw-slice       (fn [start-angle arc-angle color]
+                           (gfx/fill! g2d (first color) (second color) (nth color 2))
+                           ;; arc! takes x, y as top-left corner of bounding box
+                           (gfx/arc! g2d
+                                     (- center-x (/ radius 2))
+                                     (- center-y (/ radius 2))
+                                     radius radius
+                                     (int start-angle)
+                                     (int arc-angle)))
+        draw-legend-item (fn [text color x y]
+                           (gfx/fill! g2d (first color) (second color) (nth color 2))
+                           (gfx/rect! g2d x y 60 30)
+                           (gfx/fill! g2d 248 248 248)
+                           (gfx/text! g2d text (+ x 70) (+ y 15) :align-x :left :align-y :center))]
 
-                                        ; Set up the drawing
-      (q/background 26 26 28)
-      (q/smooth)
-      (q/no-stroke)
+    ;; Background
+    (gfx/background! g2d width height 26 26 28)
+    ;; smooth and no-stroke handled by gfx/create-canvas
 
-                                        ; Draw the slices
-      (let [p1-to-angle (* 360 (if (pos? player1-wins)
-                       (/ player1-wins total)
-                       0))
-            p2-to-angle (* 360 (if (pos? player2-wins)
-                              (/ (+ player1-wins player2-wins) total)
-                              p1-to-angle))]
-        (draw-slice 0
-                    p1-to-angle
-                    p1-color)  ; Red for player 1
+    ;; Draw the slices
+    (let [p1-angle (* 360 (if (pos? player1-wins)
+                            (/ player1-wins total)
+                            0))
+          p2-angle (* 360 (if (pos? player2-wins)
+                            (/ player2-wins total)
+                            0))
+          draws-angle (* 360 (if (pos? draws)
+                               (/ draws total)
+                               0))]
+      ;; Player 1 slice
+      (draw-slice 0 p1-angle p1-color)
 
-        (draw-slice p1-to-angle
-                    p2-to-angle
-                    p2-color)  ; Blue for player 2
-        (draw-slice p2-to-angle
-                    360
-                    draw-color))  ; Green for draws
+      ;; Player 2 slice
+      (draw-slice p1-angle p2-angle p2-color)
 
-                                        ; Add labels
-      (q/text-size 20)
-      (draw-legend-item (str p1 ": " player1-wins) p1-color (- center-x 280) 450)
-      (draw-legend-item (str p2 ": " player2-wins) p2-color (- center-x 280) 500)
-      (draw-legend-item (str "Draws: " draws ) draw-color (- center-x 280) 550))))
+      ;; Draws slice
+      (draw-slice (+ p1-angle p2-angle) draws-angle draw-color))
+
+    ;; Add labels
+    (gfx/set-font! g2d "Sans Serif" Font/PLAIN 20)
+    (draw-legend-item (str p1 ": " player1-wins) p1-color (- center-x 280) 450)
+    (draw-legend-item (str p2 ": " player2-wins) p2-color (- center-x 280) 500)
+    (draw-legend-item (str "Draws: " draws) draw-color (- center-x 280) 550)))
 
 (defn draw-pie-chart
-  "Draw the pie chart representing who's best"
-  [player1-wins player2-wins draws p1 p2 chat-key]
-  (let [gr (q/create-graphics 600 600 :p2d)]
-    (q/with-graphics gr
-      (draw-pie-chart-gr gr player1-wins player2-wins draws p1 p2)
-      ;; need some get-pie-img - can this not be abstracted?
-      (set-img chat-key :pie (pgraphics-to-bufferedimage (q/current-graphics)))
-      (q/exit))))
+  "Draw the pie chart and return BufferedImage.
+   Returns the image directly - no longer async or using image cache."
+  [player1-wins player2-wins draws p1 p2]
+  (let [{:keys [canvas g2d]} (gfx/create-canvas pie-width pie-height)]
+    (draw-pie-chart-gr g2d player1-wins player2-wins draws p1 p2)
+    (gfx/finalize-canvas {:canvas canvas :g2d g2d})))
 
-(defn width-for-info
-  "Returns the image width needed for the given draw info"
-  [info]
-  (cond
-    (= (:type info) :pie)
-        pie-width
-    (= (:type info) :stats)
-        stats-width
-    (= (:type info) :board)
-        (board-width (:size info))))
-
-(defn height-for-info
-  "Returns the image width needed for the given draw info"
-  [info]
-  (cond
-    (= (:type info) :pie)
-        pie-height
-    (= (:type info) :stats)
-        stats-height
-    (= (:type info) :board)
-        (board-height (count (:guesses-classified info)))))
-
-(defn drawfn-for-info
-  "Returns the draw function required to draw the given draw info"
-  [info chat-key]
-  (cond
-    (= (:type info) :pie)
-        (partial draw-pie-chart (:user-wins info) (:opponent-wins info) (:draws info) (:user info) (:opponent info) chat-key)
-    (= (:type info) :stats)
-        (partial draw-stats (:user info) chat-key)
-    (= (:type info) :board)
-    (partial draw-board chat-key (:guesses-classified info) (:size info) (:max-guesses info))))
-
-;; FIXME fold get-quil-img into this as well
-;; original args - chat-key drawfn width height type
 (defn get-img-sync
-  "Get an image of the given *type* and return it synchronously.
+  "Get an image of the given type and return it synchronously.
   info must have :type of :pie :stats or :board - to get a pie chart, stats chart, or board state.
-  If it has :board state it should then also have the board info (ie number of letters)
-  chat-key is required to allow \"caching\" each ongoing chat seperately.."
+  Now directly calls the drawing functions - no more async/threading!"
   [chat-key info]
-  (remove-img! chat-key (:type info))
-  (q/defsketch org.goat.module.Wordle
-    :host "host"
-    :renderer :p2d
-    :size [(width-for-info info) (height-for-info info)]
-    :setup (drawfn-for-info info chat-key)  )
-  ;; defsketch spawns an applet under the hood which has its own thread
-  ;; so we wait till it completes by checking if img is ready
-  (while (nil? (get-img chat-key (:type info)))
-    (Thread/sleep 50))
-  (get-img chat-key (:type info)))
+  (cond
+    (= (:type info) :pie)
+        (draw-pie-chart (:user-wins info) (:opponent-wins info) (:draws info) (:user info) (:opponent info))
+    (= (:type info) :stats)
+        (draw-stats (:user info))
+    (= (:type info) :board)
+        (draw-board (:guesses-classified info) (:size info) (:max-guesses info))))
 
 (defn append-images
   "Append two images side by side as one new image."

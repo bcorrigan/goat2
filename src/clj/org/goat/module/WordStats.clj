@@ -322,7 +322,7 @@
 ;; ============================================================================
 
 (defmodule WordStats
-  :commands [:stats :wordstats :mystats :purity]
+  :commands [:wordstats :purity]
   :receive-messages :unclaimed
 
   (defn process-channel-message [m]
@@ -334,9 +334,7 @@
       (if command
         ;; Handle stats commands
         (case command
-          :stats (show-user-stats m username chatid)
           :wordstats (show-user-stats m username chatid)
-          :mystats (show-user-stats m username chatid)
           :purity (show-purity-stats m username chatid)
           nil)
         ;; Analyze unclaimed messages
