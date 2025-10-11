@@ -46,8 +46,8 @@
   [text]
   (re-find #"[a-zA-Z]{2,}" text))
 
-(defn should-analyze-message?
-  "Determines if a message should be analyzed"
+(defn should-analyse-message?
+  "Determines if a message should be analysed"
   [text]
   (and text
        (not (contains-url? text))
@@ -132,8 +132,8 @@
 ;; Message Analysis and Storage
 ;; ============================================================================
 
-(defn analyze-and-store-message
-  "Analyze message and store stats. Returns true if message contained swears."
+(defn analyse-and-store-message
+  "Analyse message and store stats. Returns true if message contained swears."
   [text username chatid]
   (let [words (tokenize-message text)
         word-count (count words)
@@ -329,17 +329,18 @@
     (let [text (msg/get-text m)
           username (msg/sender m)
           chatid (msg/chat-id m)
-          command (msg/command m)]
-
+          command (msg/command m)
+          is-private (msg/private? m)]
       (if command
-        ;; Handle stats commands
+        ;; Handle stats commands (respond to both private and channel)
         (case command
           :wordstats (show-user-stats m username chatid)
           :purity (show-purity-stats m username chatid)
           nil)
-        ;; Analyze unclaimed messages
-        (when (should-analyze-message? text)
-          (let [result (analyze-and-store-message text username chatid)]
+        ;; Analyse unclaimed messages ONLY from channels/groups (not private)
+        (when (and (not is-private)
+                   (should-analyse-message? text))
+          (let [result (analyse-and-store-message text username chatid)]
             ;; Check for "fall from grace"
             (when (:had-swear result)
               (check-purity-fall m username chatid (:previous-streak result)))))))))

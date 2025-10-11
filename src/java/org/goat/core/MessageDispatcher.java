@@ -90,6 +90,19 @@ public class MessageDispatcher {
 
 
         boolean used = false;
+
+        // Check if any WANT_ALL_MESSAGES module has registered this command
+        for(Module mod : modulesWantingAll) {
+            String [] commands = mod.getCommands();
+            for (String command : commands)
+                if (command.equalsIgnoreCase(msg.getModCommand())) {
+                    used = true;
+                    break;
+                }
+            if (used) break;
+        }
+
+        // Check WANT_COMMAND_MESSAGES modules
         for(Module mod : modulesWantingOne) {
             String [] commands = mod.getCommands();
             for (String command : commands)
