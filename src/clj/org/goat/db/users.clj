@@ -239,6 +239,80 @@
          first
          :count))))
 
+(defn get-league-table
+  "Calculate league table points for two players over last N days.
+   If days is :all, calculate for all time.
+   Returns map with {:p1-points X :p2-points Y :games-played N}"
+  [p1 p2 days]
+  (let [time-clause (if (= days :all)
+                      ""
+                      "and datetime(endtime / 1000, 'unixepoch') > datetime('now', ?)")]
+    (let [query-base-p1 (str "select user1 as p1, user2 as p2, 
+                              user1_won as p1_won, user2_won as p2_won,
+                              user1_guesses as p1_guesses, user2_guesses as p2_guesses
+                              from challenges
+                              where lower(user1)=lower(?)
+                              and lower(user2)=lower(?)
+                              " time-clause)
+          query-base-p2 (str "select user2 as p1, user1 as p2,
+                              user2_won as p1_won, user1_won as p2_won,
+                              user2_guesses as p1_guesses, user1_guesses as p2_guesses
+                              from challenges
+                              where lower(user1)=lower(?)
+                              and lower(user2)=lower(?)
+                              " time-clause)
+          days-param (when (not= days :all) (str "-" days " days"))
+          matches (concat
+                   (if (= days :all)
+                     (sql/query db [query-base-p1 p1 p2])
+                     (sql/query db [query-base-p1 p1 p2 days-param]))
+                   (if (= days :all)
+                     (sql/query db [query-base-p2 p2 p1])
+                     (sql/query db [query-base-p2 p2 p1 days-param])))]
+      ;; Calculate points for each match
+      (reduce (fn [acc match]
+                (let [{:keys [p1_won p2_won p1_guesses p2_guesses]} match
+                      p1-won (= 1 p1_won)
+                      p2-won (= 1 p2_won)
+                      guess-diff (Math/abs (- p1_guesses p2_guesses))]
+                  (cond
+                    ;; Both won, same guesses - draw
+                    (and p1-won p2-won (= p1_guesses p2_guesses))
+                    (-> acc
+                        (update :p1-points + 1)
+                        (update :p2-points + 1)
+                        (update :games-played inc))
+                    
+                    ;; p1 won, p2 lost
+                    (and p1-won (not p2-won))
+                    (-> acc
+                        (update :p1-points + 2)
+                        (update :games-played inc))
+                    
+                    ;; p2 won, p1 lost
+                    (and p2-won (not p1-won))
+                    (-> acc
+                        (update :p2-points + 2)
+                        (update :games-played inc))
+                    
+                    ;; Both won, p1 won faster
+                    (and p1-won p2-won (< p1_guesses p2_guesses))
+                    (-> acc
+                        (update :p1-points + (+ 2 guess-diff))
+                        (update :games-played inc))
+                    
+                    ;; Both won, p2 won faster
+                    (and p1-won p2-won (< p2_guesses p1_guesses))
+                    (-> acc
+                        (update :p2-points + (+ 2 guess-diff))
+                        (update :games-played inc))
+                    
+                    ;; Both lost - no points but still a game
+                    :else
+                    (update acc :games-played inc))))
+              {:p1-points 0 :p2-points 0 :games-played 0}
+              matches))))
+
 (defn results-n
   "Get results of last N games"
   [user n]

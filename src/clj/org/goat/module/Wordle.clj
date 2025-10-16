@@ -462,6 +462,28 @@
         (.replyWithImage m (gfx/get-img-sync chat-key {:user-wins user-wins :opponent-wins opponent-wins :draws draws :user user :opponent opponent :type :pie})))
       (.reply m "Er, who is that?"))))
 
+(defn handle-league-command [m chat-key user]
+  (let [mod-text (str/trim (.getModText m))
+        parts (str/split mod-text #"\s+")
+        opponent (first parts)
+        time-period (when (> (count parts) 1) (str/lower-case (second parts)))
+        all-time? (= time-period "all")]
+    (if (users/user-known? opponent)
+      (let [days (if all-time? :all 7)
+            league-data (users/get-league-table user opponent days)
+            user-points (:p1-points league-data)
+            opponent-points (:p2-points league-data)
+            games-played (:games-played league-data)
+            time-desc (if all-time? "All Time" "Last 7 days")
+            reply-msg (format "League Table (%s) - %d game%s played:\n%s: %d points\n%s: %d points"
+                              time-desc
+                              games-played
+                              (if (= games-played 1) "" "s")
+                              user user-points
+                              opponent opponent-points)]
+        (.reply m reply-msg))
+      (.reply m "Er, who is that?"))))
+
 (defn handle-streak-command [m user]
   (let [streak     (users/get-streak user)
         streak-msg (msg/get-streak-msg streak user)]
@@ -522,6 +544,7 @@
     (case command
       "stats"   (handle-stats-command m chat-key user)
       "statsvs" (handle-statsvs-command m chat-key user)
+      "league"  (handle-league-command m chat-key user)
       "streak"  (handle-streak-command m user)
       "wordle"  (handle-wordle-command m chat-key user trailing)
       (when (playing? chat-key)
@@ -529,7 +552,7 @@
 
 (defn -processPrivateMessage [this m] (-processChannelMessage this m))
 
-(defn -getCommands [_] (into-array String '("wordle" "streak", "stats", "statsvs")))
+(defn -getCommands [_] (into-array String '("wordle" "streak" "stats" "statsvs" "league")))
 
 (defn -messageType [_]
   Module/WANT_ALL_MESSAGES)

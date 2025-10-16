@@ -31,7 +31,8 @@
    :exec-fn test-runner/test}
 
   :build
-  {:deps {io.github.clojure/tools.build {:mvn/version "0.10.10"}}
+  {:extra-paths ["."]
+   :deps {io.github.clojure/tools.build {:mvn/version "0.10.10"}}
    :ns-default build}
 
   :run
@@ -47,7 +48,8 @@
    :main-opts ["-m" "antq.core"]}
 
   :uberjar
-  {:replace-deps {io.github.clojure/tools.build {:mvn/version "0.10.10"}}
+  {:extra-paths ["."]
+   :replace-deps {io.github.clojure/tools.build {:mvn/version "0.10.10"}}
    :ns-default build
    :exec-fn uber}}
 
