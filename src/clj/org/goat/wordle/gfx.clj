@@ -92,8 +92,7 @@
                      (+ letter-border (* letter-size max-guesses))
                      letter-size)
             x (range letter-border
-                     (+ (* size letter-size)
-                        (* 2 letter-border))
+                     (+ letter-border (* size letter-size))
                      letter-size)]
       (draw-unrevealed g2d x y))))
 
