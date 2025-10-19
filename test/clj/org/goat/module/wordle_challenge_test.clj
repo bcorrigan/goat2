@@ -128,3 +128,121 @@
           (wordle/-processPrivateMessage nil bob-win-msg)
           ;; At this point challenge cleanup has occurred and challenge-key is removed
           )))))
+
+(deftest test-remaining-words-history
+  "Tests that remaining-words-history is tracked correctly during gameplay"
+  
+  (testing "Remaining words count is tracked after each guess"
+    (setup-test-users!)
+    
+    (let [start-msg (msg-utils/mock-command-message 
+                     "wordle" 
+                     ""
+                     {:chat-id 1001
+                      :sender "alice"
+                      :is-private true})]
+      (wordle/-processPrivateMessage nil start-msg)
+      
+      (let [alice-key :1001]
+        ;; Verify game started and history is initialized
+        (is (wordle/playing? alice-key))
+        (is (= [] (wordle/get-gameprop alice-key :remaining-words-history)))
+        
+        ;; Make first guess
+        (let [guess1-msg (msg-utils/mock-message {:text "CRANE" :chat-id 1001 :sender "alice" :is-private true})]
+          (wordle/-processPrivateMessage nil guess1-msg))
+        
+        ;; Check history has one entry
+        (let [history1 (wordle/get-gameprop alice-key :remaining-words-history)]
+          (is (= 1 (count history1)) "Should have 1 entry after 1 guess")
+          (is (pos? (first history1)) "Remaining words count should be positive"))
+        
+        ;; Make second guess
+        (let [guess2-msg (msg-utils/mock-message {:text "SLOTH" :chat-id 1001 :sender "alice" :is-private true})]
+          (wordle/-processPrivateMessage nil guess2-msg))
+        
+        ;; Check history has two entries
+        (let [history2 (wordle/get-gameprop alice-key :remaining-words-history)]
+          (is (= 2 (count history2)) "Should have 2 entries after 2 guesses")
+          (is (every? pos? history2) "All counts should be positive")
+          (println (str "Remaining words history after 2 guesses: " history2)))
+        
+        ;; Make third guess (correct answer to end game)
+        (let [answer (wordle/get-gameprop alice-key :answer)
+              win-msg (msg-utils/mock-message {:text answer :chat-id 1001 :sender "alice" :is-private true})]
+          (wordle/-processPrivateMessage nil win-msg)
+          
+          ;; Game should be cleared, but we can verify the pattern existed
+          (is (not (wordle/playing? alice-key)) "Game should be finished")))))
+  
+  (testing "Remaining words history is cached in challenge mode"
+    (setup-test-users!)
+    
+    (let [challenge-msg (msg-utils/mock-command-message 
+                         "wordle" 
+                         "challenge bob"
+                         {:chat-id 2000
+                          :sender "alice"
+                          :is-private false})]
+      (wordle/-processChannelMessage nil challenge-msg)
+      
+      (let [alice-key :1001
+            bob-key :1002
+            challenge-key (wordle/get-gameprop alice-key :challenge-key)]
+        
+        ;; Alice makes a guess
+        (let [guess-msg (msg-utils/mock-message {:text "CRANE" :chat-id 1001 :sender "alice" :is-private true})]
+          (wordle/-processPrivateMessage nil guess-msg))
+        
+        ;; Verify Alice has remaining-words-history
+        (let [alice-history (wordle/get-gameprop alice-key :remaining-words-history)]
+          (is (= 1 (count alice-history)) "Alice should have 1 history entry"))
+        
+        ;; Alice finishes
+        (let [answer (wordle/get-gameprop alice-key :answer)
+              win-msg (msg-utils/mock-message {:text answer :chat-id 1001 :sender "alice" :is-private true})]
+          (wordle/-processPrivateMessage nil win-msg))
+        
+        ;; Verify Alice's remaining-words-history is cached in first-game
+        (let [cached-history (wordle/get-fgameprop challenge-key :remaining-words-history)]
+          (is (some? cached-history) "Remaining words history should be cached")
+          (is (>= (count cached-history) 1) "Cached history should have at least 1 entry")
+          (println (str "Cached remaining words history: " cached-history)))
+        
+        ;; Bob finishes to complete challenge
+        (let [answer (wordle/get-gameprop bob-key :answer)
+              bob-win-msg (msg-utils/mock-message {:text answer :chat-id 1002 :sender "bob" :is-private true})]
+          (wordle/-processPrivateMessage nil bob-win-msg))))))
+
+(deftest test-end-to-end-with-counts
+  "End-to-end test verifying remaining words counts are displayed on board images"
+  
+  (testing "Board images include remaining words counts"
+    (setup-test-users!)
+    
+    (let [start-msg (msg-utils/mock-command-message 
+                     "wordle" 
+                     ""
+                     {:chat-id 1001
+                      :sender "alice"
+                      :is-private true})]
+      (wordle/-processPrivateMessage nil start-msg)
+      
+      (let [alice-key :1001]
+        ;; Make a few guesses
+        (let [guess1-msg (msg-utils/mock-message {:text "CRANE" :chat-id 1001 :sender "alice" :is-private true})]
+          (wordle/-processPrivateMessage nil guess1-msg))
+        
+        (let [guess2-msg (msg-utils/mock-message {:text "SLOTH" :chat-id 1001 :sender "alice" :is-private true})]
+          (wordle/-processPrivateMessage nil guess2-msg))
+        
+        ;; Get the board image - this should now include counts
+        (let [board-img (wordle/get-board-img alice-key)
+              history (wordle/get-gameprop alice-key :remaining-words-history)]
+          (is (some? board-img) "Board image should be generated")
+          (is (= 2 (count history)) "Should have 2 count entries")
+          
+          ;; Verify image width includes space for counts (5 letters * 60px + 10px border + 80px for counts)
+          (is (= 390 (.getWidth board-img)) "Image width should include count annotation space")
+          (println (str "Board image dimensions: " (.getWidth board-img) "x" (.getHeight board-img)))
+          (println (str "Counts displayed: " history)))))))

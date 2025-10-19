@@ -96,6 +96,7 @@
             :hits hits
             :facts-history []  ;; Track accumulated facts after each guess
             :ratings-history []  ;; Track guess ratings from analytics
+            :remaining-words-history []  ;; Track count of remaining possible words after each guess
             })))
 
 (defn new-challenge!
@@ -321,13 +322,15 @@
   (let [guesses (get-gameprop chat-key :guesses)
         size (get-gameprop chat-key :size)
         answer (get-gameprop chat-key :answer)
+        remaining-words-counts (get-gameprop chat-key :remaining-words-history)
         guesses-classified (zipmap guesses
                                    (map #(analytics/compare-guess-to-answer % answer)
                                         guesses))]
     (gfx/get-img-sync chat-key {:type    :board
                                 :size    size
                                 :guesses-classified guesses-classified
-                                :max-guesses max-guesses})))
+                                :max-guesses max-guesses
+                                :remaining-words-counts remaining-words-counts})))
 
 (defn start-new-game [m chat-key user size difficulty]
   (let [worddata (words/get-word difficulty size)
@@ -372,6 +375,13 @@
     
     ;; Now add the guess to state (this changes the facts!)
     (add-guess! chat-key guess user)
+    
+    ;; Calculate remaining words count AFTER adding the guess
+    ;; This represents how many words are still possible given all guesses so far
+    (let [updated-facts (calculate-facts-so-far chat-key)
+          remaining-count (analytics/allowed-words-for-facts updated-facts :count)]
+      (add-to-col! chat-key :remaining-words-history remaining-count))
+    
     (.replyWithImage m (get-board-img chat-key))
 
     ;; Provide analytics feedback if we calculated it successfully

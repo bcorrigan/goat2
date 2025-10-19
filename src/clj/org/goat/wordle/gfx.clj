@@ -58,8 +58,9 @@
   (gfx/rect-outline! g2d x y (- letter-size letter-border) (- letter-size letter-border)))
 
 (defn draw-board-gr
-  "Draws the board letter by letter according to the chat's guesses array"
-  [g2d width height guesses-classified size max-guesses]
+  "Draws the board letter by letter according to the chat's guesses array.
+   If remaining-words-counts is provided, displays the count next to each guess row."
+  [g2d width height guesses-classified size max-guesses remaining-words-counts]
   (let [guesses (vec (keys guesses-classified))]
     ;; Background
     (gfx/background! g2d width height 17 17 18)
@@ -73,6 +74,18 @@
             y (+ letter-border (* letter-size i))
             x (+ letter-border (* letter-size j))]
         (draw-letter g2d letter x y sym)))
+
+    ;; Draw remaining words count for each guess (if provided)
+    (when (and remaining-words-counts (seq remaining-words-counts))
+      (doseq [i (range (count guesses))]
+        (when (< i (count remaining-words-counts))
+          (let [count-val (nth remaining-words-counts i)
+                ;; Position: right of the board, vertically centered with the guess row
+                x (+ (* size letter-size) (* 2 letter-border) 10)
+                y (+ letter-border (* letter-size i) (/ letter-size 2))]
+            (gfx/fill! g2d 180 180 180)  ;; Light gray for count text
+            (gfx/set-font! g2d "Monospace" Font/PLAIN 18)
+            (gfx/text! g2d (str "[" count-val "]") x y :align-y :center)))))
 
     ;; Draw unrevealed boxes
     (doseq [y (range (+ letter-border (* letter-size (count guesses)))
@@ -93,10 +106,12 @@
     (inc guesses)))
 
 (defn board-width
-  "get the width of the board for the given chat-key"
-  [size]
-  (+ (* size letter-size)
-     letter-border))
+  "Get the width of the board. If include-counts? is true, add extra space for count annotations."
+  [size include-counts?]
+  (let [base-width (+ (* size letter-size) letter-border)]
+    (if include-counts?
+      (+ base-width 80)  ;; Extra space for count annotations like [234]
+      base-width)))
 
 (defn board-height
   "get the width of the board for the given chat-key"
@@ -105,12 +120,14 @@
 
 (defn draw-board
   "Draw the Wordle board and return BufferedImage.
+   If remaining-words-counts is provided, displays count annotations next to each guess.
    Returns the image directly - no longer async or using image cache."
-  [guesses-classified size max-guesses]
-  (let [width (board-width size)
+  [guesses-classified size max-guesses remaining-words-counts]
+  (let [include-counts? (and remaining-words-counts (seq remaining-words-counts))
+        width (board-width size include-counts?)
         height (board-height (count guesses-classified))
         {:keys [canvas g2d]} (gfx/create-canvas width height)]
-    (draw-board-gr g2d width height guesses-classified size max-guesses)
+    (draw-board-gr g2d width height guesses-classified size max-guesses remaining-words-counts)
     (gfx/finalize-canvas {:canvas canvas :g2d g2d})))
 
 (defn get-wonbox-col
@@ -285,6 +302,7 @@
 (defn get-img-sync
   "Get an image of the given type and return it synchronously.
   info must have :type of :pie :stats or :board - to get a pie chart, stats chart, or board state.
+  For :board type, can optionally include :remaining-words-counts to show count annotations.
   Now directly calls the drawing functions - no more async/threading!"
   [chat-key info]
   (cond
@@ -293,7 +311,10 @@
     (= (:type info) :stats)
         (draw-stats (:user info))
     (= (:type info) :board)
-        (draw-board (:guesses-classified info) (:size info) (:max-guesses info))))
+        (draw-board (:guesses-classified info) 
+                   (:size info) 
+                   (:max-guesses info)
+                   (:remaining-words-counts info))))
 
 (defn append-images
   "Append two images side by side as one new image."
