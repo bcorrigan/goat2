@@ -1,0 +1,250 @@
+(ns org.goat.db.freezer
+  (:require [clojure.java.jdbc :refer :all :as sql]
+            [clojure.string :as str]
+            [org.goat.db.util :as util]))
+
+(def db
+  {:classname "org.sqlite.JDBC"
+   :subprotocol "sqlite"
+   :subname "resources/freezer.db"})
+
+(defn create-db
+  "If no DB file found, create the freezer db and tables"
+  []
+  (try
+    ;; Enable foreign key constraints (required for CASCADE)
+    (sql/execute! db "PRAGMA foreign_keys = ON")
+
+    ;; Create freezers table
+    (when-not (util/tbl-exists? db :freezers)
+      (sql/db-do-commands db
+        "create table freezers (
+           freezer_id integer primary key autoincrement,
+           freezer_name text not null unique collate NOCASE,
+           created_at datetime
+         )"))
+
+    ;; Create items table with foreign key
+    (when-not (util/tbl-exists? db :items)
+      (sql/db-do-commands db
+        "create table items (
+           item_id integer primary key autoincrement,
+           freezer_id integer not null,
+           item_name text not null,
+           quantity real not null default 1,
+           unit text,
+           added_date datetime not null,
+           expiry_date datetime,
+           notes text,
+           foreign key (freezer_id) references freezers(freezer_id) on delete cascade
+         )")
+      (sql/execute! db "create index item_freezer_idx on items(freezer_id)"))
+
+    ;; Create user_context table with foreign key
+    ;; Tracks each user's default freezer preference
+    (when-not (util/tbl-exists? db :user_context)
+      (sql/db-do-commands db
+        "create table user_context (
+           user_id text primary key,
+           default_freezer_id integer,
+           last_command_time datetime,
+           foreign key (default_freezer_id) references freezers(freezer_id) on delete set null
+         )"))
+
+    (catch Exception e
+      (println "Error creating freezer database:" (.getMessage e)))))
+
+;; ============================================================================
+;; Freezer Operations
+;; ============================================================================
+
+(defn get-freezers
+  "Get all freezers (global, not user-specific)"
+  []
+  (sql/query db ["select * from freezers
+                  order by freezer_name asc"]))
+
+(defn get-freezer-by-id
+  "Get a freezer by its ID"
+  [freezer-id]
+  (-> (sql/query db ["select * from freezers
+                      where freezer_id=?" freezer-id])
+      first))
+
+(defn get-default-freezer
+  "Get the default freezer for a user, or nil if none set"
+  [user-id]
+  (let [context (-> (sql/query db ["select * from user_context
+                                    where user_id=? collate NOCASE" user-id])
+                    first)]
+    (when-let [freezer-id (:default_freezer_id context)]
+      (get-freezer-by-id freezer-id))))
+
+(defn add-freezer
+  "Create a new global freezer. Returns the freezer-id of the created freezer."
+  [freezer-name]
+  (try
+    (sql/db-transaction* db (fn [t-con]
+      (sql/execute! t-con
+        ["insert into freezers (freezer_name, created_at)
+          values (?, ?)"
+         freezer-name (System/currentTimeMillis)])
+      (-> (sql/query t-con ["select last_insert_rowid() as id"])
+          first
+          :id)))
+    (catch Exception e
+      (println "Error adding freezer:" (.getMessage e))
+      nil)))
+
+(defn delete-freezer
+  "Delete a freezer and all its items (cascade)"
+  [freezer-id]
+  (sql/with-db-connection [conn db]
+    (sql/execute! conn ["PRAGMA foreign_keys = ON"])
+    (sql/delete! conn :freezers ["freezer_id=?" freezer-id])))
+
+(defn rename-freezer
+  "Rename a freezer"
+  [freezer-id new-name]
+  (sql/execute! db ["update freezers
+                     set freezer_name=?
+                     where freezer_id=?" new-name freezer-id]))
+
+(defn set-default-freezer
+  "Set a freezer as the default for a specific user"
+  [user-id freezer-id]
+  (try
+    (sql/execute! db ["insert into user_context (user_id, default_freezer_id, last_command_time)
+                       values(?,?,?)
+                       on conflict(user_id)
+                       do update set
+                         default_freezer_id=excluded.default_freezer_id,
+                         last_command_time=excluded.last_command_time"
+                      user-id freezer-id (System/currentTimeMillis)])
+    true
+    (catch Exception e
+      (println "Error setting default freezer:" (.getMessage e))
+      false)))
+
+(defn get-freezer-by-name
+  "Find a freezer by name (case-insensitive, global)"
+  [freezer-name]
+  (-> (sql/query db ["select * from freezers
+                      where freezer_name=? collate NOCASE" freezer-name])
+      first))
+
+;; ============================================================================
+;; Item Operations
+;; ============================================================================
+
+(defn add-item
+  "Add a new item to a freezer. Returns the item-id of the created item.
+   quantity defaults to 1, unit, notes, and expiry-date are optional."
+  ([freezer-id item-name]
+   (add-item freezer-id item-name 1 nil nil nil))
+  ([freezer-id item-name quantity]
+   (add-item freezer-id item-name quantity nil nil nil))
+  ([freezer-id item-name quantity unit]
+   (add-item freezer-id item-name quantity unit nil nil))
+  ([freezer-id item-name quantity unit notes]
+   (add-item freezer-id item-name quantity unit notes nil))
+  ([freezer-id item-name quantity unit notes expiry-date]
+   (try
+     (sql/db-transaction* db (fn [t-con]
+       (sql/execute! t-con
+         ["insert into items (freezer_id, item_name, quantity, unit, added_date, notes, expiry_date)
+           values (?, ?, ?, ?, ?, ?, ?)"
+          freezer-id item-name quantity unit (System/currentTimeMillis) notes expiry-date])
+       (-> (sql/query t-con ["select last_insert_rowid() as id"])
+           first
+           :id)))
+     (catch Exception e
+       (println "Error adding item:" (.getMessage e))
+       nil))))
+
+(defn get-items
+  "Get all items in a freezer, ordered by item_id"
+  [freezer-id]
+  (sql/query db ["select * from items
+                  where freezer_id=?
+                  order by item_id asc" freezer-id]))
+
+(defn get-item-by-id
+  "Get a specific item by its ID"
+  [item-id]
+  (-> (sql/query db ["select * from items
+                      where item_id=?" item-id])
+      first))
+
+(defn remove-item
+  "Remove a quantity of an item. If quantity >= item quantity, delete the item.
+   Returns the remaining quantity (0 if deleted)."
+  [item-id quantity]
+  (let [item (get-item-by-id item-id)]
+    (when item
+      (let [current-qty (:quantity item)
+            new-qty (- current-qty quantity)]
+        (if (<= new-qty 0)
+          ;; Delete the item
+          (do
+            (sql/delete! db :items ["item_id=?" item-id])
+            0)
+          ;; Update the quantity
+          (do
+            (sql/execute! db ["update items
+                               set quantity=?
+                               where item_id=?" new-qty item-id])
+            new-qty))))))
+
+(defn search-items
+  "Search for items across all freezers (global).
+   Returns items with their freezer information."
+  [search-term]
+  (sql/query db ["select i.*, f.freezer_name
+                  from items i
+                  join freezers f on i.freezer_id = f.freezer_id
+                  where i.item_name like ? collate NOCASE
+                  order by f.freezer_name, i.item_id"
+                 (str "%" search-term "%")]))
+
+(defn get-item-age
+  "Get the age of an item in days"
+  [item-id]
+  (let [item (get-item-by-id item-id)]
+    (when item
+      (let [added-date (:added_date item)
+            now (System/currentTimeMillis)
+            age-ms (- now added-date)
+            age-days (quot age-ms (* 1000 60 60 24))]
+        age-days))))
+
+;; ============================================================================
+;; Helper Functions for Smart Item Management
+;; ============================================================================
+
+(defn find-matching-item
+  "Find an existing item in a freezer by name and unit (case-insensitive).
+   Returns the item or nil if not found."
+  [freezer-id item-name unit]
+  (let [items (get-items freezer-id)
+        normalized-name (str/lower-case (str/trim item-name))
+        normalized-unit (when unit (str/lower-case (str/trim unit)))]
+    (first (filter (fn [item]
+                     (and (= normalized-name (str/lower-case (:item_name item)))
+                          (= normalized-unit (when (:unit item)
+                                              (str/lower-case (:unit item))))))
+                   items))))
+
+(defn update-item-quantity
+  "Update the quantity of an existing item"
+  [item-id quantity-to-add]
+  (let [item (get-item-by-id item-id)]
+    (when item
+      (let [new-qty (+ (:quantity item) quantity-to-add)]
+        (sql/execute! db ["update items
+                           set quantity=?
+                           where item_id=?" new-qty item-id])
+        new-qty))))
+
+;; Initialize database on load
+(create-db)

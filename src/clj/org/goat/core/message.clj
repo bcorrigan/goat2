@@ -57,6 +57,44 @@
   [^Message msg]
   (MessageWrapper. msg))
 
+;; Extend the protocol to work directly with Java Message objects
+;; This allows modules to use protocol methods with both wrapped and unwrapped messages
+(extend-protocol MessageContext
+  org.goat.core.Message
+  (reply [this text]
+    (.reply this text))
+
+  (reply-image [this img]
+    (.replyWithImage this img))
+
+  (get-command [this]
+    (when-let [cmd (.getModCommand this)]
+      (keyword cmd)))
+
+  (get-text [this]
+    (.getText this))
+
+  (get-mod-text [this]
+    (.getModText this))
+
+  (get-sender [this]
+    (.getSender this))
+
+  (get-chat-id [this]
+    (.getChatId this))
+
+  (get-chatname [this]
+    (.getChatname this))
+
+  (private? [this]
+    (.isPrivate this))
+
+  (has-text? [this]
+    (.hasText this))
+
+  (has-image? [this]
+    (.hasImage this)))
+
 ;; Convenience functions that work with either wrapped or unwrapped messages
 (defn unwrap
   "Extract the underlying Java Message from a wrapper, or return as-is if already unwrapped"

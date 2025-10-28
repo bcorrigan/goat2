@@ -103,15 +103,15 @@
     (is (not (sut/contains-words? "123 456")))
     (is (not (sut/contains-words? "🎉🎊")))))
 
-(deftest test-should-analyze-message?
+(deftest test-should-analyse-message?
   (testing "Correctly filters messages for analysis"
-    (is (sut/should-analyze-message? "This is a normal message"))
-    (is (not (sut/should-analyze-message? "Check http://example.com")))
-    (is (not (sut/should-analyze-message? "\"Quoted text\"")))
-    (is (not (sut/should-analyze-message? "> Quote reply")))
-    (is (not (sut/should-analyze-message? "Hi")))  ; too short
-    (is (not (sut/should-analyze-message? "123")))  ; no words
-    (is (not (sut/should-analyze-message? nil)))))
+    (is (sut/should-analyse-message? "This is a normal message"))
+    (is (not (sut/should-analyse-message? "Check http://example.com")))
+    (is (not (sut/should-analyse-message? "\"Quoted text\"")))
+    (is (not (sut/should-analyse-message? "> Quote reply")))
+    (is (not (sut/should-analyse-message? "Hi")))  ; too short
+    (is (not (sut/should-analyse-message? "123")))  ; no words
+    (is (not (sut/should-analyse-message? nil)))))
 
 ;; ============================================================================
 ;; Text Analysis Tests
@@ -174,10 +174,10 @@
 ;; Message Analysis Integration Tests
 ;; ============================================================================
 
-(deftest test-analyze-and-store-clean-message
+(deftest test-analyse-and-store-clean-message
   (testing "Analyzes and stores clean message correctly"
     (with-redefs [sut/swear-words (delay #{"damn" "hell"})]
-      (let [result (sut/analyze-and-store-message "Hello world this is a test" "alice" 123)]
+      (let [result (sut/analyse-and-store-message "Hello world this is a test" "alice" 123)]
         (is (false? (:had-swear result)))
 
         ;; Check message stats were updated
@@ -190,10 +190,10 @@
         ;; Check vocabulary was stored
         (is (= 6 (db/get-vocabulary-size "alice" 123)))))))
 
-(deftest test-analyze-and-store-message-with-swear
+(deftest test-analyse-and-store-message-with-swear
   (testing "Analyzes and stores message with swear word"
     (with-redefs [sut/swear-words (delay #{"damn" "hell"})]
-      (let [result (sut/analyze-and-store-message "Oh damn that sucks" "bob" 456)]
+      (let [result (sut/analyse-and-store-message "Oh damn that sucks" "bob" 456)]
         (is (true? (:had-swear result)))
 
         ;; Check message stats
@@ -208,32 +208,32 @@
           (is (= 1 (count swears)))
           (is (= "damn" (:swear_word (first swears)))))))))
 
-(deftest test-analyze-multiple-messages-building-streak
+(deftest test-analyse-multiple-messages-building-streak
   (testing "Multiple clean messages build up streak"
     (with-redefs [sut/swear-words (delay #{"damn"})]
       ;; Send 3 clean messages
-      (sut/analyze-and-store-message "Clean message one" "alice" 123)
-      (sut/analyze-and-store-message "Clean message two" "alice" 123)
-      (sut/analyze-and-store-message "Clean message three" "alice" 123)
+      (sut/analyse-and-store-message "Clean message one" "alice" 123)
+      (sut/analyse-and-store-message "Clean message two" "alice" 123)
+      (sut/analyse-and-store-message "Clean message three" "alice" 123)
 
       (let [stats (db/get-user-stats "alice" 123)]
         (is (= 3 (:total_messages stats)))
         (is (= 3 (:messages_since_last_swear stats)))
         (is (= 0 (:swear_words_count stats)))))))
 
-(deftest test-analyze-streak-then-swear
+(deftest test-analyse-streak-then-swear
   (testing "Clean streak followed by swear resets counter"
     (with-redefs [sut/swear-words (delay #{"damn"})]
       ;; Build streak
-      (sut/analyze-and-store-message "Clean one" "alice" 123)
-      (sut/analyze-and-store-message "Clean two" "alice" 123)
-      (sut/analyze-and-store-message "Clean three" "alice" 123)
+      (sut/analyse-and-store-message "Clean one" "alice" 123)
+      (sut/analyse-and-store-message "Clean two" "alice" 123)
+      (sut/analyse-and-store-message "Clean three" "alice" 123)
 
       (let [stats-before (db/get-user-stats "alice" 123)]
         (is (= 3 (:messages_since_last_swear stats-before))))
 
       ;; Swear - should reset
-      (let [result (sut/analyze-and-store-message "Oh damn it" "alice" 123)]
+      (let [result (sut/analyse-and-store-message "Oh damn it" "alice" 123)]
         (is (= 3 (:previous-streak result)))
 
         (let [stats-after (db/get-user-stats "alice" 123)]
@@ -266,7 +266,7 @@
          :first_message_time (System/currentTimeMillis)
          :last_updated (System/currentTimeMillis)})
 
-      (let [msg (msg-utils/mock-command-message "stats" nil {:sender "alice" :chat-id 123})]
+      (let [msg (msg-utils/mock-command-message "wordstats" nil {:sender "alice" :chat-id 123})]
         (sut/-processChannelMessage nil msg)
 
         ;; Verify response contains key stats
@@ -279,7 +279,7 @@
 (deftest test-show-user-stats-no-data
   (testing "Handles user with no stats gracefully"
     (msg-utils/with-clean-replies
-      (let [msg (msg-utils/mock-command-message "stats" nil {:sender "nobody" :chat-id 999})]
+      (let [msg (msg-utils/mock-command-message "wordstats" nil {:sender "nobody" :chat-id 999})]
         (sut/-processChannelMessage nil msg)
 
         (is (msg-utils/replied-with? "No statistics available"))))))
@@ -345,7 +345,7 @@
          :first_message_time (System/currentTimeMillis)
          :last_updated (System/currentTimeMillis)})
 
-      (let [msg (msg-utils/mock-command-message "stats" nil {:sender "alice" :chat-id 123})]
+      (let [msg (msg-utils/mock-command-message "wordstats" nil {:sender "alice" :chat-id 123})]
         ;; Simulate module processing
         (sut/-processChannelMessage nil msg)
 

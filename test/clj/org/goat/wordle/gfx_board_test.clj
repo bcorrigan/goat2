@@ -10,7 +10,7 @@
                               "WORLD" [:wrong :semiknown :revealed :wrong :semiknown]}
           size 5
           max-guesses 6
-          img (sut/draw-board guesses-classified size max-guesses)]
+          img (sut/draw-board guesses-classified size max-guesses nil)]
 
       ;; Should return a BufferedImage
       (is (instance? BufferedImage img))
@@ -31,7 +31,7 @@
     (let [guesses-classified {}
           size 5
           max-guesses 6
-          img (sut/draw-board guesses-classified size max-guesses)]
+          img (sut/draw-board guesses-classified size max-guesses nil)]
 
       (is (instance? BufferedImage img))
       (is (> (.getWidth img) 0))
@@ -42,7 +42,7 @@
     (let [guesses-classified {"GHOST" [:revealed :revealed :revealed :revealed :revealed]}
           size 5
           max-guesses 6
-          img (sut/draw-board guesses-classified size max-guesses)]
+          img (sut/draw-board guesses-classified size max-guesses nil)]
 
       (is (instance? BufferedImage img))
       ;; Width: 5*60+10 = 310
@@ -51,10 +51,10 @@
       (is (= 130 (.getHeight img))))))
 
 (deftest test-board-width-calculation
-  (testing "board-width calculation"
-    (is (= 310 (sut/board-width 5)))
-    (is (= 370 (sut/board-width 6)))
-    (is (= 250 (sut/board-width 4)))))
+  (testing "board-width calculation without counts"
+    (is (= 310 (sut/board-width 5 false)))
+    (is (= 370 (sut/board-width 6 false)))
+    (is (= 250 (sut/board-width 4 false)))))
 
 (deftest test-board-height-calculation
   (testing "board-height calculation uses get-no-cols (guesses+1)"
