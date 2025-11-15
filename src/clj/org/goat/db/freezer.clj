@@ -54,6 +54,44 @@
     (catch Exception e
       (println "Error creating freezer database:" (.getMessage e)))))
 
+(defn migrate-db
+  "Migrate database from old schema to new schema"
+  []
+  (try
+    ;; Check if we have the old schema (has user_id column)
+    (let [old-schema? (try
+                        (sql/query db ["SELECT user_id FROM freezers LIMIT 1"])
+                        true
+                        (catch Exception _ false))]
+      (when old-schema?
+        (println "Migrating freezer database from old schema to new schema...")
+
+        ;; Backup old data
+        (let [old-freezers (sql/query db ["SELECT * FROM freezers"])
+              old-items (try (sql/query db ["SELECT * FROM items"]) (catch Exception _ []))]
+
+          ;; Drop old tables
+          (sql/execute! db "DROP TABLE IF EXISTS items")
+          (sql/execute! db "DROP TABLE IF EXISTS freezers")
+          (sql/execute! db "DROP TABLE IF EXISTS user_context")
+          (sql/execute! db "DROP INDEX IF EXISTS freezer_user_name_idx")
+
+          ;; Create new schema
+          (create-db)
+
+          ;; Migrate freezers (make them global by removing duplicates)
+          (doseq [freezer old-freezers]
+            (try
+              (sql/execute! db ["INSERT OR IGNORE INTO freezers (freezer_name, created_at) VALUES (?, ?)"
+                               (:freezer_name freezer)
+                               (:created_at freezer)])
+              (catch Exception e
+                (println "Error migrating freezer:" (:freezer_name freezer)))))
+
+          (println "Migration complete. Old per-user freezers are now global shared freezers."))))
+    (catch Exception e
+      (println "Error during migration:" (.getMessage e)))))
+
 ;; ============================================================================
 ;; Freezer Operations
 ;; ============================================================================

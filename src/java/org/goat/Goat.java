@@ -140,6 +140,7 @@ public class Goat {
             modController.loadInAllChannels("CoreCommands");
 			modController.loadInAllChannels("Capture");
 			modController.loadInAllChannels("WordStats");
+			modController.loadInAllChannels("Freezer");
             /*ModuleCommands moduleCommands = (ModuleCommands) modController.getLoaded("ModuleCommands");
             moduleCommands.modControl = modController;
             moduleCommands.inAllChannels = true;*/
