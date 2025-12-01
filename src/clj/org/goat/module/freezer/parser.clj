@@ -1,5 +1,6 @@
 (ns org.goat.module.freezer.parser
-  (:require [clojure.string :as str])
+  (:require [clojure.string :as str]
+            [org.goat.util.date :as date-util])
   (:import [java.time LocalDate YearMonth]
            [java.time.format DateTimeFormatter]))
 
@@ -27,42 +28,51 @@
   (get month-names (str/lower-case month-str)))
 
 (defn parse-expiry-date
-  "Parse expiry date from formats like:
-   - 'Aug 2026' or 'August 2026'
-   - '10/2027' or '10-2027'
-   Returns a timestamp (milliseconds) for the last day of that month, or nil if invalid."
+  "Parse expiry date from various formats using Hawking ML library (UK date format DD/MM/YYYY).
+   Also supports legacy formats:
+   - UK dates: '5/5/2025', '25/12/2025' (DD/MM/YYYY)
+   - Natural language: 'tomorrow', 'next week', 'in 3 months'
+   - Month/year: 'Aug 2026' or 'August 2026'
+   - Numeric month/year: '10/2027' or '10-2027'
+   Returns a timestamp (milliseconds), or nil if invalid."
   [date-str]
   (let [date-str (str/trim date-str)]
     (try
-      (cond
-        ;; Month name + year: "Aug 2026" or "August 2026"
-        (re-matches #"(?i)([a-z]+)\s+(\d{4})" date-str)
-        (let [match (re-matches #"(?i)([a-z]+)\s+(\d{4})" date-str)
-              month-str (nth match 1)
-              year (Integer/parseInt (nth match 2))
-              month (parse-month-name month-str)]
-          (when month
-            (let [year-month (YearMonth/of year month)
-                  last-day (.atEndOfMonth year-month)]
-              (.toEpochDay last-day)
-              (* (.toEpochDay last-day) 24 60 60 1000))))
+      ;; First try Hawking for maximum flexibility (UK dates, natural language)
+      (if-let [timestamp (date-util/parse-date-timestamp date-str)]
+        timestamp
+        ;; Fallback to legacy month/year parsing
+        (cond
+          ;; Month name + year: "Aug 2026" or "August 2026"
+          (re-matches #"(?i)([a-z]+)\s+(\d{4})" date-str)
+          (let [match (re-matches #"(?i)([a-z]+)\s+(\d{4})" date-str)
+                month-str (nth match 1)
+                year (Integer/parseInt (nth match 2))
+                month (parse-month-name month-str)]
+            (when month
+              (let [year-month (YearMonth/of year month)
+                    last-day (.atEndOfMonth year-month)]
+                (* (.toEpochDay last-day) 24 60 60 1000))))
 
-        ;; Numeric format: "10/2027" or "10-2027"
-        (re-matches #"(\d{1,2})[/-](\d{4})" date-str)
-        (let [match (re-matches #"(\d{1,2})[/-](\d{4})" date-str)
-              month (Integer/parseInt (nth match 1))
-              year (Integer/parseInt (nth match 2))]
-          (when (<= 1 month 12)
-            (let [year-month (YearMonth/of year month)
-                  last-day (.atEndOfMonth year-month)]
-              (* (.toEpochDay last-day) 24 60 60 1000))))
+          ;; Numeric format: "10/2027" or "10-2027" (month/year only)
+          (re-matches #"(\d{1,2})[/-](\d{4})" date-str)
+          (let [match (re-matches #"(\d{1,2})[/-](\d{4})" date-str)
+                month (Integer/parseInt (nth match 1))
+                year (Integer/parseInt (nth match 2))]
+            (when (<= 1 month 12)
+              (let [year-month (YearMonth/of year month)
+                    last-day (.atEndOfMonth year-month)]
+                (* (.toEpochDay last-day) 24 60 60 1000))))
 
-        :else nil)
+          :else nil))
       (catch Exception e
         nil))))
 
 (defn extract-expiry
-  "Extract expiry date from text like 'expires Aug 2026' or 'expires 10/2027'.
+  "Extract expiry date from text like:
+   - 'expires 5/5/2025' (UK date format DD/MM/YYYY)
+   - 'expires Aug 2026' (month/year)
+   - 'expires tomorrow' (natural language)
    Returns [expiry-timestamp remaining-text] or [nil text] if not found."
   [text]
   (let [text (str/trim text)
@@ -153,7 +163,11 @@
 ;; ============================================================================
 
 (defn parse-add-command
-  "Parse an add command like 'add 2 bags of peas to garage expires Aug 2026'.
+  "Parse an add command with optional expiry date:
+   - 'add 2 bags of peas' (no expiry)
+   - 'add 2 bags of peas expires 5/5/2025' (UK date format)
+   - 'add 2 bags of peas expires Aug 2026' (month/year)
+   - 'add 2 bags of peas to garage expires tomorrow' (natural language)
    Returns a map with :quantity, :unit, :item-name, :freezer-name, :expiry-date
    or nil if not a valid add command."
   [text]

@@ -195,22 +195,34 @@
         (is (= 3.0 (:quantity item)))))))
 
 (deftest test-remove-item-complete
-  (testing "Removing all of an item deletes it"
+  (testing "Removing all of an item soft deletes it (keeps in DB with quantity 0)"
     (let [freezer-id (freezer/add-freezer "garage")
           item-id (freezer/add-item freezer-id "peas" 5 "bags" nil)
-          remaining (freezer/remove-item item-id 5)]
+          remaining (freezer/remove-item item-id 5)
+          item (freezer/get-item-by-id item-id)]
 
       (is (= 0 remaining))
-      (is (nil? (freezer/get-item-by-id item-id))))))
+      ;; Item still exists in database (soft delete)
+      (is (not (nil? item)))
+      (is (= 0.0 (:quantity item)))
+      (is (not (nil? (:removed_date item))))
+      ;; But should not appear in active items list
+      (is (empty? (freezer/get-items freezer-id))))))
 
 (deftest test-remove-item-over-quantity
-  (testing "Removing more than available deletes the item"
+  (testing "Removing more than available soft deletes the item"
     (let [freezer-id (freezer/add-freezer "garage")
           item-id (freezer/add-item freezer-id "peas" 3 "bags" nil)
-          remaining (freezer/remove-item item-id 10)]
+          remaining (freezer/remove-item item-id 10)
+          item (freezer/get-item-by-id item-id)]
 
       (is (= 0 remaining))
-      (is (nil? (freezer/get-item-by-id item-id))))))
+      ;; Item still exists in database (soft delete)
+      (is (not (nil? item)))
+      (is (= 0.0 (:quantity item)))
+      (is (not (nil? (:removed_date item))))
+      ;; But should not appear in active items list
+      (is (empty? (freezer/get-items freezer-id))))))
 
 (deftest test-delete-freezer-cascades-items
   (testing "Deleting a freezer removes all its items"
@@ -352,11 +364,15 @@
         (freezer/remove-item peas-id 2)
         (is (= 3.0 (:quantity (freezer/get-item-by-id peas-id))))
 
-        ;; Remove all chicken
+        ;; Remove all chicken (soft delete)
         (freezer/remove-item chicken-id 4)
-        (is (nil? (freezer/get-item-by-id chicken-id)))
+        (let [chicken-item (freezer/get-item-by-id chicken-id)]
+          ;; Item still exists in DB (soft delete)
+          (is (not (nil? chicken-item)))
+          (is (= 0.0 (:quantity chicken-item)))
+          (is (not (nil? (:removed_date chicken-item)))))
 
-        ;; Garage should now have 1 item
+        ;; Garage should now have 1 active item
         (is (= 1 (count (freezer/get-items garage-id))))
 
         ;; Search for ice cream (global search)

@@ -36,6 +36,7 @@
            added_date datetime not null,
            expiry_date datetime,
            notes text,
+           removed_date datetime,
            foreign key (freezer_id) references freezers(freezer_id) on delete cascade
          )")
       (sql/execute! db "create index item_freezer_idx on items(freezer_id)"))
@@ -201,11 +202,38 @@
        nil))))
 
 (defn get-items
-  "Get all items in a freezer, ordered by item_id"
+  "Get all active (non-removed) items in a freezer, ordered by item_id.
+   Filters out items with quantity <= 0 or removed_date set."
+  [freezer-id]
+  (sql/query db ["select * from items
+                  where freezer_id=? and quantity > 0 and removed_date is null
+                  order by item_id asc" freezer-id]))
+
+(defn get-all-items-including-removed
+  "Get ALL items in a freezer including removed ones, ordered by item_id.
+   Useful for viewing freezer history and past meal ideas."
   [freezer-id]
   (sql/query db ["select * from items
                   where freezer_id=?
                   order by item_id asc" freezer-id]))
+
+(defn get-removed-items
+  "Get only removed items from a freezer, ordered by removed_date (most recent first).
+   Useful for browsing meal history."
+  [freezer-id]
+  (sql/query db ["select * from items
+                  where freezer_id=? and removed_date is not null
+                  order by removed_date desc" freezer-id]))
+
+(defn get-all-removed-items
+  "Get all removed items across all freezers, ordered by removed_date (most recent first).
+   Useful for browsing global meal history and finding recipe ideas."
+  []
+  (sql/query db ["select i.*, f.freezer_name
+                  from items i
+                  join freezers f on i.freezer_id = f.freezer_id
+                  where i.removed_date is not null
+                  order by i.removed_date desc"]))
 
 (defn get-item-by-id
   "Get a specific item by its ID"
@@ -215,17 +243,20 @@
       first))
 
 (defn remove-item
-  "Remove a quantity of an item. If quantity >= item quantity, delete the item.
-   Returns the remaining quantity (0 if deleted)."
+  "Remove a quantity of an item. If quantity >= item quantity, mark as removed (soft delete).
+   Items are kept in the database with quantity=0 and removed_date set for history tracking.
+   Returns the remaining quantity (0 if fully removed)."
   [item-id quantity]
   (let [item (get-item-by-id item-id)]
     (when item
       (let [current-qty (:quantity item)
             new-qty (- current-qty quantity)]
         (if (<= new-qty 0)
-          ;; Delete the item
+          ;; Soft delete: set quantity to 0 and record removed_date
           (do
-            (sql/delete! db :items ["item_id=?" item-id])
+            (sql/execute! db ["update items
+                               set quantity=0, removed_date=?
+                               where item_id=?" (System/currentTimeMillis) item-id])
             0)
           ;; Update the quantity
           (do
@@ -235,13 +266,14 @@
             new-qty))))))
 
 (defn search-items
-  "Search for items across all freezers (global).
+  "Search for active (non-removed) items across all freezers (global).
    Returns items with their freezer information."
   [search-term]
   (sql/query db ["select i.*, f.freezer_name
                   from items i
                   join freezers f on i.freezer_id = f.freezer_id
                   where i.item_name like ? collate NOCASE
+                    and i.quantity > 0 and i.removed_date is null
                   order by f.freezer_name, i.item_id"
                  (str "%" search-term "%")]))
 

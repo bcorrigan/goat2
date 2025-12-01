@@ -59,14 +59,16 @@
 
 (defn format-item-display
   "Format a single item for inventory display.
-   Returns a string like '#1: 2x bags of peas (frozen 3 days ago, expires Aug 2026)'"
-  [item index]
+   Returns a string like '#1: 2x bags of peas (frozen 3 days ago, expires Aug 2026)'
+   Uses the actual database item_id for the # reference."
+  [item]
   (let [quantity (:quantity item)
         unit (:unit item)
         name (:item_name item)
         notes (:notes item)
         expiry (:expiry_date item)
-        age-days (or (db/get-item-age (:item_id item)) 0)
+        item-id (:item_id item)
+        age-days (or (db/get-item-age item-id) 0)
         age-str (format-item-age age-days)
         ;; Build the quantity+unit+name part
         item-desc (str (format-quantity quantity) "x"
@@ -88,7 +90,7 @@
                                   :else (str "expires " expiry-str))))
                         metadata-parts)
         metadata (str/join ", " metadata-parts)]
-    (str "#" index ": " full-desc " (" metadata ")")))
+    (str "#" item-id ": " full-desc " (" metadata ")")))
 
 (defn format-inventory-single
   "Format inventory for a single freezer"
@@ -97,9 +99,7 @@
         header (str "🧊 <b>" (str/capitalize freezer-name) " Freezer</b>")
         lines (if (empty? items)
                 ["The freezer is empty! 🎉"]
-                (map-indexed (fn [idx item]
-                              (format-item-display item (inc idx)))
-                            items))]
+                (map format-item-display items))]
     (str header "\n" (str/join "\n" lines))))
 
 (defn format-inventory-all
@@ -374,6 +374,7 @@
          "<b>Basic Commands:</b>\n"
          "• <code>add 2 bags of peas</code> - Add items\n"
          "• <code>add 3 bags of peas to garage</code> - Add to specific freezer\n"
+         "• <code>add 5 portions of stew expires 3/5/26</code> - Add with expiry date (UK format)\n"
          "• <code>inventory</code> - See all freezers\n"
          "• <code>take 1 of #2</code> - Remove by ID\n"
          "• <code>remove peas</code> - Remove by name\n"
