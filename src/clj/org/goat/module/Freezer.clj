@@ -3,6 +3,7 @@
             [org.goat.core.message :as msg]
             [org.goat.db.freezer :as db]
             [org.goat.module.freezer.parser :as parser]
+            [org.goat.util.emoji :as emoji]
             [clojure.string :as str])
   (:import [java.time Instant LocalDate ZoneId]
            [java.time.format DateTimeFormatter]))
@@ -59,8 +60,9 @@
 
 (defn format-item-display
   "Format a single item for inventory display.
-   Returns a string like '#1: 2x bags of peas (frozen 3 days ago, expires Aug 2026)'
-   Uses the actual database item_id for the # reference."
+   Returns a string like '#1: 2x bags of peas 🫛 (frozen 3 days ago, expires Aug 2026)'
+   Uses the actual database item_id for the # reference.
+   Adds relevant emojis based on item name."
   [item]
   (let [quantity (:quantity item)
         unit (:unit item)
@@ -78,6 +80,8 @@
         full-desc (if notes
                     (str item-desc " (" notes ")")
                     item-desc)
+        ;; Add emojis based on item name (emojification layer)
+        emojified-desc (emoji/emojify full-desc)
         ;; Build metadata string
         metadata-parts [(str age-str)]
         metadata-parts (if expiry
@@ -90,7 +94,7 @@
                                   :else (str "expires " expiry-str))))
                         metadata-parts)
         metadata (str/join ", " metadata-parts)]
-    (str "#" item-id ": " full-desc " (" metadata ")")))
+    (str "#" item-id ": " emojified-desc " (" metadata ")")))
 
 (defn format-inventory-single
   "Format inventory for a single freezer"
@@ -107,7 +111,7 @@
   []
   (let [freezers (db/get-freezers)]
     (if (empty? freezers)
-      "❄️ No freezers found. Add one with 'add freezer <name>'."
+      "❄️ No freezers found. Add one with 'add freezer &lt;name&gt;'."
       (let [sections (for [freezer freezers]
                       (let [items (db/get-items (:freezer_id freezer))]
                         (format-inventory-single freezer items)))]

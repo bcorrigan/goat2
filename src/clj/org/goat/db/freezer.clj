@@ -100,8 +100,16 @@
 (defn get-freezers
   "Get all freezers (global, not user-specific)"
   []
-  (sql/query db ["select * from freezers
-                  order by freezer_name asc"]))
+  (try
+    (sql/query db ["select * from freezers
+                    order by freezer_name asc"])
+    (catch Exception e
+      ;; If tables don't exist yet, create them and retry
+      (when (or (re-find #"no such table" (.getMessage e))
+                (re-find #"database is locked" (.getMessage e)))
+        (create-db)
+        (sql/query db ["select * from freezers
+                        order by freezer_name asc"])))))
 
 (defn get-freezer-by-id
   "Get a freezer by its ID"
