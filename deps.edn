@@ -7,12 +7,12 @@
         org.telegram/telegrambots-client {:mvn/version "9.2.0"}
         org.telegram/telegrambots-extensions {:mvn/version "9.2.0"}
         org.json/json {:mvn/version "20250517"}
-        org.apache.commons/commons-lang3 {:mvn/version "3.19.0"}
+        org.apache.commons/commons-lang3 {:mvn/version "3.20.0"}
         org.reflections/reflections {:mvn/version "0.10.2"}
         com.zoho/hawking {:mvn/version "0.1.9"}
         org.mapdb/mapdb {:mvn/version "3.1.0"}
         org.clojure/java.jdbc {:mvn/version "0.7.12"}
-        org.xerial/sqlite-jdbc {:mvn/version "3.51.0.0"}
+        org.xerial/sqlite-jdbc {:mvn/version "3.51.1.0"}
         http-kit/http-kit {:mvn/version "2.9.0-beta3"}
         compojure/compojure {:mvn/version "1.7.2"}
         cheshire/cheshire {:mvn/version "6.1.0"}
