@@ -13,6 +13,7 @@ import org.telegram.telegrambots.client.okhttp.OkHttpTelegramClient;
 import org.telegram.telegrambots.longpolling.TelegramBotsLongPollingApplication;
 import org.telegram.telegrambots.longpolling.util.LongPollingSingleThreadUpdateConsumer;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
+import org.telegram.telegrambots.meta.api.methods.send.SendDocument;
 import org.telegram.telegrambots.meta.api.objects.Update;
 //import org.telegram.telegrambots.meta.api.objects.message.Message;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
@@ -154,6 +155,8 @@ public class ServerConnection extends Thread {
                         //"things that can be sent to telegram" so we can't be generic here.
                         if(m.hasImage()) {
                             telegramClient.execute(m.getSendPhoto());
+                        } else if(m.hasDocument()) {
+                            telegramClient.execute(m.getSendDocument());
                         } else {
                             telegramClient.execute(m.getSendMessage());
                         }

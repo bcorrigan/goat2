@@ -24,10 +24,15 @@
 
 (deftest test-extract-item-id
   (testing "Extracting item ID from text"
+    ;; Test with # prefix
     (is (= 1 (parser/extract-item-id "#1")))
     (is (= 23 (parser/extract-item-id "#23")))
-    (is (= 5 (parser/extract-item-id "take #5")))
-    (is (nil? (parser/extract-item-id "no id here")))))
+    ;; Test without # prefix (convenience for mobile users)
+    (is (= 1 (parser/extract-item-id "1")))
+    (is (= 23 (parser/extract-item-id "23")))
+    ;; Test non-ID text
+    (is (nil? (parser/extract-item-id "no id here")))
+    (is (nil? (parser/extract-item-id "chicken")))))
 
 (deftest test-normalize-freezer-name
   (testing "Normalizing freezer names"
@@ -96,7 +101,14 @@
 
 (deftest test-parse-remove-command-by-id
   (testing "Parsing remove command with item ID"
+    ;; With # prefix
     (let [result (parser/parse-remove-command "take 2 of #1")]
+      (is (= 2.0 (:quantity result)))
+      (is (= 1 (:item-id result)))
+      (is (nil? (:item-name result)))
+      (is (nil? (:freezer-name result))))
+    ;; Without # prefix (convenience for mobile)
+    (let [result (parser/parse-remove-command "take 2 of 1")]
       (is (= 2.0 (:quantity result)))
       (is (= 1 (:item-id result)))
       (is (nil? (:item-name result)))
@@ -348,5 +360,33 @@
     (let [cmd8 (parser/parse-command "find chicken")]
       (is (= :search (:type cmd8)))
       (is (= "chicken" (:search-term cmd8))))))
+
+;; ============================================================================
+;; Regression Tests
+;; ============================================================================
+
+(deftest test-item-names-containing-keywords
+  (testing "Items with 'to', 'in', 'from' in their names should not be misinterpreted as freezer keywords"
+    ;; Bug: "tomato soup" was parsed as item="toma" freezer="soup" because "to" was matched
+    (let [cmd1 (parser/parse-command "add 3 cans of tomato soup")]
+      (is (= :add-item (:type cmd1)))
+      (is (= "tomato soup" (:item-name cmd1)))
+      (is (nil? (:freezer-name cmd1)))
+      (is (= 3.0 (:quantity cmd1)))
+      (is (= "cans" (:unit cmd1))))
+
+    ;; Similar cases
+    (let [cmd2 (parser/parse-command "add 1 tub of potato salad")]
+      (is (= "potato salad" (:item-name cmd2)))
+      (is (nil? (:freezer-name cmd2))))
+
+    (let [cmd3 (parser/parse-command "add 2 cans of pinto beans")]
+      (is (= "pinto beans" (:item-name cmd3)))
+      (is (nil? (:freezer-name cmd3))))
+
+    ;; But "to garage" should still work as freezer specifier
+    (let [cmd4 (parser/parse-command "add 3 cans of tomato soup to garage")]
+      (is (= "tomato soup" (:item-name cmd4)))
+      (is (= "garage" (:freezer-name cmd4))))))
 
 (run-tests)

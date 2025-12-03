@@ -126,14 +126,21 @@
       [nil text])))
 
 (defn extract-item-id
-  "Extract item ID from text like '#1', '#23', etc.
+  "Extract item ID from text like '#1', '#23', or just '1', '23', etc.
    Returns the numeric ID or nil if not found."
   [text]
-  (let [text (str/trim text)
-        id-pattern #"#(\d+)"
-        match (re-find id-pattern text)]
-    (when match
-      (Integer/parseInt (nth match 1)))))
+  (let [text (str/trim text)]
+    (cond
+      ;; Try #ID format first (e.g., #1, #23)
+      (re-matches #"#(\d+)" text)
+      (Integer/parseInt (second (re-matches #"#(\d+)" text)))
+
+      ;; Try just a number (e.g., 1, 23)
+      (re-matches #"(\d+)" text)
+      (Integer/parseInt text)
+
+      ;; Otherwise nil
+      :else nil)))
 
 (defn normalize-freezer-name
   "Normalize freezer name: trim, lowercase for comparison"
@@ -149,12 +156,13 @@
   [text]
   (let [text (str/trim text)
         ;; Match patterns like "to garage", "in kitchen", "from upstairs"
-        freezer-pattern #"(?i)(to|in|from)\s+(?:the\s+)?([a-zA-Z][\w\s-]*?)(?:\s+freezer)?\s*$"
+        ;; Use \b word boundaries to avoid matching "to" inside "tomato"
+        freezer-pattern #"(?i)\b(to|in|from)\s+(?:the\s+)?([a-zA-Z][\w\s-]*?)(?:\s+freezer)?\s*$"
         match (re-find freezer-pattern text)]
     (if match
       (let [freezer-name (str/trim (nth match 2))
             ;; Remove the freezer part from text
-            text-without-freezer (str/trim (str/replace text (re-pattern (str "(?i)" (nth match 0) "$")) ""))]
+            text-without-freezer (str/trim (str/replace text (re-pattern (str "(?i)\\b" (nth match 0) "$")) ""))]
         [freezer-name text-without-freezer])
       [nil text])))
 
@@ -302,6 +310,14 @@
         (when (not (str/blank? search-term))
           {:search-term search-term})))))
 
+(defn parse-export-command
+  "Parse an export command like 'export csv' or 'export' or 'download csv'.
+   Returns an empty map (just a flag) or nil if not valid."
+  [text]
+  (let [text (str/trim text)]
+    (when (re-matches #"(?i)^(export|download)(\s+(csv|inventory))?$" text)
+      {})))
+
 ;; ============================================================================
 ;; Main Parser
 ;; ============================================================================
@@ -315,6 +331,10 @@
       ;; Try freezer management commands first (more specific)
       (when-let [result (parse-freezer-command text)]
         (assoc result :type :freezer-management))
+
+      ;; Try export command
+      (when-let [result (parse-export-command text)]
+        (assoc result :type :export-csv))
 
       ;; Try add command
       (when-let [result (parse-add-command text)]

@@ -3,6 +3,7 @@ package org.goat.core;
 import org.telegram.telegrambots.meta.generics.TelegramClient;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.methods.send.SendPhoto;
+import org.telegram.telegrambots.meta.api.methods.send.SendDocument;
 import org.telegram.telegrambots.meta.api.objects.InputFile;
 import org.goat.Goat;
 import org.goat.util.Pager;
@@ -11,6 +12,7 @@ import javax.imageio.ImageIO;
 import java.awt.image.RenderedImage;
 import java.io.*;
 import java.nio.file.Path;
+import java.io.ByteArrayInputStream;
 import java.util.StringTokenizer;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -27,6 +29,7 @@ public class Message {
 
     //don't think we need an enum for "type" of message. ie a telegram msg could have text AND various other media
     private boolean hasImage=false;
+    private boolean hasDocument=false;
 
     public boolean hasImage() {
         return hasImage;
@@ -80,6 +83,10 @@ public class Message {
 
     private byte[] imageBytes;
 
+    private byte[] documentBytes;
+
+    private String documentFilename;
+
     //who sent this message?
     private String sender;
 
@@ -110,6 +117,16 @@ public class Message {
         this.isPrivate = isPrivate;
         this.sender = sender;
         hasImage=true;
+    }
+
+    //private - only used to construct outgoing document messages
+    private Message(Long chatId, byte[] documentBytes, String filename, Boolean isPrivate, String sender) {
+        this.chatId = chatId;
+        this.documentBytes = documentBytes;
+        this.documentFilename = filename;
+        this.isPrivate = isPrivate;
+        this.sender = sender;
+        hasDocument=true;
     }
 
     public Message(Long chatId, String text, Boolean isPrivate, String sender) {
@@ -167,6 +184,14 @@ public class Message {
         outqueue.add(new Message(chatId, image, isPrivate, sender));
     }
 
+    public void replyWithDocument(byte[] bytes, String filename) {
+        outqueue.add(new Message(chatId, bytes, filename, isPrivate, sender));
+    }
+
+    public boolean hasDocument() {
+        return hasDocument;
+    }
+
     public void send() {
         outqueue.add(this);
     }
@@ -191,6 +216,12 @@ public class Message {
         InputStream istr = new ByteArrayInputStream(baos.toByteArray());
         //System.out.println("image:" + imageFile.getFileName());
         return new SendPhoto(this.chatId.toString(), new InputFile(istr, "image.png"));
+    }
+
+    public SendDocument getSendDocument() {
+        //convert byte array to "in memory file" & return as SendDocument
+        InputStream istr = new ByteArrayInputStream(documentBytes);
+        return new SendDocument(this.chatId.toString(), new InputFile(istr, documentFilename));
     }
 
     /*

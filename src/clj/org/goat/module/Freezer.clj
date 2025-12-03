@@ -3,6 +3,7 @@
             [org.goat.core.message :as msg]
             [org.goat.db.freezer :as db]
             [org.goat.module.freezer.parser :as parser]
+            [org.goat.module.freezer.csv :as csv]
             [org.goat.util.emoji :as emoji]
             [clojure.string :as str])
   (:import [java.time Instant LocalDate ZoneId]
@@ -364,11 +365,30 @@
     (if (empty? results)
       (msg/reply m (str "🔍 No items found matching \"" search-term "\"."))
       (let [lines (for [item results]
-                    (str "• " (:item_name item)
+                    (str "• #" (:item_id item) ": "
+                         (:item_name item)
                          (when (:unit item) (str " (" (:unit item) ")"))
                          " in <b>" (str/capitalize (:freezer_name item)) "</b>"
                          " - " (format-quantity (:quantity item)) "x"))]
         (msg/reply m (str "🔍 <b>Found \"" search-term "\":</b>\n" (str/join "\n" lines)))))))
+
+(defn handle-export-csv
+  "Export all freezer inventory to CSV file"
+  [m]
+  (try
+    (let [csv-data (csv/generate-csv-data)
+          csv-byte-array (csv/csv-bytes csv-data)
+          item-count (csv/count-items csv-data)
+          filename (str "freezer-inventory-"
+                       (.format (LocalDate/now)
+                               (DateTimeFormatter/ofPattern "yyyy-MM-dd"))
+                       ".csv")]
+      (msg/reply-document m csv-byte-array filename)
+      (msg/reply m (format-success (str "Exported " item-count " items to " filename))))
+    (catch Exception e
+      (println "Error exporting CSV:" (.getMessage e))
+      (.printStackTrace e)
+      (msg/reply m (format-error (str "Failed to export CSV: " (.getMessage e)))))))
 
 (defn handle-help
   "Show help message for freezer commands"
@@ -380,9 +400,10 @@
          "• <code>add 3 bags of peas to garage</code> - Add to specific freezer\n"
          "• <code>add 5 portions of stew expires 3/5/26</code> - Add with expiry date (UK format)\n"
          "• <code>inventory</code> - See all freezers\n"
-         "• <code>take 1 of #2</code> - Remove by ID\n"
+         "• <code>take 1 of 2</code> or <code>take 1 of #2</code> - Remove by ID\n"
          "• <code>remove peas</code> - Remove by name\n"
-         "• <code>find chicken</code> - Search across freezers\n\n"
+         "• <code>find chicken</code> - Search across freezers\n"
+         "• <code>export csv</code> - Export all items to CSV file\n\n"
          "<b>Freezer Management:</b>\n"
          "• <code>add freezer garage</code> - Create new freezer\n"
          "• <code>delete freezer garage</code> - Delete freezer\n"
@@ -425,6 +446,8 @@
                 :freezer-management (handle-freezer-management m parsed)
 
                 :search (handle-search m parsed)
+
+                :export-csv (handle-export-csv m)
 
                 ;; Default
                 nil))))))))

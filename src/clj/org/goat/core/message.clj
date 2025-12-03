@@ -6,6 +6,7 @@
   "Protocol for interacting with messages in a Clojurian way"
   (reply [this text] "Send a reply to this message")
   (reply-image [this img] "Send an image reply to this message")
+  (reply-document [this bytes filename] "Send a document reply to this message")
   (get-command [this] "Get the command as a keyword (e.g. :wordle)")
   (get-text [this] "Get the full text of the message")
   (get-mod-text [this] "Get the text after the command")
@@ -23,6 +24,9 @@
 
   (reply-image [_ img]
     (.replyWithImage msg img))
+
+  (reply-document [_ bytes filename]
+    (.replyWithDocument msg bytes filename))
 
   (get-command [_]
     (when-let [cmd (.getModCommand msg)]
@@ -66,6 +70,9 @@
 
   (reply-image [this img]
     (.replyWithImage this img))
+
+  (reply-document [this bytes filename]
+    (.replyWithDocument this bytes filename))
 
   (get-command [this]
     (when-let [cmd (.getModCommand this)]

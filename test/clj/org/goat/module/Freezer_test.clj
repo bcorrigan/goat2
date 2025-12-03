@@ -43,6 +43,7 @@
        added_date datetime not null,
        expiry_date datetime,
        notes text,
+       removed_date datetime,
        foreign key (freezer_id) references freezers(freezer_id) on delete cascade
      )")
   (sql/execute! test-db "create index item_freezer_idx on items(freezer_id)")
@@ -408,7 +409,10 @@
           (is (msg-utils/replied-with? "chicken breasts"))
           (is (msg-utils/replied-with? "chicken wings"))
           (is (msg-utils/replied-with? "Garage"))
-          (is (msg-utils/replied-with? "Kitchen")))))))
+          (is (msg-utils/replied-with? "Kitchen"))
+          ;; Verify IDs are displayed
+          (is (msg-utils/replied-with? "#1:") "Search results should include item IDs")
+          (is (msg-utils/replied-with? "#2:") "Search results should include item IDs"))))))
 
 (deftest test-search-no-results
   (testing "Search with no results"
@@ -523,3 +527,145 @@
           (is (msg-utils/replied-with? "Kitchen Freezer"))
           (is (msg-utils/replied-with? "peas"))
           (is (msg-utils/replied-with? "chicken")))))))
+
+;; ============================================================================
+;; CSV Export Tests
+;; ============================================================================
+
+(deftest test-csv-export-empty-database
+  (testing "Exporting CSV from empty database returns header only"
+    (msg-utils/with-clean-replies
+      (let [msg (msg-utils/mock-message {:text "export csv" :sender "alice"})]
+        (sut/-processChannelMessage nil msg)
+
+        ;; Verify document was sent
+        (is (msg-utils/replied-with-document?) "Should send document")
+        (is (= 1 (msg-utils/document-reply-count)) "Should send exactly one document")
+
+        ;; Verify success message
+        (is (msg-utils/replied-with? "✅") "Should show success")
+        (is (msg-utils/replied-with? "Exported") "Should mention export")
+
+        ;; Verify CSV content
+        (let [csv-bytes (msg-utils/get-document-content)
+              csv-string (String. csv-bytes "UTF-8")
+              lines (clojure.string/split-lines csv-string)]
+          (is (= 1 (count lines)) "Should have only header row")
+          (is (= "ID,Freezer,Item,Quantity,Unit,Date Added,Expiry Date" (first lines))
+              "Header should be correct"))
+
+        ;; Verify filename
+        (let [filename (msg-utils/get-document-filename)]
+          (is (clojure.string/starts-with? filename "freezer-inventory-"))
+          (is (clojure.string/ends-with? filename ".csv")))))))
+
+(deftest test-csv-export-with-items
+  (testing "Exporting CSV with items includes all active items"
+    (msg-utils/with-clean-replies
+      ;; Setup: Create freezers and add items
+      (let [garage-id (db/add-freezer "garage")
+            kitchen-id (db/add-freezer "kitchen")]
+
+        ;; Add items to garage
+        (db/add-item garage-id "Peas" 2.0 "bags" nil nil)
+        (db/add-item garage-id "Ice Cream" 1.0 nil "Chocolate" nil)
+
+        ;; Add items to kitchen
+        (db/add-item kitchen-id "Chicken Breasts" 4.0 nil nil nil)
+
+        ;; Export CSV
+        (let [msg (msg-utils/mock-message {:text "export" :sender "alice"})]
+          (sut/-processChannelMessage nil msg)
+
+          ;; Verify document was sent
+          (is (msg-utils/replied-with-document?) "Should send document")
+
+          ;; Verify success message mentions correct count
+          (is (msg-utils/replied-with? "3 items") "Should export 3 items")
+
+          ;; Parse and verify CSV content
+          (let [csv-bytes (msg-utils/get-document-content)
+                csv-string (String. csv-bytes "UTF-8")
+                lines (clojure.string/split-lines csv-string)]
+
+            ;; Should have header + 3 data rows
+            (is (= 4 (count lines)) "Should have header + 3 items")
+
+            ;; Verify header
+            (is (= "ID,Freezer,Item,Quantity,Unit,Date Added,Expiry Date" (first lines)))
+
+            ;; Verify all items are present (order: garage, kitchen alphabetically)
+            (let [data-lines (rest lines)
+                  csv-content (clojure.string/join "\n" data-lines)]
+
+              ;; Check for garage items
+              (is (clojure.string/includes? csv-content "Garage") "Should include Garage freezer")
+              (is (clojure.string/includes? csv-content "Peas") "Should include Peas")
+              (is (clojure.string/includes? csv-content "bags") "Should include bags unit")
+              (is (clojure.string/includes? csv-content "Ice Cream") "Should include Ice Cream")
+
+              ;; Check for kitchen items
+              (is (clojure.string/includes? csv-content "Kitchen") "Should include Kitchen freezer")
+              (is (clojure.string/includes? csv-content "Chicken Breasts") "Should include Chicken Breasts")
+
+              ;; Verify quantities are formatted correctly
+              (is (clojure.string/includes? csv-content "2,bags") "Peas should show quantity 2")
+              (is (clojure.string/includes? csv-content "1,") "Ice cream should show quantity 1")
+              (is (clojure.string/includes? csv-content "4,") "Chicken should show quantity 4"))))))))
+
+(deftest test-csv-export-escaping
+  (testing "CSV export properly escapes special characters"
+    (msg-utils/with-clean-replies
+      ;; Add item with special characters that need escaping
+      (let [freezer-id (db/add-freezer "test")]
+        ;; Item with comma in name
+        (db/add-item freezer-id "Beans, Baked" 1.0 nil nil nil)
+        ;; Item with quotes in name (if this ever happens)
+        (db/add-item freezer-id "Mom's \"Special\" Sauce" 1.0 nil nil nil)
+
+        (let [msg (msg-utils/mock-message {:text "export csv" :sender "alice"})]
+          (sut/-processChannelMessage nil msg)
+
+          (let [csv-bytes (msg-utils/get-document-content)
+                csv-string (String. csv-bytes "UTF-8")
+                lines (clojure.string/split-lines csv-string)]
+
+            ;; Should have header + 2 items
+            (is (= 3 (count lines)))
+
+            ;; Check that items with commas are quoted
+            (let [beans-line (first (filter #(clojure.string/includes? % "Beans") lines))]
+              (is (some? beans-line) "Should find beans line")
+              (is (clojure.string/includes? beans-line "\"Beans, Baked\"")
+                  "Item with comma should be quoted"))
+
+            ;; Check that items with quotes have doubled quotes
+            (let [sauce-line (first (filter #(clojure.string/includes? % "Special") lines))]
+              (is (some? sauce-line) "Should find sauce line")
+              (is (clojure.string/includes? sauce-line "\"\"Special\"\"")
+                  "Quotes should be escaped by doubling"))))))))
+
+(deftest test-csv-export-excludes-removed-items
+  (testing "CSV export only includes active items, not removed ones"
+    (msg-utils/with-clean-replies
+      (let [freezer-id (db/add-freezer "garage")]
+        ;; Add items
+        (let [peas-id (db/add-item freezer-id "Peas" 2.0 "bags" nil nil)
+              chicken-id (db/add-item freezer-id "Chicken" 1.0 nil nil nil)]
+
+          ;; Remove peas completely
+          (db/remove-item peas-id 2.0)
+
+          ;; Export CSV
+          (let [msg (msg-utils/mock-message {:text "download csv" :sender "alice"})]
+            (sut/-processChannelMessage nil msg)
+
+            (let [csv-bytes (msg-utils/get-document-content)
+                  csv-string (String. csv-bytes "UTF-8")]
+
+              ;; Should only include chicken, not peas
+              (is (clojure.string/includes? csv-string "Chicken") "Should include active chicken")
+              (is (not (clojure.string/includes? csv-string "Peas")) "Should NOT include removed peas")
+
+              ;; Verify count
+              (is (msg-utils/replied-with? "1 item") "Should export only 1 active item"))))))))

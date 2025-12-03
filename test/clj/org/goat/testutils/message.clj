@@ -78,13 +78,17 @@
          (isPrivate [] (.isPrivate base-msg))
          (hasText [] (.hasText base-msg))
          (hasImage [] (.hasImage base-msg))
+         (hasDocument [] (.hasDocument base-msg))
          
          ;; Override reply methods to capture
          (reply [msg-text]
            (swap! reply-log conj {:type :text :content msg-text}))
-         
+
          (replyWithImage [img]
-           (swap! reply-log conj {:type :image :content img})))
+           (swap! reply-log conj {:type :image :content img}))
+
+         (replyWithDocument [bytes filename]
+           (swap! reply-log conj {:type :document :content bytes :filename filename})))
        
        ;; Otherwise just return the real message
        base-msg))))
@@ -170,6 +174,32 @@
   (count (filter #(= :text (:type %)) (get-replies))))
 
 (defn image-reply-count
-  "Count number of image replies sent." 
+  "Count number of image replies sent."
   []
   (count (filter #(= :image (:type %)) (get-replies))))
+
+(defn replied-with-document?
+  "Check if any document reply was sent."
+  []
+  (some #(= :document (:type %)) (get-replies)))
+
+(defn document-reply-count
+  "Count number of document replies sent."
+  []
+  (count (filter #(= :document (:type %)) (get-replies))))
+
+(defn get-document-reply
+  "Get the first document reply, or nil if none.
+   Returns map with :content (bytes) and :filename."
+  []
+  (first (filter #(= :document (:type %)) (get-replies))))
+
+(defn get-document-content
+  "Get the content (byte array) of the first document reply, or nil."
+  []
+  (:content (get-document-reply)))
+
+(defn get-document-filename
+  "Get the filename of the first document reply, or nil."
+  []
+  (:filename (get-document-reply)))
