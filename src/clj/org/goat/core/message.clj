@@ -15,7 +15,10 @@
   (get-chatname [this] "Get the chat name")
   (private? [this] "True if this is a private message")
   (has-text? [this] "True if this message has text")
-  (has-image? [this] "True if this message has an image"))
+  (has-image? [this] "True if this message has an image")
+  (has-document? [this] "True if this message has a document")
+  (get-document-bytes [this] "Get the document bytes")
+  (get-document-filename [this] "Get the document filename"))
 
 (deftype MessageWrapper [^Message msg]
   MessageContext
@@ -54,7 +57,16 @@
     (.hasText msg))
 
   (has-image? [_]
-    (.hasImage msg)))
+    (.hasImage msg))
+
+  (has-document? [_]
+    (.hasDocument msg))
+
+  (get-document-bytes [_]
+    (.getDocumentBytes msg))
+
+  (get-document-filename [_]
+    (.getDocumentFilename msg)))
 
 (defn wrap-message
   "Wraps a Java Message object in a Clojurian MessageWrapper"
@@ -100,7 +112,16 @@
     (.hasText this))
 
   (has-image? [this]
-    (.hasImage this)))
+    (.hasImage this))
+
+  (has-document? [this]
+    (.hasDocument this))
+
+  (get-document-bytes [this]
+    (.getDocumentBytes this))
+
+  (get-document-filename [this]
+    (.getDocumentFilename this)))
 
 ;; Convenience functions that work with either wrapped or unwrapped messages
 (defn unwrap
@@ -176,3 +197,13 @@
   "Shorthand for get-mod-text"
   [msg-wrapper]
   (get-mod-text msg-wrapper))
+
+(defn document-bytes
+  "Shorthand for get-document-bytes"
+  [msg-wrapper]
+  (get-document-bytes msg-wrapper))
+
+(defn document-filename
+  "Shorthand for get-document-filename"
+  [msg-wrapper]
+  (get-document-filename msg-wrapper))

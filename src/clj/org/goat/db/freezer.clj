@@ -324,5 +324,34 @@
                            where item_id=?" new-qty item-id])
         new-qty))))
 
+(defn update-item
+  "Update an existing item's fields (quantity, unit, expiry_date, item_name).
+   Does NOT update: freezer_id, added_date, notes, removed_date.
+   Takes item-id and a map of updates.
+   Returns true on success, false on error."
+  [item-id updates]
+  (try
+    (let [item (get-item-by-id item-id)]
+      (when item
+        ;; Build update map with only provided fields
+        (let [update-map (cond-> {}
+                          (contains? updates :quantity)
+                          (assoc :quantity (:quantity updates))
+
+                          (contains? updates :unit)
+                          (assoc :unit (:unit updates))
+
+                          (contains? updates :expiry_date)
+                          (assoc :expiry_date (:expiry_date updates))
+
+                          (contains? updates :item_name)
+                          (assoc :item_name (:item_name updates)))]
+          (when (seq update-map)
+            (sql/update! db :items update-map ["item_id=?" item-id])
+            true))))
+    (catch Exception e
+      (println "Error updating item:" (.getMessage e))
+      false)))
+
 ;; Initialize database on load
 (create-db)

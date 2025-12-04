@@ -318,6 +318,14 @@
     (when (re-matches #"(?i)^(export|download)(\s+(csv|inventory))?$" text)
       {})))
 
+(defn parse-import-command
+  "Parse an import command like 'import csv' or 'import' or 'upload csv'.
+   Returns an empty map (just a flag) or nil if not valid."
+  [text]
+  (let [text (str/trim text)]
+    (when (re-matches #"(?i)^import(\s+(csv|inventory|freezer))?$" text)
+      {})))
+
 ;; ============================================================================
 ;; Main Parser
 ;; ============================================================================
@@ -335,6 +343,10 @@
       ;; Try export command
       (when-let [result (parse-export-command text)]
         (assoc result :type :export-csv))
+
+      ;; Try import command
+      (when-let [result (parse-import-command text)]
+        (assoc result :type :import-csv))
 
       ;; Try add command
       (when-let [result (parse-add-command text)]

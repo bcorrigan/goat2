@@ -4,9 +4,12 @@ import org.telegram.telegrambots.meta.generics.TelegramClient;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.methods.send.SendPhoto;
 import org.telegram.telegrambots.meta.api.methods.send.SendDocument;
+import org.telegram.telegrambots.meta.api.methods.GetFile;
 import org.telegram.telegrambots.meta.api.objects.InputFile;
+import org.telegram.telegrambots.meta.api.objects.File;
 import org.goat.Goat;
 import org.goat.util.Pager;
+import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
 import javax.imageio.ImageIO;
 import java.awt.image.RenderedImage;
@@ -190,6 +193,20 @@ public class Message {
 
     public boolean hasDocument() {
         return hasDocument;
+    }
+
+    public byte[] getDocumentBytes() {
+        return documentBytes;
+    }
+
+    public String getDocumentFilename() {
+        return documentFilename;
+    }
+
+    public void setIncomingDocument(String filename, byte[] bytes) {
+        this.documentFilename = filename;
+        this.documentBytes = bytes;
+        this.hasDocument = true;
     }
 
     public void send() {

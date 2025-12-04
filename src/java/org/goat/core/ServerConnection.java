@@ -14,9 +14,12 @@ import org.telegram.telegrambots.longpolling.TelegramBotsLongPollingApplication;
 import org.telegram.telegrambots.longpolling.util.LongPollingSingleThreadUpdateConsumer;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.methods.send.SendDocument;
+import org.telegram.telegrambots.meta.api.methods.GetFile;
 import org.telegram.telegrambots.meta.api.objects.Update;
+import org.telegram.telegrambots.meta.api.objects.Document;
 //import org.telegram.telegrambots.meta.api.objects.message.Message;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
+import java.net.URL;
 
 /**
  * Maintains the connection with the server. A seperate thread, this.
@@ -100,20 +103,58 @@ public class ServerConnection extends Thread {
             keeprunning = false;
         }
 
+        private byte[] downloadDocument(String fileId) {
+            try {
+                GetFile getFile = new GetFile(fileId);
+                org.telegram.telegrambots.meta.api.objects.File file = telegramClient.execute(getFile);
+                String filePath = file.getFilePath();
+                String fileUrl = "https://api.telegram.org/file/bot" + BotStats.getInstance().getToken() + "/" + filePath;
+
+                URL url = new URL(fileUrl);
+                ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                try (InputStream in = url.openStream()) {
+                    byte[] buffer = new byte[8192];
+                    int bytesRead;
+                    while ((bytesRead = in.read(buffer)) != -1) {
+                        baos.write(buffer, 0, bytesRead);
+                    }
+                }
+                return baos.toByteArray();
+            } catch (Exception e) {
+                System.err.println("Error downloading document: " + e.getMessage());
+                e.printStackTrace();
+                return null;
+            }
+        }
+
         public void consume(Update update) {
                 try {
                     Message m;
+                    org.telegram.telegrambots.meta.api.objects.message.Message tMsg = null;
 
                     if (update.hasEditedMessage()) {
-                        m = new Message(update.getEditedMessage());
+                        tMsg = update.getEditedMessage();
                     } else if (update.hasMessage()) {
-                        m = new Message(update.getMessage());
+                        tMsg = update.getMessage();
                     } else if (update.hasChannelPost()) {
-                        m = new Message(update.getChannelPost());
+                        tMsg = update.getChannelPost();
                     } else {
                         System.out.println("Unknown update type!: " + update.toString());
-
                         return;
+                    }
+
+                    m = new Message(tMsg);
+
+                    // Check if message has a document and download it
+                    if (tMsg.hasDocument()) {
+                        Document doc = tMsg.getDocument();
+                        String fileName = doc.getFileName();
+                        String fileId = doc.getFileId();
+
+                        byte[] documentBytes = downloadDocument(fileId);
+                        if (documentBytes != null) {
+                            m.setIncomingDocument(fileName, documentBytes);
+                        }
                     }
 
                     inqueue.add(m); //add to inqueue

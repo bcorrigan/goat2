@@ -4,6 +4,7 @@
             [org.goat.db.freezer :as db]
             [org.goat.module.freezer.parser :as parser]
             [org.goat.module.freezer.csv :as csv]
+            [org.goat.module.freezer.csv-import :as csv-import]
             [org.goat.util.emoji :as emoji]
             [clojure.string :as str])
   (:import [java.time Instant LocalDate ZoneId]
@@ -390,6 +391,95 @@
       (.printStackTrace e)
       (msg/reply m (format-error (str "Failed to export CSV: " (.getMessage e)))))))
 
+(defn format-import-success
+  "Format successful import results"
+  [stats]
+  (let [{:keys [total-rows added updated removed]} stats]
+    (str "✅ <b>Import Complete!</b>\n\n"
+         "📊 Processed " total-rows " rows:\n"
+         "• " added " items added\n"
+         "• " updated " items updated\n"
+         "• " removed " items removed\n\n"
+         "Use <code>inventory</code> to see updated freezers.")))
+
+(defn format-import-errors
+  "Format import errors with detailed feedback"
+  [result]
+  (let [{:keys [error unknown-freezers validation-errors total-errors]} result
+        all-freezers (map :freezer_name (db/get-freezers))]
+    (str "❌ <b>Import Failed</b>\n\n"
+         error "\n\n"
+         ;; Special handling for unknown freezers
+         (when (seq unknown-freezers)
+           (str "<b>Unknown freezers found:</b>\n"
+                (str/join "\n"
+                  (map (fn [{:keys [name suggestion]}]
+                         (if suggestion
+                           (str "• \"" name "\" (did you mean \"" suggestion "\"?)")
+                           (str "• \"" name "\"")))
+                       unknown-freezers))
+                "\n\n"
+                "Please check for typos or create freezers first using:\n"
+                "<code>add freezer &lt;name&gt;</code>\n\n"
+                (when (seq all-freezers)
+                  (str "Available freezers: " (str/join ", " (map str/capitalize all-freezers)) "\n\n"))))
+         ;; Show validation errors
+         (when (seq validation-errors)
+           (str "<b>Row Errors:</b>\n"
+                (str/join "\n"
+                  (map #(str "Row " (:row-number %) ": " (:error %))
+                       (take 10 validation-errors)))
+                (when (> total-errors 10)
+                  (str "\n... and " (- total-errors 10) " more errors")))))))
+
+(defn handle-import-csv
+  "Handle CSV import from uploaded file or prompt for file upload.
+   Two modes:
+   1. User uploads .csv file - auto-detect and import
+   2. User types 'import csv' - prompt for file upload"
+  [m]
+  (cond
+    ;; Mode 1: File uploaded
+    (msg/has-document? m)
+    (let [filename (msg/document-filename m)
+          content-bytes (msg/document-bytes m)]
+      (cond
+        ;; Check file size (5MB limit)
+        (> (count content-bytes) (* 5 1024 1024))
+        (msg/reply m (format-error "CSV file too large. Maximum 5MB."))
+
+        ;; Check file extension
+        (not (str/ends-with? (str/lower-case filename) ".csv"))
+        (msg/reply m (format-error "Please upload a CSV file (.csv extension)."))
+
+        ;; Import the CSV
+        :else
+        (try
+          (let [csv-string (String. content-bytes "UTF-8")
+                result (csv-import/import-csv-data csv-string)]
+            (if (:success result)
+              (msg/reply m (format-import-success (:stats result)))
+              (msg/reply m (format-import-errors result))))
+          (catch Exception e
+            (println "Error importing CSV:" (.getMessage e))
+            (.printStackTrace e)
+            (msg/reply m (format-error (str "Failed to import CSV: " (.getMessage e))))))))
+
+    ;; Mode 2: Command without file - show instructions
+    :else
+    (msg/reply m (str "📤 <b>CSV Import Instructions</b>\n\n"
+                     "Please upload a CSV file to import.\n\n"
+                     "<b>CSV Format:</b>\n"
+                     "<code>ID,Freezer,Item,Quantity,Unit,Date Added,Expiry Date</code>\n\n"
+                     "<b>Import Rules:</b>\n"
+                     "• No ID or unknown ID → Add as new item\n"
+                     "• Existing ID + quantity > 0 → Update item\n"
+                     "• Existing ID + quantity = 0 → Remove item\n"
+                     "• Unknown freezer name → Reject (prevents typos)\n\n"
+                     "💡 <b>Tip:</b> Export your current inventory first with:\n"
+                     "<code>export csv</code>\n\n"
+                     "Then edit the CSV and upload it to update your freezers."))))
+
 (defn handle-help
   "Show help message for freezer commands"
   [m]
@@ -402,8 +492,10 @@
          "• <code>inventory</code> - See all freezers\n"
          "• <code>take 1 of 2</code> or <code>take 1 of #2</code> - Remove by ID\n"
          "• <code>remove peas</code> - Remove by name\n"
-         "• <code>find chicken</code> - Search across freezers\n"
-         "• <code>export csv</code> - Export all items to CSV file\n\n"
+         "• <code>find chicken</code> - Search across freezers\n\n"
+         "<b>CSV Import/Export:</b>\n"
+         "• <code>export csv</code> - Export all items to CSV file\n"
+         "• <code>import csv</code> - Import items from CSV (or just upload a .csv file)\n\n"
          "<b>Freezer Management:</b>\n"
          "• <code>add freezer garage</code> - Create new freezer\n"
          "• <code>delete freezer garage</code> - Delete freezer\n"
@@ -432,22 +524,28 @@
       (if (= :freezer command)
         (handle-help m)
 
-        ;; Try to parse natural language
-        (when text
-          (let [parsed (parser/parse-command text)]
-            (when parsed
-              (case (:type parsed)
-                :add-item (handle-add-item m parsed)
+        ;; Check for document upload (auto-import if CSV)
+        (if (msg/has-document? m)
+          (handle-import-csv m)
 
-                :remove-item (handle-remove-item m parsed)
+          ;; Try to parse natural language
+          (when text
+            (let [parsed (parser/parse-command text)]
+              (when parsed
+                (case (:type parsed)
+                  :add-item (handle-add-item m parsed)
 
-                :inventory (handle-inventory m parsed)
+                  :remove-item (handle-remove-item m parsed)
 
-                :freezer-management (handle-freezer-management m parsed)
+                  :inventory (handle-inventory m parsed)
 
-                :search (handle-search m parsed)
+                  :freezer-management (handle-freezer-management m parsed)
 
-                :export-csv (handle-export-csv m)
+                  :search (handle-search m parsed)
 
-                ;; Default
-                nil))))))))
+                  :export-csv (handle-export-csv m)
+
+                  :import-csv (handle-import-csv m)
+
+                  ;; Default
+                  nil)))))))))

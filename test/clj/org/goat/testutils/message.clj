@@ -36,30 +36,35 @@
 
 (defn mock-message
   "Creates a mock org.goat.core.Message object for testing.
-   
+
    Options map supports:
    - :text         - The message text (default: 'test message')
    - :chat-id      - Chat ID as Long (default: 123)
-   - :sender       - Who sent the message (default: 'test-user')  
+   - :sender       - Who sent the message (default: 'test-user')
    - :chat-name    - Name of chat room (default: 'test-chat')
    - :is-private   - Whether message is private/1-1 (default: false)
    - :capture-replies - Whether to capture .reply() calls (default: true)
-   
+   - :document-bytes - Byte array for document content (default: nil)
+   - :document-filename - Filename for document (default: nil)
+
    The mock supports all key Message methods and captures reply calls for testing.
-   
+
    Example usage:
    (mock-message {:text 'wordle 5 hard' :sender 'alice' :chat-id 456})
    (mock-message {:text 'Check out https://example.com'})
-   (mock-message {:sender 'bob' :is-private true})"
-  
+   (mock-message {:sender 'bob' :is-private true})
+   (mock-message {:document-bytes csv-bytes :document-filename 'data.csv'})"
+
   ([] (mock-message {}))
-  ([{:keys [text chat-id sender chat-name is-private capture-replies]
+  ([{:keys [text chat-id sender chat-name is-private capture-replies document-bytes document-filename]
      :or {text "test message"
           chat-id 123
           sender "test-user"
           chat-name "test-chat"
           is-private false
-          capture-replies true}}]
+          capture-replies true
+          document-bytes nil
+          document-filename nil}}]
    
    ;; Create the actual Message object using the constructor
    ;; This handles all the parsing logic (modCommand, modText, etc.)
@@ -67,31 +72,38 @@
      
      ;; If we need reply capture, wrap with a proxy
      (if capture-replies
-       (proxy [Message] [chat-id text is-private sender]
-         ;; Delegate all getters to the real message
-         (getText [] (.getText base-msg))
-         (getChatId [] (.getChatId base-msg)) 
-         (getSender [] (.getSender base-msg))
-         (getChatname [] (.getChatname base-msg))
-         (getModCommand [] (.getModCommand base-msg))
-         (getModText [] (.getModText base-msg))
-         (isPrivate [] (.isPrivate base-msg))
-         (hasText [] (.hasText base-msg))
-         (hasImage [] (.hasImage base-msg))
-         (hasDocument [] (.hasDocument base-msg))
-         
-         ;; Override reply methods to capture
-         (reply [msg-text]
-           (swap! reply-log conj {:type :text :content msg-text}))
+       (let [mock-msg (proxy [Message] [chat-id text is-private sender]
+                        ;; Delegate all getters to the real message
+                        (getText [] (.getText base-msg))
+                        (getChatId [] (.getChatId base-msg))
+                        (getSender [] (.getSender base-msg))
+                        (getChatname [] (.getChatname base-msg))
+                        (getModCommand [] (.getModCommand base-msg))
+                        (getModText [] (.getModText base-msg))
+                        (isPrivate [] (.isPrivate base-msg))
+                        (hasText [] (.hasText base-msg))
+                        (hasImage [] (.hasImage base-msg))
+                        (hasDocument [] (some? document-bytes))
+                        (getDocumentBytes [] document-bytes)
+                        (getDocumentFilename [] document-filename)
 
-         (replyWithImage [img]
-           (swap! reply-log conj {:type :image :content img}))
+                        ;; Override reply methods to capture
+                        (reply [msg-text]
+                          (swap! reply-log conj {:type :text :content msg-text}))
 
-         (replyWithDocument [bytes filename]
-           (swap! reply-log conj {:type :document :content bytes :filename filename})))
-       
-       ;; Otherwise just return the real message
-       base-msg))))
+                        (replyWithImage [img]
+                          (swap! reply-log conj {:type :image :content img}))
+
+                        (replyWithDocument [bytes filename]
+                          (swap! reply-log conj {:type :document :content bytes :filename filename})))]
+         ;; Document data is already handled via proxy methods above
+         mock-msg)
+
+       ;; Otherwise just return the real message (possibly with document set)
+       (let [msg base-msg]
+         (when (and document-bytes document-filename)
+           (.setIncomingDocument msg document-filename document-bytes))
+         msg)))))
 
 (defn mock-command-message
   "Convenience function to create a message with a bot command.

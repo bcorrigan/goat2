@@ -669,3 +669,187 @@
 
               ;; Verify count
               (is (msg-utils/replied-with? "1 item") "Should export only 1 active item"))))))))
+
+;; ============================================================================
+;; CSV Import Tests
+;; ============================================================================
+
+(deftest test-csv-import-command-without-file
+  (testing "Import command without file shows instructions"
+    (msg-utils/with-clean-replies
+      (let [msg (msg-utils/mock-message {:text "import csv" :sender "alice"})]
+        (sut/-processChannelMessage nil msg)
+
+        (is (msg-utils/replied-with? "📤") "Should show import icon")
+        (is (msg-utils/replied-with? "CSV Import Instructions") "Should show instructions")
+        (is (msg-utils/replied-with? "ID,Freezer,Item,Quantity") "Should show CSV format")))))
+
+(deftest test-csv-import-reject-non-csv-file
+  (testing "Import rejects non-CSV files"
+    (msg-utils/with-clean-replies
+      (let [text-bytes (.getBytes "some text content" "UTF-8")
+            msg (msg-utils/mock-message {:document-bytes text-bytes
+                                         :document-filename "data.txt"
+                                         :sender "alice"})]
+        (sut/-processChannelMessage nil msg)
+
+        (is (msg-utils/replied-with? "❌") "Should show error")
+        (is (msg-utils/replied-with? "CSV file") "Should mention CSV file requirement")))))
+
+(deftest test-csv-import-reject-unknown-freezer
+  (testing "Import rejects CSV with unknown freezer names"
+    (msg-utils/with-clean-replies
+      ;; Create only garage freezer
+      (db/add-freezer "garage")
+
+      ;; Try to import CSV with unknown freezer
+      (let [csv-content "ID,Freezer,Item,Quantity,Unit,Date Added,Expiry Date\n,UnknownFreezer,Peas,2,bags,,\n"
+            csv-bytes (.getBytes csv-content "UTF-8")
+            msg (msg-utils/mock-message {:document-bytes csv-bytes
+                                         :document-filename "import.csv"
+                                         :sender "alice"})]
+        (sut/-processChannelMessage nil msg)
+
+        (is (msg-utils/replied-with? "❌") "Should show error")
+        (is (msg-utils/replied-with? "Unknown freezers found in CSV") "Should mention unknown freezers")
+        (is (msg-utils/replied-with? "UnknownFreezer") "Should show the unknown freezer name")))))
+
+(deftest test-csv-import-full-roundtrip
+  (testing "Complete CSV export-modify-import roundtrip"
+    (msg-utils/with-clean-replies
+      ;; 1. Setup: Create freezers and add initial items
+      (let [garage-id (db/add-freezer "garage")
+            kitchen-id (db/add-freezer "kitchen")]
+
+        ;; Add 3 initial items to garage
+        (let [peas-id (db/add-item garage-id "Peas" 2.0 "bags" nil nil)
+              chicken-id (db/add-item garage-id "Chicken Breasts" 4.0 nil nil nil)
+              ice-cream-id (db/add-item garage-id "Ice Cream" 1.5 "tubs" nil nil)]
+
+          ;; Add 1 item to kitchen
+          (db/add-item kitchen-id "Pizza" 3.0 nil nil nil)
+
+          (msg-utils/clear-replies!)
+
+          ;; 2. Export CSV
+          (let [export-msg (msg-utils/mock-message {:text "export csv" :sender "alice"})]
+            (sut/-processChannelMessage nil export-msg)
+
+            (is (msg-utils/replied-with-document?) "Should export document")
+
+            ;; Get the exported CSV
+            (let [original-csv-bytes (msg-utils/get-document-content)
+                  original-csv-string (String. original-csv-bytes "UTF-8")
+                  lines (clojure.string/split-lines original-csv-string)]
+
+              ;; Verify export worked
+              (is (= 5 (count lines)) "Should have header + 4 items")
+
+              (msg-utils/clear-replies!)
+
+              ;; 3. Modify the CSV in key ways:
+              ;;    - Add new item (no ID)
+              ;;    - Zero out ice cream (quantity = 0)
+              ;;    - Modify chicken (change quantity from 4 to 6 and name to "Chicken")
+              (let [header (first lines)
+                    data-lines (rest lines)
+
+                    ;; Parse lines to modify them
+                    ;; Line format: ID,Freezer,Item,Quantity,Unit,Date Added,Expiry Date
+                    peas-line (first (filter #(clojure.string/includes? % "Peas") data-lines))
+                    chicken-line (first (filter #(clojure.string/includes? % "Chicken") data-lines))
+                    ice-cream-line (first (filter #(clojure.string/includes? % "Ice Cream") data-lines))
+                    pizza-line (first (filter #(clojure.string/includes? % "Pizza") data-lines))
+
+                    ;; Modify chicken: change quantity 4 -> 6 and name "Chicken Breasts" -> "Chicken"
+                    modified-chicken-line (-> chicken-line
+                                             (clojure.string/replace "Chicken Breasts" "Chicken")
+                                             (clojure.string/replace #",4," ",6,"))
+
+                    ;; Zero out ice cream for removal
+                    modified-ice-cream-line (clojure.string/replace ice-cream-line #",1\.5," ",0,")
+
+                    ;; Add new item (no ID)
+                    new-item-line ",garage,Frozen Vegetables,5,bags,,"
+
+                    ;; Build modified CSV
+                    modified-csv (clojure.string/join "\n"
+                                   [header
+                                    peas-line          ; Keep peas unchanged
+                                    modified-chicken-line   ; Modified
+                                    modified-ice-cream-line ; Zero'd out
+                                    pizza-line         ; Keep pizza unchanged
+                                    new-item-line])    ; New item
+
+                    modified-csv-bytes (.getBytes modified-csv "UTF-8")]
+
+                ;; 4. Import the modified CSV
+                (let [import-msg (msg-utils/mock-message {:document-bytes modified-csv-bytes
+                                                          :document-filename "freezer-import.csv"
+                                                          :sender "alice"})]
+                  (sut/-processChannelMessage nil import-msg)
+
+                  ;; Verify success message
+                  (is (msg-utils/replied-with? "✅") "Should show success")
+                  (is (msg-utils/replied-with? "Import Complete") "Should show import complete")
+                  (is (msg-utils/replied-with? "1 items added") "Should report 1 item added (new vegetables)")
+                  (is (msg-utils/replied-with? "3 items updated") "Should report 3 items updated (peas, chicken, pizza - all have IDs)")
+                  (is (msg-utils/replied-with? "1 items removed") "Should report 1 item removed (ice cream)")
+
+                  ;; 5. Verify database state
+                  (let [garage-items (db/get-items garage-id)
+                        kitchen-items (db/get-items kitchen-id)]
+
+                    ;; Garage should have 3 items now (peas, chicken, vegetables)
+                    ;; Ice cream should be gone
+                    (is (= 3 (count garage-items)) "Garage should have 3 items")
+
+                    ;; Check peas unchanged
+                    (let [peas (first (filter #(= "Peas" (:item_name %)) garage-items))]
+                      (is (some? peas) "Peas should still exist")
+                      (is (= 2.0 (:quantity peas)) "Peas quantity should be unchanged")
+                      (is (= "bags" (:unit peas)) "Peas unit should be unchanged"))
+
+                    ;; Check chicken was updated
+                    (let [chicken (first (filter #(clojure.string/includes? (:item_name %) "Chicken") garage-items))]
+                      (is (some? chicken) "Chicken should exist")
+                      (is (= "Chicken" (:item_name chicken)) "Chicken name should be updated to 'Chicken'")
+                      (is (= 6.0 (:quantity chicken)) "Chicken quantity should be updated to 6"))
+
+                    ;; Check ice cream was removed (soft delete)
+                    (let [ice-cream (db/get-item-by-id ice-cream-id)]
+                      (is (some? ice-cream) "Ice cream record should still exist")
+                      (is (= 0.0 (:quantity ice-cream)) "Ice cream quantity should be 0")
+                      (is (some? (:removed_date ice-cream)) "Ice cream should have removed_date set"))
+
+                    ;; Check new item was added
+                    (let [vegetables (first (filter #(= "Frozen Vegetables" (:item_name %)) garage-items))]
+                      (is (some? vegetables) "Frozen Vegetables should be added")
+                      (is (= 5.0 (:quantity vegetables)) "Vegetables quantity should be 5")
+                      (is (= "bags" (:unit vegetables)) "Vegetables unit should be 'bags'"))
+
+                    ;; Kitchen should still have 1 item (pizza unchanged)
+                    (is (= 1 (count kitchen-items)) "Kitchen should still have 1 item")
+                    (let [pizza (first kitchen-items)]
+                      (is (= "Pizza" (:item_name pizza)) "Pizza should still exist")
+                      (is (= 3.0 (:quantity pizza)) "Pizza quantity should be unchanged"))))))))))))
+
+(deftest test-csv-import-with-typo-suggestion
+  (testing "Import with freezer typo shows helpful suggestion"
+    (msg-utils/with-clean-replies
+      ;; Create garage freezer
+      (db/add-freezer "garage")
+
+      ;; Try to import CSV with typo "Garag" (missing 'e')
+      (let [csv-content "ID,Freezer,Item,Quantity,Unit,Date Added,Expiry Date\n,Garag,Peas,2,bags,,\n"
+            csv-bytes (.getBytes csv-content "UTF-8")
+            msg (msg-utils/mock-message {:document-bytes csv-bytes
+                                         :document-filename "import.csv"
+                                         :sender "alice"})]
+        (sut/-processChannelMessage nil msg)
+
+        (is (msg-utils/replied-with? "❌") "Should show error")
+        (is (msg-utils/replied-with? "Unknown freezers") "Should mention unknown freezers")
+        (is (msg-utils/replied-with? "Garag") "Should show the typo")
+        (is (msg-utils/replied-with? "did you mean") "Should offer suggestion")
+        (is (msg-utils/replied-with? "garage") "Should suggest 'garage'")))))
