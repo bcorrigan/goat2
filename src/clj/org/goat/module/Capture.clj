@@ -9,23 +9,25 @@
 (defn extract-url
   "If there's a url in the msg, extract it and also return original msg & timestamp too"
   [m]
-  (let [url-pattern #"https?://[^\s]+|www\.[^\s]+"
-        msg (.getText m)
-        found-url (re-find url-pattern msg)]
-    (when found-url
-      {:url found-url
-       :msg msg
-       :chatname (.getChatname m)
-       :chatid (.getChatId m)
-       :sender (.getSender m)
-       :time (System/currentTimeMillis)})))
+  (let [msg (.getText m)]
+    (when (and msg (not (str/blank? msg)))
+      (let [url-pattern #"https?://[^\s]+|www\.[^\s]+"
+            found-url (re-find url-pattern msg)]
+        (when found-url
+          {:url found-url
+           :msg msg
+           :chatname (.getChatname m)
+           :chatid (.getChatId m)
+           :sender (.getSender m)
+           :time (System/currentTimeMillis)})))))
 
 ;; Inspect each message, if it contains a url lets save it with timestamp to a sqlite url db
 ;; along with timestamp, chat it was on etc.
 (defn -processChannelMessage
   [_ m]
   (let [urlinfo  (extract-url m)
-        note (= "note" (str/lower-case (.getModCommand m)))]
+        mod-command (.getModCommand m)
+        note (and mod-command (= "note" (str/lower-case mod-command)))]
     (if urlinfo
       (urls/save-url urlinfo)
       (when note

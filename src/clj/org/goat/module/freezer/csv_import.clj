@@ -272,7 +272,9 @@
   [row-data]
   (try
     (let [{:keys [freezer-id item-name quantity unit expiry-date]} row-data
-          item-id (db/add-item freezer-id item-name quantity unit nil expiry-date)]
+          ;; Apply 1-year default expiry if not specified (same as chat-based adds)
+          final-expiry (or expiry-date (parser/default-expiry-date))
+          item-id (db/add-item freezer-id item-name quantity unit nil final-expiry)]
       (if item-id
         {:success true :item-id item-id}
         {:success false :error "Failed to add item to database"}))

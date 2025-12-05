@@ -546,19 +546,21 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defn -processChannelMessage [_ m]
-  (let [chat-key (keyword (str (.getChatId m)))
-        guess    (str/upper-case (.getText m))
-        command  (str/lower-case (.getModCommand m))
-        trailing (str/lower-case (.getText m))
-        user     (get-user m chat-key)]
-    (case command
-      "stats"   (handle-stats-command m chat-key user)
-      "statsvs" (handle-statsvs-command m chat-key user)
-      "league"  (handle-league-command m chat-key user)
-      "streak"  (handle-streak-command m user)
-      "wordle"  (handle-wordle-command m chat-key user trailing)
-      (when (playing? chat-key)
-        (handle-gameplay m chat-key guess user)))))
+  ;; Skip messages without text (e.g., document uploads)
+  (when (.hasText m)
+    (let [chat-key (keyword (str (.getChatId m)))
+          guess    (str/upper-case (.getText m))
+          command  (str/lower-case (or (.getModCommand m) ""))
+          trailing (str/lower-case (.getText m))
+          user     (get-user m chat-key)]
+      (case command
+        "stats"   (handle-stats-command m chat-key user)
+        "statsvs" (handle-statsvs-command m chat-key user)
+        "league"  (handle-league-command m chat-key user)
+        "streak"  (handle-streak-command m user)
+        "wordle"  (handle-wordle-command m chat-key user trailing)
+        (when (playing? chat-key)
+          (handle-gameplay m chat-key guess user))))))
 
 (defn -processPrivateMessage [this m] (-processChannelMessage this m))
 

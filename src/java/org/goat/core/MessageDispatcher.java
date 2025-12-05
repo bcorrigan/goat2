@@ -66,8 +66,9 @@ public class MessageDispatcher {
             return;
         } not sure how this maps to telegram exactly */
 
-        if(!msg.hasText()) {
-            //we don't do anything interesting with picture messages or anything yet...
+        if(!msg.hasText() && !msg.hasDocument()) {
+            //we don't do anything interesting with picture-only messages yet...
+            //but we DO want to process documents (CSV uploads, etc.)
             return;
         }
 
