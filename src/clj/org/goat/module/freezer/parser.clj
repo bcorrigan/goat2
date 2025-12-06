@@ -334,6 +334,14 @@
         (when (not (str/blank? search-term))
           {:search-term search-term})))))
 
+(defn parse-due-command
+  "Parse a due command like 'due' or 'expiring'.
+   Returns an empty map (just a flag) or nil if not valid."
+  [text]
+  (let [text (str/trim text)]
+    (when (re-matches #"(?i)^(due|expiring)$" text)
+      {})))
+
 (defn parse-export-command
   "Parse an export command like 'export csv' or 'export' or 'download csv'.
    Returns an empty map (just a flag) or nil if not valid."
@@ -422,4 +430,8 @@
 
       ;; Try search command
       (when-let [result (parse-search-command text)]
-        (assoc result :type :search)))))
+        (assoc result :type :search))
+
+      ;; Try due command
+      (when-let [result (parse-due-command text)]
+        (assoc result :type :due)))))

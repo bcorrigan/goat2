@@ -315,6 +315,23 @@
                               (str/lower-case search-term)))
               all-items))))
 
+(defn get-items-expiring-soon
+  "Get all active items with expiry dates in the past or within the next 2 months.
+   Returns items ordered by expiry date (soonest first)."
+  []
+  (let [now (System/currentTimeMillis)
+        two-months-ms (* 60 24 60 60 1000) ; 60 days in milliseconds
+        cutoff-date (+ now two-months-ms)]
+    (sql/query db ["select i.*, f.freezer_name
+                    from items i
+                    join freezers f on i.freezer_id = f.freezer_id
+                    where i.quantity > 0
+                      and i.removed_date is null
+                      and i.expiry_date is not null
+                      and i.expiry_date <= ?
+                    order by i.expiry_date asc"
+                   cutoff-date])))
+
 (defn get-item-age
   "Get the age of an item in days"
   [item-id]

@@ -472,6 +472,34 @@
                             (str/join "\n\n" sections))]
         (msg/reply m result-text)))))
 
+(defn handle-due
+  "Handle showing items that are expiring soon (within 2 months or already expired).
+   Display items ordered by expiry date (soonest first)."
+  [m _parsed]
+  (let [items (db/get-items-expiring-soon)]
+    (if (empty? items)
+      (msg/reply m "✅ No items expiring within the next 2 months!")
+      (let [now (System/currentTimeMillis)
+            ;; Group items by freezer for organized display
+            grouped (group-by :freezer_name items)
+            sections (for [[freezer-name freezer-items] (sort-by key grouped)]
+                      (let [item-lines (for [item freezer-items]
+                                        (let [expiry-ts (:expiry_date item)
+                                              is-expired? (< expiry-ts now)
+                                              days-diff (quot (- expiry-ts now) (* 24 60 60 1000))
+                                              status-emoji (cond
+                                                            is-expired? "🚨"
+                                                            (<= days-diff 7) "⚠️"
+                                                            (<= days-diff 30) "⏰"
+                                                            :else "📅")]
+                                          (str "  " status-emoji " " (format-item-display item))))]
+                        (str "<b>" (str/capitalize freezer-name) " Freezer:</b>\n"
+                             (str/join "\n" item-lines))))
+            result-text (str "📅 <b>Items Expiring Soon:</b>\n\n"
+                            (str/join "\n\n" sections)
+                            "\n\n<i>Showing items expiring within 2 months</i>")]
+        (msg/reply m result-text)))))
+
 (defn handle-export-csv
   "Export all freezer inventory to CSV file"
   [m]
@@ -594,7 +622,8 @@
          "• <code>remove peas</code> - Remove by name\n"
          "• <code>move 3 to garage</code> - Move entire item to another freezer\n"
          "• <code>move 5 of 3 to kitchen</code> - Move partial quantity to another freezer\n"
-         "• <code>find chicken</code> - Search across freezers (also try: <i>fish</i>, <i>dinners</i>, <i>bakery</i>)\n\n"
+         "• <code>find chicken</code> - Search across freezers (also try generic terms: <i>fish</i>, <i>dinners</i>, <i>bakery</i>)\n\n"
+         "• <code>due</code> - Show items expiring within 2 months (ordered by date)\n\n"
          "<b>CSV Import/Export:</b>\n"
          "• <code>export csv</code> - Export all items to CSV file\n"
          "• <code>import csv</code> - Import items from CSV (or just upload a .csv file)\n\n"
@@ -635,6 +664,7 @@
                   :inventory (handle-inventory m parsed)
                   :freezer-management (handle-freezer-management m parsed)
                   :search (handle-search m parsed)
+                  :due (handle-due m parsed)
                   :export-csv (handle-export-csv m)
                   :import-csv (handle-import-csv m)
                   nil)))))))))
