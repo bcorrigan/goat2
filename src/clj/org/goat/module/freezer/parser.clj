@@ -176,7 +176,8 @@
    - 'add 2 bags of peas expires 5/5/2025' (UK date format)
    - 'add 2 bags of peas expires Aug 2026' (month/year)
    - 'add 2 bags of peas to garage expires tomorrow' (natural language)
-   Returns a map with :quantity, :unit, :item-name, :freezer-name, :expiry-date
+   - 'add 3 of 5' or 'add 2 to 5' (add to existing item by ID)
+   Returns a map with :quantity, :unit, :item-name/:item-id, :freezer-name, :expiry-date
    or nil if not a valid add command."
   [text]
   (let [text (str/trim text)
@@ -193,16 +194,20 @@
             [quantity text-after-qty] (extract-quantity text-without-freezer)
             ;; Extract unit
             [unit text-after-unit] (extract-unit text-after-qty)
-            ;; Remove "of" if present
-            item-text (str/trim (str/replace text-after-unit #"^of\s+" ""))
-            ;; What's left is the item name
-            item-name (when (not (str/blank? item-text)) item-text)]
-        (when item-name
+            ;; Remove "of" or "to" if present (both work for adding by ID)
+            item-text (str/trim (str/replace text-after-unit #"^(of|to)\s+" ""))
+            ;; Check if it's an item ID (like #5 or 5)
+            item-id (extract-item-id item-text)
+            ;; If not an ID, what's left is the item name
+            item-name (when (and (not item-id) (not (str/blank? item-text))) item-text)]
+        (when (or item-id item-name)
           (merge
             {:quantity quantity
              :unit unit
-             :item-name item-name
              :freezer-name freezer-name}
+            (if item-id
+              {:item-id item-id}
+              {:item-name item-name})
             (when expiry-ts
               {:expiry-date expiry-ts})))))))
 
@@ -326,6 +331,38 @@
     (when (re-matches #"(?i)^import(\s+(csv|inventory|freezer))?$" text)
       {})))
 
+(defn parse-move-command
+  "Parse a move command like 'move 3 to garage' or 'move 5 of 3 to kitchen'.
+   - 'move 3 to garage' - Move entire item #3 to garage
+   - 'move 5 of 3 to kitchen' - Move 5 portions from item #3 to kitchen
+   Returns a map with :item-id, :freezer-name, and optionally :quantity
+   or nil if not a valid move command."
+  [text]
+  (let [text (str/trim text)
+        ;; Check for move keyword at start
+        move-pattern #"^(?i)move\s+(.+)"
+        match (re-matches move-pattern text)]
+    (when match
+      (let [rest-text (nth match 1)
+            ;; Extract freezer name first (from the end, after "to")
+            [freezer-name text-without-freezer] (extract-freezer-name rest-text)]
+        (when freezer-name
+          ;; Check if there's an "of" keyword to distinguish patterns
+          (if (re-find #"(?i)\s+of\s+" text-without-freezer)
+            ;; Pattern: "move 5 of 3" - quantity then item ID
+            (let [[quantity text-after-qty] (extract-quantity text-without-freezer)
+                  item-text (str/trim (str/replace text-after-qty #"^of\s+" ""))
+                  item-id (extract-item-id item-text)]
+              (when item-id
+                {:item-id item-id
+                 :quantity quantity
+                 :freezer-name freezer-name}))
+            ;; Pattern: "move 3" - just item ID, no quantity
+            (let [item-id (extract-item-id (str/trim text-without-freezer))]
+              (when item-id
+                {:item-id item-id
+                 :freezer-name freezer-name}))))))))
+
 ;; ============================================================================
 ;; Main Parser
 ;; ============================================================================
@@ -355,6 +392,10 @@
       ;; Try remove command
       (when-let [result (parse-remove-command text)]
         (assoc result :type :remove-item))
+
+      ;; Try move command
+      (when-let [result (parse-move-command text)]
+        (assoc result :type :move-item))
 
       ;; Try inventory command
       (when-let [result (parse-inventory-command text)]

@@ -353,5 +353,73 @@
       (println "Error updating item:" (.getMessage e))
       false)))
 
+(defn move-item
+  "Move an entire item to a different freezer.
+   Updates the freezer_id of the item.
+   Returns true on success, false on error."
+  [item-id target-freezer-id]
+  (try
+    (sql/execute! db ["update items
+                       set freezer_id=?
+                       where item_id=?" target-freezer-id item-id])
+    true
+    (catch Exception e
+      (println "Error moving item:" (.getMessage e))
+      false)))
+
+(defn move-item-partial
+  "Move a partial quantity of an item to a different freezer.
+   Creates a new item in the target freezer with the specified quantity.
+   Decrements the original item's quantity.
+   If original item's quantity becomes 0 or less, marks it as removed.
+   Returns {:success true :new-item-id N :remaining-qty M} or {:success false :error \"...\"}"
+  [item-id quantity target-freezer-id]
+  (try
+    (let [item (get-item-by-id item-id)]
+      (cond
+        (not item)
+        {:success false :error "Item not found"}
+
+        (<= (:quantity item) 0)
+        {:success false :error "Item has no quantity to move"}
+
+        (> quantity (:quantity item))
+        {:success false :error (str "Cannot move " quantity " - only " (:quantity item) " available")}
+
+        :else
+        (sql/db-transaction* db (fn [t-con]
+          ;; Create new item in target freezer
+          (sql/execute! t-con
+            ["insert into items (freezer_id, item_name, quantity, unit, added_date, notes, expiry_date)
+              values (?, ?, ?, ?, ?, ?, ?)"
+             target-freezer-id
+             (:item_name item)
+             quantity
+             (:unit item)
+             (System/currentTimeMillis)
+             (:notes item)
+             (:expiry_date item)])
+
+          (let [new-item-id (-> (sql/query t-con ["select last_insert_rowid() as id"])
+                                first
+                                :id)
+                new-qty (- (:quantity item) quantity)]
+
+            ;; Decrement original item
+            (if (<= new-qty 0)
+              ;; Mark as removed if no quantity left
+              (sql/execute! t-con ["update items
+                                    set quantity=0, removed_date=?
+                                    where item_id=?" (System/currentTimeMillis) item-id])
+              ;; Just decrement quantity
+              (sql/execute! t-con ["update items
+                                    set quantity=?
+                                    where item_id=?" new-qty item-id]))
+
+            {:success true :new-item-id new-item-id :remaining-qty new-qty})))))
+    (catch Exception e
+      (println "Error moving partial item:" (.getMessage e))
+      {:success false :error (.getMessage e)})))
+
 ;; Initialize database on load
 (create-db)

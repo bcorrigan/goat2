@@ -135,62 +135,81 @@
 
 (defn handle-add-item
   "Handle adding an item to a freezer.
-   Phase 5: Expiry date support with 1-year default."
+   Supports adding by name (creates new or finds existing) or by ID (adds to specific item)."
   [m parsed]
   (let [user (msg/sender m)
         quantity (:quantity parsed)
         unit (:unit parsed)
         item-name (:item-name parsed)
+        item-id (:item-id parsed)
         expiry-date (or (:expiry-date parsed) (parser/default-expiry-date))
         freezer-name (when (:freezer-name parsed)
                       (parser/normalize-freezer-name (:freezer-name parsed)))]
 
-    ;; Determine which freezer to use
-    (let [freezer (cond
-                    ;; Explicit freezer name provided
-                    freezer-name
-                    (db/get-freezer-by-name freezer-name)
+    (cond
+      ;; Case 1: Adding by item ID
+      item-id
+      (let [item (db/get-item-by-id item-id)]
+        (cond
+          (not item)
+          (msg/reply m (format-error (str "Item #" item-id " not found. Use 'inventory' to see all items.")))
 
-                    ;; Use default freezer
-                    :else
-                    (db/get-default-freezer user))]
+          (:removed_date item)
+          (msg/reply m (format-error (str "Item #" item-id " was previously removed and cannot be added to.")))
 
-      (cond
-        ;; No freezer found and name was specified
-        (and freezer-name (not freezer))
-        (msg/reply m (format-error (str "I can't find a freezer named \"" freezer-name "\". "
-                                       "Use 'list freezers' to see all freezers.")))
+          :else
+          (let [new-qty (db/update-item-quantity item-id quantity)]
+            (msg/reply m (format-success
+                          (str "Added " (format-quantity quantity)
+                               (when (:unit item) (str " " (:unit item)))
+                               " to " (emoji/emojify (:item_name item))
+                               " (ID #" item-id "). "
+                               "You now have " (format-quantity new-qty) ".")))))
 
-        ;; No default freezer
-        (not freezer)
-        (msg/reply m (format-error (str "You don't have a default freezer set. "
-                                     "Set one with 'set default freezer <name>'.")))
+)      ;; Case 2: Adding by item name
+      item-name
+      (let [freezer (cond
+                      freezer-name
+                      (db/get-freezer-by-name freezer-name)
 
-        ;; Add or update the item
-        :else
-        (let [freezer-id (:freezer_id freezer)
-              ;; Check if item already exists
-              existing-item (db/find-matching-item freezer-id item-name unit)]
+                      :else
+                      (db/get-default-freezer user))]
 
-          (if existing-item
-            ;; Update existing item quantity
-            (let [new-qty (db/update-item-quantity (:item_id existing-item) quantity)]
-              (msg/reply m (format-success
-                            (str "Added " (format-quantity quantity)
-                                 (when unit (str " " unit " of"))
-                                 " " item-name
-                                 " to the " (str/capitalize (:freezer_name freezer)) " Freezer. "
-                                 "You now have " (format-quantity new-qty) "."))))
+        (cond
+          (and freezer-name (not freezer))
+          (msg/reply m (format-error (str "I can't find a freezer named \"" freezer-name "\". "
+                                         "Use 'list freezers' to see all freezers.")))
 
-            ;; Create new item
-            (let [item-id (db/add-item freezer-id item-name quantity unit nil expiry-date)]
-              (if item-id
+          (not freezer)
+          (msg/reply m (format-error (str "You don't have a default freezer set. "
+                                       "Set one with 'set default freezer <name>'.")))
+
+          :else
+          (let [freezer-id (:freezer_id freezer)
+                existing-item (db/find-matching-item freezer-id item-name unit)]
+
+            (if existing-item
+              (let [new-qty (db/update-item-quantity (:item_id existing-item) quantity)]
                 (msg/reply m (format-success
                               (str "Added " (format-quantity quantity)
                                    (when unit (str " " unit " of"))
-                                   " " item-name
-                                   " to the " (str/capitalize (:freezer_name freezer)) " Freezer.")))
-                (msg/reply m (format-error "Failed to add item. Please try again."))))))))))
+                                   " " (emoji/emojify item-name)
+                                   " to the " (str/capitalize (:freezer_name freezer)) " Freezer. "
+                                   "You now have " (format-quantity new-qty) "."))))
+
+              (let [item-id (db/add-item freezer-id item-name quantity unit nil expiry-date)]
+                (if item-id
+                  (msg/reply m (format-success
+                                (str "Added " (format-quantity quantity)
+                                     (when unit (str " " unit " of"))
+                                     " " (emoji/emojify item-name)
+                                     " to the " (str/capitalize (:freezer_name freezer)) " Freezer.")))
+                  (msg/reply m (format-error "Failed to add item. Please try again."))))))))
+
+      ;; Case 3: Neither item-id nor item-name provided
+      :else
+      (msg/reply m (format-error "Please specify an item name or ID.")))))
+
 
 (defn handle-remove-item
   "Handle removing an item from a freezer.
@@ -283,6 +302,74 @@
       :else
       (msg/reply m (format-error "Please specify an item ID (e.g., #1) or item name.")))))
 
+(defn handle-move-item
+  "Handle moving an item from one freezer to another.
+   Supports full move (move 3 to garage) and partial move (move 5 of 3 to kitchen)."
+  [m parsed]
+  (let [item-id (:item-id parsed)
+        quantity (:quantity parsed)
+        freezer-name (parser/normalize-freezer-name (:freezer-name parsed))]
+
+    (cond
+      ;; No item ID specified
+      (not item-id)
+      (msg/reply m (format-error "Please specify an item ID (e.g., 'move 3 to garage')."))
+
+      ;; No freezer specified
+      (not freezer-name)
+      (msg/reply m (format-error "Please specify a target freezer (e.g., 'move 3 to garage')."))
+
+      ;; Process the move
+      :else
+      (let [item (db/get-item-by-id item-id)
+            target-freezer (db/get-freezer-by-name freezer-name)]
+        (cond
+          ;; Item not found
+          (not item)
+          (msg/reply m (format-error (str "Item #" item-id " not found. Use 'inventory' to see all items.")))
+
+          ;; Item was previously removed
+          (:removed_date item)
+          (msg/reply m (format-error (str "Item #" item-id " was previously removed and cannot be moved.")))
+
+          ;; Target freezer not found
+          (not target-freezer)
+          (msg/reply m (format-error (str "I can't find a freezer named \"" freezer-name "\". "
+                                         "Use 'list freezers' to see all freezers.")))
+
+          ;; Move entire item (no quantity specified)
+          (not quantity)
+          (let [source-freezer (db/get-freezer-by-id (:freezer_id item))]
+            (if (= (:freezer_id source-freezer) (:freezer_id target-freezer))
+              (msg/reply m (format-error (str "Item #" item-id " is already in the "
+                                             (str/capitalize (:freezer_name target-freezer)) " Freezer.")))
+              (do
+                (db/move-item item-id (:freezer_id target-freezer))
+                (msg/reply m (format-success
+                              (str "Moved " (:item_name item)
+                                   " (ID #" item-id ", "
+                                   (format-quantity (:quantity item))
+                                   (when (:unit item) (str " " (:unit item)))
+                                   ") from " (str/capitalize (:freezer_name source-freezer))
+                                   " to " (str/capitalize (:freezer_name target-freezer)) " Freezer."))))))
+
+          ;; Move partial quantity
+          :else
+          (let [source-freezer (db/get-freezer-by-id (:freezer_id item))
+                result (db/move-item-partial item-id quantity (:freezer_id target-freezer))]
+            (if (:success result)
+              (msg/reply m (format-success
+                            (str "Moved " (format-quantity quantity)
+                                 (when (:unit item) (str " " (:unit item)))
+                                 " of " (:item_name item)
+                                 " from " (str/capitalize (:freezer_name source-freezer))
+                                 " to " (str/capitalize (:freezer_name target-freezer)) " Freezer. "
+                                 (if (> (:remaining-qty result) 0)
+                                   (str (format-quantity (:remaining-qty result)) " remaining in "
+                                        (str/capitalize (:freezer_name source-freezer)) ".")
+                                   (str "All moved from " (str/capitalize (:freezer_name source-freezer)) ".")))))
+              (msg/reply m (format-error (:error result))))))))))
+
 (defn handle-inventory
   "Handle inventory display.
    Phase 4: Always shows all freezers."
@@ -359,19 +446,23 @@
       (msg/reply m (format-error "Unknown freezer management command.")))))
 
 (defn handle-search
-  "Handle search across all freezers"
+  "Handle search across all freezers.
+   Uses the same emojified format as inventory."
   [m parsed]
   (let [search-term (:search-term parsed)
         results (db/search-items search-term)]
     (if (empty? results)
       (msg/reply m (str "🔍 No items found matching \"" search-term "\"."))
-      (let [lines (for [item results]
-                    (str "• #" (:item_id item) ": "
-                         (:item_name item)
-                         (when (:unit item) (str " (" (:unit item) ")"))
-                         " in <b>" (str/capitalize (:freezer_name item)) "</b>"
-                         " - " (format-quantity (:quantity item)) "x"))]
-        (msg/reply m (str "🔍 <b>Found \"" search-term "\":</b>\n" (str/join "\n" lines)))))))
+      (let [;; Group results by freezer for organized display
+            grouped (group-by :freezer_name results)
+            sections (for [[freezer-name items] (sort-by key grouped)]
+                      (let [item-lines (for [item items]
+                                        (str "  " (format-item-display item)))]
+                        (str "<b>" (str/capitalize freezer-name) " Freezer:</b>\n"
+                             (str/join "\n" item-lines))))
+            result-text (str "🔍 <b>Found \"" search-term "\":</b>\n\n"
+                            (str/join "\n\n" sections))]
+        (msg/reply m result-text)))))
 
 (defn handle-export-csv
   "Export all freezer inventory to CSV file"
@@ -489,9 +580,12 @@
          "• <code>add 2 bags of peas</code> - Add items\n"
          "• <code>add 3 bags of peas to garage</code> - Add to specific freezer\n"
          "• <code>add 5 portions of stew expires 3/5/26</code> - Add with expiry date (UK format)\n"
+         "• <code>add 3 of 5</code> or <code>add 3 to 5</code> - Add to existing item by ID\n"
          "• <code>inventory</code> - See all freezers\n"
          "• <code>take 1 of 2</code> or <code>take 1 of #2</code> - Remove by ID\n"
          "• <code>remove peas</code> - Remove by name\n"
+         "• <code>move 3 to garage</code> - Move entire item to another freezer\n"
+         "• <code>move 5 of 3 to kitchen</code> - Move partial quantity to another freezer\n"
          "• <code>find chicken</code> - Search across freezers\n\n"
          "<b>CSV Import/Export:</b>\n"
          "• <code>export csv</code> - Export all items to CSV file\n"
@@ -515,37 +609,24 @@
 
   (defn process-channel-message [m]
     (let [command (msg/command m)
-          ;; Use mod-text only if command is :freezer, otherwise use full text
           text (if (= :freezer command)
                  (msg/mod-text m)
                  (msg/text m))]
 
-      ;; Check for help command first
       (if (= :freezer command)
         (handle-help m)
-
-        ;; Check for document upload (auto-import if CSV)
         (if (msg/has-document? m)
           (handle-import-csv m)
-
-          ;; Try to parse natural language
           (when text
             (let [parsed (parser/parse-command text)]
               (when parsed
                 (case (:type parsed)
                   :add-item (handle-add-item m parsed)
-
                   :remove-item (handle-remove-item m parsed)
-
+                  :move-item (handle-move-item m parsed)
                   :inventory (handle-inventory m parsed)
-
                   :freezer-management (handle-freezer-management m parsed)
-
                   :search (handle-search m parsed)
-
                   :export-csv (handle-export-csv m)
-
                   :import-csv (handle-import-csv m)
-
-                  ;; Default
                   nil)))))))))
