@@ -103,6 +103,86 @@
       (is (= :remove-item (:action result))))))
 
 ;; ============================================================================
+;; Date Comparison Tests (Month-Level Precision)
+;; ============================================================================
+
+(deftest test-same-month-year-identical-dates
+  (testing "Same date should be equal"
+    (let [date1 (* (.toEpochDay (java.time.LocalDate/of 2025 12 15)) 24 60 60 1000)
+          date2 (* (.toEpochDay (java.time.LocalDate/of 2025 12 15)) 24 60 60 1000)]
+      (is (csv-import/same-month-year? date1 date2)))))
+
+(deftest test-same-month-year-different-days-same-month
+  (testing "Different days in same month should be equal"
+    (let [date1 (* (.toEpochDay (java.time.LocalDate/of 2025 12 1)) 24 60 60 1000)
+          date2 (* (.toEpochDay (java.time.LocalDate/of 2025 12 31)) 24 60 60 1000)]
+      (is (csv-import/same-month-year? date1 date2)))))
+
+(deftest test-same-month-year-different-months
+  (testing "Different months should not be equal"
+    (let [date1 (* (.toEpochDay (java.time.LocalDate/of 2025 11 15)) 24 60 60 1000)
+          date2 (* (.toEpochDay (java.time.LocalDate/of 2025 12 15)) 24 60 60 1000)]
+      (is (not (csv-import/same-month-year? date1 date2))))))
+
+(deftest test-same-month-year-different-years
+  (testing "Different years should not be equal"
+    (let [date1 (* (.toEpochDay (java.time.LocalDate/of 2024 12 15)) 24 60 60 1000)
+          date2 (* (.toEpochDay (java.time.LocalDate/of 2025 12 15)) 24 60 60 1000)]
+      (is (not (csv-import/same-month-year? date1 date2))))))
+
+(deftest test-same-month-year-both-nil
+  (testing "Both nil dates should be equal"
+    (is (csv-import/same-month-year? nil nil))))
+
+(deftest test-same-month-year-one-nil
+  (testing "One nil date should not be equal to a timestamp"
+    (let [date1 (* (.toEpochDay (java.time.LocalDate/of 2025 12 15)) 24 60 60 1000)]
+      (is (not (csv-import/same-month-year? date1 nil)))
+      (is (not (csv-import/same-month-year? nil date1))))))
+
+(deftest test-item-data-changed-expiry-same-month
+  (testing "Items with expiry dates in same month should not be detected as changed"
+    (let [db-item {:quantity 2.0 :unit "bags" :item_name "Peas"
+                   :expiry_date (* (.toEpochDay (java.time.LocalDate/of 2025 12 1)) 24 60 60 1000)}
+          csv-data {:quantity 2.0 :unit "bags" :item-name "Peas"
+                    :expiry-date (* (.toEpochDay (java.time.LocalDate/of 2025 12 31)) 24 60 60 1000)}]
+      (is (not (csv-import/item-data-changed? db-item csv-data))))))
+
+(deftest test-item-data-changed-expiry-different-month
+  (testing "Items with expiry dates in different months should be detected as changed"
+    (let [db-item {:quantity 2.0 :unit "bags" :item_name "Peas"
+                   :expiry_date (* (.toEpochDay (java.time.LocalDate/of 2025 11 15)) 24 60 60 1000)}
+          csv-data {:quantity 2.0 :unit "bags" :item-name "Peas"
+                    :expiry-date (* (.toEpochDay (java.time.LocalDate/of 2025 12 15)) 24 60 60 1000)}]
+      (is (csv-import/item-data-changed? db-item csv-data)))))
+
+(deftest test-item-data-changed-quantity
+  (testing "Items with different quantities should be detected as changed"
+    (let [db-item {:quantity 2.0 :unit "bags" :item_name "Peas" :expiry_date nil}
+          csv-data {:quantity 3.0 :unit "bags" :item-name "Peas" :expiry-date nil}]
+      (is (csv-import/item-data-changed? db-item csv-data)))))
+
+(deftest test-item-data-changed-unit
+  (testing "Items with different units should be detected as changed"
+    (let [db-item {:quantity 2.0 :unit "bags" :item_name "Peas" :expiry_date nil}
+          csv-data {:quantity 2.0 :unit "boxes" :item-name "Peas" :expiry-date nil}]
+      (is (csv-import/item-data-changed? db-item csv-data)))))
+
+(deftest test-item-data-changed-name
+  (testing "Items with different names should be detected as changed"
+    (let [db-item {:quantity 2.0 :unit "bags" :item_name "Peas" :expiry_date nil}
+          csv-data {:quantity 2.0 :unit "bags" :item-name "Carrots" :expiry-date nil}]
+      (is (csv-import/item-data-changed? db-item csv-data)))))
+
+(deftest test-item-data-changed-no-changes
+  (testing "Items with no changes should not be detected as changed"
+    (let [db-item {:quantity 2.0 :unit "bags" :item_name "Peas"
+                   :expiry_date (* (.toEpochDay (java.time.LocalDate/of 2025 12 15)) 24 60 60 1000)}
+          csv-data {:quantity 2.0 :unit "bags" :item-name "Peas"
+                    :expiry-date (* (.toEpochDay (java.time.LocalDate/of 2025 12 20)) 24 60 60 1000)}]
+      (is (not (csv-import/item-data-changed? db-item csv-data))))))
+
+;; ============================================================================
 ;; Integration Tests
 ;; ============================================================================
 

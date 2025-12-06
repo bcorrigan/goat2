@@ -227,10 +227,10 @@
                 ;; Check date formats
                 (cond
                   (and (not (str/blank? date-added-str)) (nil? date-added))
-                  {:valid false :error (str "Invalid date format \"" date-added-str "\" - expected DD/MM/YYYY")}
+                  {:valid false :error (str "Invalid date \"" date-added-str "\" (date does not exist or wrong format - use DD/MM/YYYY)")}
 
                   (and (not (str/blank? expiry-str)) (nil? expiry-date))
-                  {:valid false :error (str "Invalid date format \"" expiry-str "\" - expected DD/MM/YYYY")}
+                  {:valid false :error (str "Invalid date \"" expiry-str "\" (date does not exist or wrong format - use DD/MM/YYYY)")}
 
                   :else
                   {:valid true
@@ -244,25 +244,78 @@
                           :expiry-date expiry-date}})))))))))
 
 ;; ============================================================================
+;; Date Comparison Helpers
+;; ============================================================================
+
+(defn same-month-year?
+  "Check if two timestamps represent dates in the same month and year.
+   For freezer inventory, we only care about month-level precision.
+   Returns true if both dates are in the same month, false otherwise.
+   Handles nil values - returns true only if both are nil."
+  [timestamp1 timestamp2]
+  (cond
+    ;; Both nil - consider them the same
+    (and (nil? timestamp1) (nil? timestamp2))
+    true
+
+    ;; One is nil, other isn't - different
+    (or (nil? timestamp1) (nil? timestamp2))
+    false
+
+    ;; Both have values - compare year and month
+    :else
+    (let [date1 (java.time.LocalDate/ofEpochDay (quot timestamp1 (* 24 60 60 1000)))
+          date2 (java.time.LocalDate/ofEpochDay (quot timestamp2 (* 24 60 60 1000)))]
+      (and (= (.getYear date1) (.getYear date2))
+           (= (.getMonthValue date1) (.getMonthValue date2))))))
+
+(defn item-data-changed?
+  "Check if item data has actually changed between database and CSV row.
+   Uses month-level precision for dates (ignoring day/time).
+   Returns true if any field differs, false if all are the same."
+  [db-item csv-data]
+  (let [db-qty (:quantity db-item)
+        csv-qty (:quantity csv-data)
+        db-unit (:unit db-item)
+        csv-unit (:unit csv-data)
+        db-name (:item_name db-item)
+        csv-name (:item-name csv-data)
+        db-expiry (:expiry_date db-item)
+        csv-expiry (:expiry-date csv-data)]
+    (or
+     ;; Quantity changed
+     (not= db-qty csv-qty)
+     ;; Unit changed (accounting for nil/"" equivalence)
+     (not= (or db-unit "") (or csv-unit ""))
+     ;; Name changed
+     (not= db-name csv-name)
+     ;; Expiry month/year changed
+     (not (same-month-year? db-expiry csv-expiry)))))
+
+;; ============================================================================
 ;; Import Logic & Row Processing
 ;; ============================================================================
 
 (defn classify-row
-  "Classify a row as :new-item, :update-item, or :remove-item.
-   Returns {:action :new-item/:update-item/:remove-item :data {...}}"
+  "Classify a row as :new-item, :update-item, :no-change, or :remove-item.
+   Returns {:action :new-item/:update-item/:no-change/:remove-item :data {...}}"
   [validated-data]
-  (let [{:keys [item-id quantity]} validated-data]
+  (let [{:keys [item-id quantity]} validated-data
+        db-item (when item-id (db/get-item-by-id item-id))]
     (cond
       ;; No ID or ID doesn't exist -> new item
-      (or (nil? item-id)
-          (nil? (db/get-item-by-id item-id)))
+      (or (nil? item-id) (nil? db-item))
       {:action :new-item :data validated-data}
 
       ;; Quantity is 0 -> remove item
       (zero? quantity)
       {:action :remove-item :data validated-data}
 
-      ;; Otherwise -> update item
+      ;; Item exists but data hasn't changed -> no action needed
+      (not (item-data-changed? db-item validated-data))
+      {:action :no-change :data validated-data}
+
+      ;; Item exists and data has changed -> update
       :else
       {:action :update-item :data validated-data})))
 
@@ -325,7 +378,8 @@
      (case action
        :new-item (process-new-item data)
        :update-item (process-update-item data)
-       :remove-item (process-remove-item data)))))
+       :remove-item (process-remove-item data)
+       :no-change {:success true}))))
 
 ;; ============================================================================
 ;; Batch Import with Transaction
@@ -399,11 +453,13 @@
                         ;; Success - collect statistics
                         (let [added (count (filter #(= :new-item (:action %)) results))
                               updated (count (filter #(= :update-item (:action %)) results))
-                              removed (count (filter #(= :remove-item (:action %)) results))]
+                              removed (count (filter #(= :remove-item (:action %)) results))
+                              unchanged (count (filter #(= :no-change (:action %)) results))]
                           {:success true
                            :stats {:total-rows (count rows)
                                   :added added
                                   :updated updated
+                                  :unchanged unchanged
                                   :removed removed}})))))))))))
     (catch Exception e
       {:success false :error (str "Error processing CSV: " (.getMessage e))})))
