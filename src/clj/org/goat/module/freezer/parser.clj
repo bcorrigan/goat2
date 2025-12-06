@@ -54,11 +54,22 @@
                     last-day (.atEndOfMonth year-month)]
                 (* (.toEpochDay last-day) 24 60 60 1000))))
 
-          ;; Numeric format: "10/2027" or "10-2027" (month/year only)
+          ;; Numeric format: "10/2027" or "10-2027" (month/year with 4-digit year)
           (re-matches #"(\d{1,2})[/-](\d{4})" date-str)
           (let [match (re-matches #"(\d{1,2})[/-](\d{4})" date-str)
                 month (Integer/parseInt (nth match 1))
                 year (Integer/parseInt (nth match 2))]
+            (when (<= 1 month 12)
+              (let [year-month (YearMonth/of year month)
+                    last-day (.atEndOfMonth year-month)]
+                (* (.toEpochDay last-day) 24 60 60 1000))))
+
+          ;; Numeric format: "2/26" or "2-26" (mm/yy - assume 20xx century)
+          (re-matches #"(\d{1,2})[/-](\d{2})" date-str)
+          (let [match (re-matches #"(\d{1,2})[/-](\d{2})" date-str)
+                month (Integer/parseInt (nth match 1))
+                year-suffix (Integer/parseInt (nth match 2))
+                year (+ 2000 year-suffix)]
             (when (<= 1 month 12)
               (let [year-month (YearMonth/of year month)
                     last-day (.atEndOfMonth year-month)]
@@ -73,7 +84,9 @@
    - 'expires 5/5/2025' (UK date format DD/MM/YYYY)
    - 'expires Aug 2026' (month/year)
    - 'expires tomorrow' (natural language)
-   Returns [expiry-timestamp remaining-text] or [nil text] if not found."
+   Returns [expiry-timestamp remaining-text] if parsed successfully,
+   [:parse-error expiry-str text] if 'expires' found but date unparseable,
+   or [nil text] if 'expires' keyword not found."
   [text]
   (let [text (str/trim text)
         ;; Match "expires <date>" at the end
@@ -85,7 +98,7 @@
             expiry-ts (parse-expiry-date expiry-str)]
         (if expiry-ts
           [expiry-ts remaining-text]
-          [nil text])) ; Invalid date format, return original
+          [:parse-error expiry-str text])) ; Invalid date format, return error indicator
       [nil text])))
 
 (defn default-expiry-date
@@ -187,7 +200,11 @@
     (when match
       (let [rest-text (nth match 2)
             ;; Extract expiry first (before freezer name since both are at the end)
-            [expiry-ts text-without-expiry] (extract-expiry rest-text)
+            [expiry-result text-without-expiry-or-error expiry-str-on-error] (extract-expiry rest-text)
+            ;; Check if there was a parse error
+            expiry-parse-error? (= expiry-result :parse-error)
+            expiry-ts (when-not expiry-parse-error? expiry-result)
+            text-without-expiry (if expiry-parse-error? expiry-str-on-error text-without-expiry-or-error)
             ;; Extract freezer name (from the end)
             [freezer-name text-without-freezer] (extract-freezer-name text-without-expiry)
             ;; Extract quantity
@@ -209,7 +226,9 @@
               {:item-id item-id}
               {:item-name item-name})
             (when expiry-ts
-              {:expiry-date expiry-ts})))))))
+              {:expiry-date expiry-ts})
+            (when expiry-parse-error?
+              {:expiry-error text-without-expiry-or-error})))))))
 
 (defn parse-remove-command
   "Parse a remove command like 'take 2 of #1' or 'remove chicken from garage'.

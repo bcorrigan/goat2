@@ -142,11 +142,28 @@
         unit (:unit parsed)
         item-name (:item-name parsed)
         item-id (:item-id parsed)
+        expiry-error (:expiry-error parsed)
         expiry-date (or (:expiry-date parsed) (parser/default-expiry-date))
         freezer-name (when (:freezer-name parsed)
                       (parser/normalize-freezer-name (:freezer-name parsed)))]
 
     (cond
+      ;; Check for expiry parse error first
+      expiry-error
+      (msg/reply m (format-error
+                    (str "I couldn't understand the expiry date \"" expiry-error "\". "
+                         "Please use one of these formats:\n"
+                         "  • UK date: 5/5/2025 (DD/MM/YYYY)\n"
+                         "  • Month/Year: Aug 2026 or 2/26 (mm/yy)\n"
+                         "  • Natural language: tomorrow, next week, in 3 months")))
+
+      ;; Defensive check: prevent items with "expires" in the name
+      (and item-name (re-find #"(?i)expires?" item-name))
+      (msg/reply m (format-error
+                    (str "Item names cannot contain the word 'expires'. "
+                         "Did you mean to specify an expiry date? "
+                         "Use format: add <item> expires <date>")))
+
       ;; Case 1: Adding by item ID
       item-id
       (let [item (db/get-item-by-id item-id)]
@@ -164,9 +181,9 @@
                                (when (:unit item) (str " " (:unit item)))
                                " to " (emoji/emojify (:item_name item))
                                " (ID #" item-id "). "
-                               "You now have " (format-quantity new-qty) ".")))))
+                               "You now have " (format-quantity new-qty) "."))))))
 
-)      ;; Case 2: Adding by item name
+      ;; Case 2: Adding by item name
       item-name
       (let [freezer (cond
                       freezer-name
@@ -186,25 +203,16 @@
 
           :else
           (let [freezer-id (:freezer_id freezer)
-                existing-item (db/find-matching-item freezer-id item-name unit)]
-
-            (if existing-item
-              (let [new-qty (db/update-item-quantity (:item_id existing-item) quantity)]
-                (msg/reply m (format-success
-                              (str "Added " (format-quantity quantity)
-                                   (when unit (str " " unit " of"))
-                                   " " (emoji/emojify item-name)
-                                   " to the " (str/capitalize (:freezer_name freezer)) " Freezer. "
-                                   "You now have " (format-quantity new-qty) "."))))
-
-              (let [item-id (db/add-item freezer-id item-name quantity unit nil expiry-date)]
-                (if item-id
-                  (msg/reply m (format-success
-                                (str "Added " (format-quantity quantity)
-                                     (when unit (str " " unit " of"))
-                                     " " (emoji/emojify item-name)
-                                     " to the " (str/capitalize (:freezer_name freezer)) " Freezer.")))
-                  (msg/reply m (format-error "Failed to add item. Please try again."))))))))
+                ;; Always create a new item when adding by name
+                ;; (only add to existing item when using explicit ID like "add 1 to 2")
+                item-id (db/add-item freezer-id item-name quantity unit nil expiry-date)]
+            (if item-id
+              (msg/reply m (format-success
+                            (str "Added " (format-quantity quantity)
+                                 (when unit (str " " unit " of"))
+                                 " " (emoji/emojify item-name)
+                                 " to the " (str/capitalize (:freezer_name freezer)) " Freezer.")))
+              (msg/reply m (format-error "Failed to add item. Please try again."))))))
 
       ;; Case 3: Neither item-id nor item-name provided
       :else
