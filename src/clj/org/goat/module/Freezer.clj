@@ -594,7 +594,7 @@
          "• <code>remove peas</code> - Remove by name\n"
          "• <code>move 3 to garage</code> - Move entire item to another freezer\n"
          "• <code>move 5 of 3 to kitchen</code> - Move partial quantity to another freezer\n"
-         "• <code>find chicken</code> - Search across freezers\n\n"
+         "• <code>find chicken</code> - Search across freezers (also try: <i>fish</i>, <i>dinners</i>, <i>bakery</i>)\n\n"
          "<b>CSV Import/Export:</b>\n"
          "• <code>export csv</code> - Export all items to CSV file\n"
          "• <code>import csv</code> - Import items from CSV (or just upload a .csv file)\n\n"

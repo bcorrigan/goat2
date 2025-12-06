@@ -1,7 +1,8 @@
 (ns org.goat.db.freezer
   (:require [clojure.java.jdbc :refer :all :as sql]
             [clojure.string :as str]
-            [org.goat.db.util :as util]))
+            [org.goat.db.util :as util]
+            [org.goat.module.freezer.categories :as categories]))
 
 (def db
   {:classname "org.sqlite.JDBC"
@@ -273,17 +274,46 @@
                                where item_id=?" new-qty item-id])
             new-qty))))))
 
+(defn- word-boundary-match?
+  "Check if term matches as a complete word in text (case-insensitive).
+   Uses word boundary logic: term must be at word boundaries (spaces, start, end)."
+  [text term]
+  (let [text-lower (str/lower-case text)
+        term-lower (str/lower-case term)
+        ;; Create regex pattern with word boundaries (\b)
+        pattern (re-pattern (str "(?i)\\b" (java.util.regex.Pattern/quote term-lower) "\\b"))]
+    (boolean (re-find pattern text-lower))))
+
 (defn search-items
   "Search for active (non-removed) items across all freezers (global).
+   Supports category expansion (e.g., 'fish' expands to all fish types).
+   When searching for category aliases, uses word boundary matching to avoid
+   partial matches (e.g., 'sole' won't match 'solero').
    Returns items with their freezer information."
   [search-term]
-  (sql/query db ["select i.*, f.freezer_name
-                  from items i
-                  join freezers f on i.freezer_id = f.freezer_id
-                  where i.item_name like ? collate NOCASE
-                    and i.quantity > 0 and i.removed_date is null
-                  order by f.freezer_name, i.item_id"
-                 (str "%" search-term "%")]))
+  (let [;; Check if this is a category search and expand if needed
+        is-category? (categories/is-category? search-term)
+        search-terms (categories/expand-category search-term)
+
+        ;; Get all non-removed items
+        all-items (sql/query db ["select i.*, f.freezer_name
+                                  from items i
+                                  join freezers f on i.freezer_id = f.freezer_id
+                                  where i.quantity > 0 and i.removed_date is null
+                                  order by f.freezer_name, i.item_id"])]
+
+    ;; Filter items based on search terms
+    (if is-category?
+      ;; For category searches, use word boundary matching
+      (filter (fn [item]
+                (some #(word-boundary-match? (:item_name item) %)
+                      search-terms))
+              all-items)
+      ;; For regular searches, use substring matching (original behavior)
+      (filter (fn [item]
+                (str/includes? (str/lower-case (:item_name item))
+                              (str/lower-case search-term)))
+              all-items))))
 
 (defn get-item-age
   "Get the age of an item in days"
