@@ -117,7 +117,7 @@ public class Goat {
     private void loadDefaultModules(ModuleController modController) {
         Class<?>[] defaultModules = {
             org.goat.module.WordGame.class,
-            org.goat.module.Remind.class,
+            //org.goat.module.Remind.class,
             org.goat.module.CountDown.class,
             org.goat.module.Calc.class,
             org.goat.module.More.class,
@@ -141,6 +141,7 @@ public class Goat {
 			modController.loadInAllChannels("Capture");
 			modController.loadInAllChannels("WordStats");
 			modController.loadInAllChannels("Freezer");
+			modController.loadInAllChannels("Remind");
             /*ModuleCommands moduleCommands = (ModuleCommands) modController.getLoaded("ModuleCommands");
             moduleCommands.modControl = modController;
             moduleCommands.inAllChannels = true;*/
