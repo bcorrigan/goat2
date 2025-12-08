@@ -328,3 +328,164 @@
 
       ;; Next should be the earliest (task 1)
       (is (= "task 1" (:message (sut/get-next-pending-reminder)))))))
+
+;; ============================================================================
+;; Recurring Reminders Tests
+;; ============================================================================
+
+(deftest test-add-recurring-reminder
+  (testing "Adding a recurring reminder with pattern"
+    (let [now (System/currentTimeMillis)
+          pattern "{:type :interval :seconds 5}"
+          reminder-id (sut/add-reminder!
+                        {:chat-id 123
+                         :username "alice"
+                         :target-user "alice"
+                         :message "recurring task"
+                         :due-time (+ now 5000)
+                         :recurrence-type "interval"
+                         :recurrence-pattern pattern})]
+      (is (some? reminder-id))
+
+      (let [reminder (sut/get-reminder-by-id reminder-id)]
+        (is (= "interval" (:recurrence_type reminder)))
+        (is (= pattern (:recurrence_pattern reminder)))
+        (is (nil? (:parent_reminder_id reminder)))
+        (is (nil? (:recurrence_end_time reminder)))))))
+
+(deftest test-add-recurring-instance
+  (testing "Adding an instance of a recurring reminder"
+    (let [now (System/currentTimeMillis)
+          pattern "{:type :interval :seconds 5}"
+          parent-id (sut/add-reminder!
+                      {:chat-id 123
+                       :username "alice"
+                       :target-user "alice"
+                       :message "recurring task"
+                       :due-time (+ now 5000)
+                       :recurrence-type "interval"
+                       :recurrence-pattern pattern})
+          instance-id (sut/add-reminder!
+                        {:chat-id 123
+                         :username "alice"
+                         :target-user "alice"
+                         :message "recurring task"
+                         :due-time (+ now 10000)
+                         :recurrence-type "interval"
+                         :recurrence-pattern pattern
+                         :parent-reminder-id parent-id})]
+
+      (let [instance (sut/get-reminder-by-id instance-id)]
+        (is (= parent-id (:parent_reminder_id instance)))
+        (is (= "interval" (:recurrence_type instance)))))))
+
+(deftest test-get-parent-reminder
+  (testing "Getting parent reminder from instance"
+    (let [now (System/currentTimeMillis)
+          pattern "{:type :interval :seconds 5}"
+          parent-id (sut/add-reminder!
+                      {:chat-id 123
+                       :username "alice"
+                       :target-user "alice"
+                       :message "recurring task"
+                       :due-time (+ now 5000)
+                       :recurrence-type "interval"
+                       :recurrence-pattern pattern})
+          instance-id (sut/add-reminder!
+                        {:chat-id 123
+                         :username "alice"
+                         :target-user "alice"
+                         :message "recurring task"
+                         :due-time (+ now 10000)
+                         :recurrence-type "interval"
+                         :recurrence-pattern pattern
+                         :parent-reminder-id parent-id})]
+
+      ;; Get parent from instance should return parent
+      (let [parent (sut/get-parent-reminder instance-id)]
+        (is (= parent-id (:reminder_id parent)))
+        (is (= "recurring task" (:message parent))))
+
+      ;; Get parent from parent should return itself
+      (let [parent (sut/get-parent-reminder parent-id)]
+        (is (= parent-id (:reminder_id parent)))))))
+
+(deftest test-get-recurring-reminders
+  (testing "Getting all recurring reminders"
+    (let [now (System/currentTimeMillis)
+          pattern "{:type :interval :seconds 5}"]
+
+      ;; Add a regular reminder
+      (sut/add-reminder! {:chat-id 123 :username "alice" :target-user "alice"
+                          :message "regular" :due-time (+ now 3600000)})
+
+      ;; Add recurring reminders
+      (let [r1 (sut/add-reminder!
+                 {:chat-id 123 :username "alice" :target-user "alice"
+                  :message "recurring 1" :due-time (+ now 5000)
+                  :recurrence-type "interval" :recurrence-pattern pattern})
+            r2 (sut/add-reminder!
+                 {:chat-id 123 :username "bob" :target-user "bob"
+                  :message "recurring 2" :due-time (+ now 10000)
+                  :recurrence-type "weekly" :recurrence-pattern "{:type :weekly}"})]
+
+        ;; Add an instance (should not appear in recurring list)
+        (sut/add-reminder!
+          {:chat-id 123 :username "alice" :target-user "alice"
+           :message "recurring 1" :due-time (+ now 10000)
+           :recurrence-type "interval" :recurrence-pattern pattern
+           :parent-reminder-id r1})
+
+        ;; Get recurring reminders
+        (let [recurring (sut/get-recurring-reminders)]
+          (is (= 2 (count recurring)))
+          (is (= #{"recurring 1" "recurring 2"} (set (map :message recurring))))
+          (is (every? some? (map :recurrence_type recurring)))
+          (is (every? nil? (map :parent_reminder_id recurring))))))))
+
+(deftest test-cancel-recurring-and-instances
+  (testing "Cancelling a recurring reminder cancels all instances"
+    (let [now (System/currentTimeMillis)
+          pattern "{:type :interval :seconds 5}"
+          parent-id (sut/add-reminder!
+                      {:chat-id 123
+                       :username "alice"
+                       :target-user "alice"
+                       :message "recurring task"
+                       :due-time (+ now 5000)
+                       :recurrence-type "interval"
+                       :recurrence-pattern pattern})
+          inst1-id (sut/add-reminder!
+                     {:chat-id 123
+                      :username "alice"
+                      :target-user "alice"
+                      :message "recurring task"
+                      :due-time (+ now 10000)
+                      :recurrence-type "interval"
+                      :recurrence-pattern pattern
+                      :parent-reminder-id parent-id})
+          inst2-id (sut/add-reminder!
+                     {:chat-id 123
+                      :username "alice"
+                      :target-user "alice"
+                      :message "recurring task"
+                      :due-time (+ now 15000)
+                      :recurrence-type "interval"
+                      :recurrence-pattern pattern
+                      :parent-reminder-id parent-id})]
+
+      ;; All should be pending
+      (is (= "pending" (:status (sut/get-reminder-by-id parent-id))))
+      (is (= "pending" (:status (sut/get-reminder-by-id inst1-id))))
+      (is (= "pending" (:status (sut/get-reminder-by-id inst2-id))))
+
+      ;; Cancel the recurring reminder
+      (sut/cancel-recurring-and-instances! parent-id)
+
+      ;; All should be cancelled
+      (is (= "cancelled" (:status (sut/get-reminder-by-id parent-id))))
+      (is (= "cancelled" (:status (sut/get-reminder-by-id inst1-id))))
+      (is (= "cancelled" (:status (sut/get-reminder-by-id inst2-id))))
+
+      ;; None should appear in pending
+      (is (empty? (sut/get-pending-reminders))))))
