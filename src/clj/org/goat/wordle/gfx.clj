@@ -59,42 +59,42 @@
 
 (defn draw-board-gr
   "Draws the board letter by letter according to the chat's guesses array.
+   guesses-classified is now a vector of [guess, classification] pairs to preserve duplicates.
    If remaining-words-counts is provided, displays the count next to each guess row."
   [g2d width height guesses-classified size max-guesses remaining-words-counts]
-  (let [guesses (vec (keys guesses-classified))]
-    ;; Background
-    (gfx/background! g2d width height 17 17 18)
+  ;; Background
+  (gfx/background! g2d width height 17 17 18)
 
-    ;; Draw revealed letters
-    (doseq [i (range (count guesses))
-            j (range (count (get guesses i)))]
-      (let [guess (get guesses i)
-            letter (nth (seq guess) j)
-            sym (get (get guesses-classified guess) j)
-            y (+ letter-border (* letter-size i))
-            x (+ letter-border (* letter-size j))]
-        (draw-letter g2d letter x y sym)))
+  ;; Draw revealed letters
+  (doseq [i (range (count guesses-classified))
+          j (range size)]
+    (let [[guess classification] (nth guesses-classified i)
+          letter (nth (seq guess) j)
+          sym (get classification j)
+          y (+ letter-border (* letter-size i))
+          x (+ letter-border (* letter-size j))]
+      (draw-letter g2d letter x y sym)))
 
-    ;; Draw remaining words count for each guess (if provided)
-    (when (and remaining-words-counts (seq remaining-words-counts))
-      (doseq [i (range (count guesses))]
-        (when (< i (count remaining-words-counts))
-          (let [count-val (nth remaining-words-counts i)
-                ;; Position: right of the board, vertically centered with the guess row
-                x (+ (* size letter-size) (* 2 letter-border) 10)
-                y (+ letter-border (* letter-size i) (/ letter-size 2))]
-            (gfx/fill! g2d 180 180 180)  ;; Light gray for count text
-            (gfx/set-font! g2d "Monospace" Font/PLAIN 18)
-            (gfx/text! g2d (str "[" count-val "]") x y :align-y :center)))))
+  ;; Draw remaining words count for each guess (if provided)
+  (when (and remaining-words-counts (seq remaining-words-counts))
+    (doseq [i (range (count guesses-classified))]
+      (when (< i (count remaining-words-counts))
+        (let [count-val (nth remaining-words-counts i)
+              ;; Position: right of the board, vertically centered with the guess row
+              x (+ (* size letter-size) (* 2 letter-border) 10)
+              y (+ letter-border (* letter-size i) (/ letter-size 2))]
+          (gfx/fill! g2d 180 180 180)  ;; Light gray for count text
+          (gfx/set-font! g2d "Monospace" Font/PLAIN 18)
+          (gfx/text! g2d (str "[" count-val "]") x y :align-y :center)))))
 
-    ;; Draw unrevealed boxes
-    (doseq [y (range (+ letter-border (* letter-size (count guesses)))
-                     (+ letter-border (* letter-size max-guesses))
-                     letter-size)
-            x (range letter-border
-                     (+ letter-border (* size letter-size))
-                     letter-size)]
-      (draw-unrevealed g2d x y))))
+  ;; Draw unrevealed boxes
+  (doseq [y (range (+ letter-border (* letter-size (count guesses-classified)))
+                   (+ letter-border (* letter-size max-guesses))
+                   letter-size)
+          x (range letter-border
+                   (+ letter-border (* size letter-size))
+                   letter-size)]
+    (draw-unrevealed g2d x y)))
 
 (defn get-no-cols
   "Calculate the number of columns to draw.

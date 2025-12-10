@@ -323,9 +323,10 @@
         size (get-gameprop chat-key :size)
         answer (get-gameprop chat-key :answer)
         remaining-words-counts (get-gameprop chat-key :remaining-words-history)
-        guesses-classified (zipmap guesses
-                                   (map #(analytics/compare-guess-to-answer % answer)
-                                        guesses))]
+        ;; Use vector of [guess, classification] pairs to preserve duplicate guesses
+        guesses-classified (mapv (fn [guess]
+                                   [guess (analytics/compare-guess-to-answer guess answer)])
+                                 guesses)]
     (gfx/get-img-sync chat-key {:type    :board
                                 :size    size
                                 :guesses-classified guesses-classified
@@ -361,8 +362,16 @@
                                                    (second (analytics/evaluate-guess-quality possible-answers guess)))
                                     ;; Use the new non-cheating rate-guess function
                                     rating (analytics/rate-guess guess current-facts)
-                                    ;; A guess is a "mistake" if it has very low information gain
-                                    is-mistake? (< guess-entropy 0.01)]  ; Very low entropy threshold
+                                    ;; A guess is a "mistake" if:
+                                    ;; 1. When there's only 1 possible word and you guess a different word
+                                    ;; 2. When there are multiple words and your guess has very low entropy
+                                    is-mistake? (or
+                                                  ;; Mistake: 1 word left but you guessed something else
+                                                  (and (= (count possible-answers) 1)
+                                                       (not (contains? (set possible-answers) guess)))
+                                                  ;; Mistake: multiple words but low information gain
+                                                  (and (> (count possible-answers) 1)
+                                                       (< guess-entropy 0.01)))]
                                 {:rating rating
                                  :is-mistake? is-mistake?
                                  :entropy guess-entropy
@@ -372,7 +381,7 @@
                                 ;; If analytics fail, just log and continue
                                 (println (str "Analytics error: " (.getMessage e)))
                                 nil)))]
-    
+
     ;; Now add the guess to state (this changes the facts!)
     (add-guess! chat-key guess user)
     
@@ -390,8 +399,11 @@
       (add-to-col! chat-key :ratings-history (:rating analytics-feedback))
       
       ;; Provide feedback for notable guesses (mistakes or excellent plays)
-      (when (or (:is-mistake? analytics-feedback) 
-                (>= (:rating analytics-feedback) 7) 
+      ;; Only praise exceptional plays (rating >= 9) when not in endgame (>4 words left)
+      ;; to avoid praising lucky guesses
+      (when (or (:is-mistake? analytics-feedback)
+                (and (>= (:rating analytics-feedback) 9)
+                     (> (:possible-answers-count analytics-feedback) 4))
                 (<= (:rating analytics-feedback) 3))
         (.reply m (:feedback-msg analytics-feedback))))
 
@@ -399,6 +411,8 @@
     (when (and (not (won? chat-key))
                (< (guesses-made chat-key) max-guesses))
       (.reply m (letter-help chat-key))
+
+      ;; Warn if next guess will be the last (after 5 guesses made, before guess 6)
       (when (= (guesses-made chat-key) (dec max-guesses))
         (.reply m (msg/last-chance-message)))
 
@@ -411,6 +425,14 @@
   (let [guesses-count (guesses-made chat-key)
         congrats-msg (rand-nth (get msg/win-responses guesses-count))]
     (.reply m congrats-msg))
+
+  ;; Check for lucky guess (many possible words before winning guess)
+  (let [remaining-history (get-gameprop chat-key :remaining-words-history)
+        ;; Get the count of possible words BEFORE the winning guess
+        possible-before-win (when (seq remaining-history)
+                             (last remaining-history))]
+    (when (and possible-before-win (>= possible-before-win 5))
+      (.reply m (format "LUCKY GUESS!!! That was a %d:1 shot and you made it!!!" possible-before-win))))
 
   (.reply m (str "Definition: " (get-gameprop chat-key :answerdef)))
 

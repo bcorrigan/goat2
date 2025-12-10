@@ -466,10 +466,10 @@
       (db/mark-reminder-fired! reminder_id)
 
       ;; Format and send the reminder message
-      (let [display-name (if (= target_user username)
-                           "you"
-                           target_user)
-            reminder-text (str username ", " display-name " asked me to remind you to " message)
+      (let [setter-name (if (= target_user username)
+                          "you"
+                          username)
+            reminder-text (str target_user ", " setter-name " asked me to remind you to " message)
             ;; Ensure chat_id is a Long object
             chat-id-long (Long/valueOf (long chat_id))
             msg (Message. chat-id-long reminder-text false target_user)]
@@ -593,12 +593,12 @@
      :description (str time-str ": " message (or recurrence-str ""))}))
 
 (defn list-reminders
-  "Get formatted list of user's reminders"
-  [username]
-  (let [reminders (db/get-user-listable-reminders username)]
+  "Get formatted list of all reminders"
+  []
+  (let [reminders (db/get-all-listable-reminders)]
     (if (empty? reminders)
-      "📋 You have no pending reminders.\n\nUse 'remind' to create one!"
-      (str "📋 <b>Your Reminders:</b>\n\n"
+      "📋 There are no pending reminders.\n\nUse 'remind' to create one!"
+      (str "📋 <b>All Reminders:</b>\n\n"
            (str/join "\n"
                      (map-indexed
                        (fn [idx r]
@@ -610,13 +610,13 @@
 
 (defn remove-reminder
   "Remove a reminder by its list number (1-based)"
-  [username number-str]
+  [number-str]
   (try
     (let [number (Integer/parseInt number-str)
-          reminders (db/get-user-listable-reminders username)]
+          reminders (db/get-all-listable-reminders)]
       (if (or (< number 1) (> number (count reminders)))
-        (str "❌ Invalid reminder number. You have " (count reminders) " reminder(s).\n\n"
-             "Use <b>reminders</b> to see your list.")
+        (str "❌ Invalid reminder number. There are " (count reminders) " reminder(s).\n\n"
+             "Use <b>reminders</b> to see the list.")
         (let [reminder (nth reminders (dec number))
               reminder-id (:reminder_id reminder)
               is-recurring (:recurrence_type reminder)]
@@ -679,10 +679,10 @@
         (= command :reminders)
         (if (str/blank? text)
           ;; List reminders
-          (msg/reply m (list-reminders (msg/sender m)))
+          (msg/reply m (list-reminders))
           ;; Check for "remove N" subcommand
           (if-let [[_ number] (re-find #"^remove\s+(\d+)$" (str/trim text))]
-            (msg/reply m (remove-reminder (msg/sender m) number))
+            (msg/reply m (remove-reminder number))
             (msg/reply m "❌ Invalid command. Use <b>reminders</b> to list or <b>reminders remove &lt;number&gt;</b> to delete.")))
 
         ;; Handle "remind" command

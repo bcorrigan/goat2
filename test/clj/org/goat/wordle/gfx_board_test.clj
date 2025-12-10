@@ -6,8 +6,9 @@
 
 (deftest test-draw-board-returns-image
   (testing "draw-board returns a BufferedImage with correct dimensions"
-    (let [guesses-classified {"GREAT" [:revealed :revealed :revealed :revealed :revealed]
-                              "WORLD" [:wrong :semiknown :revealed :wrong :semiknown]}
+    (let [;; guesses-classified is now a vector of [guess, classification] pairs
+          guesses-classified [["GREAT" [:revealed :revealed :revealed :revealed :revealed]]
+                              ["WORLD" [:wrong :semiknown :revealed :wrong :semiknown]]]
           size 5
           max-guesses 6
           img (sut/draw-board guesses-classified size max-guesses nil)]
@@ -28,7 +29,7 @@
 
 (deftest test-draw-board-empty-guesses
   (testing "draw-board handles empty guesses"
-    (let [guesses-classified {}
+    (let [guesses-classified []
           size 5
           max-guesses 6
           img (sut/draw-board guesses-classified size max-guesses nil)]
@@ -39,7 +40,7 @@
 
 (deftest test-draw-board-single-guess
   (testing "draw-board handles single guess"
-    (let [guesses-classified {"GHOST" [:revealed :revealed :revealed :revealed :revealed]}
+    (let [guesses-classified [["GHOST" [:revealed :revealed :revealed :revealed :revealed]]]
           size 5
           max-guesses 6
           img (sut/draw-board guesses-classified size max-guesses nil)]

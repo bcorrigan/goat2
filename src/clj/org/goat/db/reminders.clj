@@ -193,6 +193,17 @@
       ORDER BY due_time ASC"
      username]))
 
+(defn get-all-listable-reminders
+  "Get all reminders to show in a list.
+   Includes one-shot reminders and parent recurring reminders (not instances).
+   Returns them ordered by next due time."
+  []
+  (sql/query db
+    ["SELECT * FROM reminders
+      WHERE status = 'pending'
+      AND parent_reminder_id IS NULL
+      ORDER BY due_time ASC"]))
+
 (defn cancel-recurring-and-instances!
   "Cancel a recurring reminder and all its pending instances"
   [parent-id]
