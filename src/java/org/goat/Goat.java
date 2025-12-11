@@ -116,7 +116,7 @@ public class Goat {
 
     private void loadDefaultModules(ModuleController modController) {
         Class<?>[] defaultModules = {
-            org.goat.module.WordGame.class,
+            //org.goat.module.WordGame.class,
             //org.goat.module.Remind.class,
             org.goat.module.CountDown.class,
             org.goat.module.Calc.class,
