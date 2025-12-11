@@ -122,7 +122,6 @@ public class Goat {
             org.goat.module.Calc.class,
             org.goat.module.More.class,
             org.goat.module.DiceRoll.class,
-            org.goat.module.Define.class,
             org.goat.module.Weather.class
             //CljTest.class
             /*goat.module.ModuleCommands.class,
@@ -142,6 +141,7 @@ public class Goat {
 			modController.loadInAllChannels("WordStats");
 			modController.loadInAllChannels("Freezer");
 			modController.loadInAllChannels("Remind");
+			modController.loadInAllChannels("Define");
             /*ModuleCommands moduleCommands = (ModuleCommands) modController.getLoaded("ModuleCommands");
             moduleCommands.modControl = modController;
             moduleCommands.inAllChannels = true;*/
