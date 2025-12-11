@@ -1,5 +1,6 @@
 (ns org.goat.db.users (:require [clojure.java.jdbc :refer :all :as sql ]
                                 [clojure.edn :as edn]
+                                [clojure.string :as str]
                                 [org.goat.db.util :as util]))
 
 (def db
@@ -13,6 +14,35 @@
     where type='single'
     and size=5
     and difficulty='easy' ")
+
+(defn column-exists?
+  "Check if a column exists in a table."
+  [table column]
+  (try
+    (let [result (sql/query db [(str "PRAGMA table_info(" (name table) ")")])]
+      (some #(= (str/lower-case column) (str/lower-case (:name %))) result))
+    (catch Exception e
+      false)))
+
+(defn migrate-schema
+  "Add any missing columns to existing tables."
+  []
+  (when (util/tbl-exists? db :users)
+    ;; Add weather_station column if it doesn't exist
+    (when-not (column-exists? :users "weather_station")
+      (try
+        (sql/execute! db ["ALTER TABLE users ADD COLUMN weather_station TEXT"])
+        (println "✓ Added weather_station column to users table")
+        (catch Exception e
+          (println "Warning: Could not add weather_station column:" (.getMessage e)))))
+
+    ;; Add timezone column if it doesn't exist
+    (when-not (column-exists? :users "timezone")
+      (try
+        (sql/execute! db ["ALTER TABLE users ADD COLUMN timezone TEXT"])
+        (println "✓ Added timezone column to users table")
+        (catch Exception e
+          (println "Warning: Could not add timezone column:" (.getMessage e)))))))
 
 (defn create-db
   "If no DB file found, create the user db and table"
@@ -51,7 +81,13 @@
                                                        [:endtime :datetime]])))
 
        (catch Exception e
-         (println "Fatal error" (.getMessage e)))))
+         (println "Fatal error" (.getMessage e))))
+
+  ;; Always run migrations after creating/checking tables
+  (migrate-schema))
+
+;; Initialize database on namespace load
+(create-db)
 
 (defn audit-challenge-game
   "Record a challenge match outcome."
@@ -402,3 +438,41 @@
    :guess-rate-150 (get-guess-rate user 150)
    :guess-rate-20 (get-guess-rate user 20)
    :results-150 (reverse (results-n user 150))})
+
+;; ============================================================================
+;; Weather Station Preferences
+;; ============================================================================
+
+(defn get-weather-station
+  "Get the saved weather station for a user. Returns nil if not set."
+  [username]
+  (when (user-known? username)
+    (-> (sql/query db ["SELECT weather_station FROM users WHERE username=? COLLATE NOCASE" username])
+        first
+        :weather_station)))
+
+(defn set-weather-station!
+  "Save the weather station preference for a user."
+  [username station]
+  ;; Ensure user exists first
+  (when-not (user-known? username)
+    (user-add username 0))  ; Add with dummy chatid if needed
+  (sql/execute! db ["UPDATE users SET weather_station=? WHERE username=? COLLATE NOCASE"
+                    station username]))
+
+(defn get-timezone
+  "Get the saved timezone for a user. Returns nil if not set."
+  [username]
+  (when (user-known? username)
+    (-> (sql/query db ["SELECT timezone FROM users WHERE username=? COLLATE NOCASE" username])
+        first
+        :timezone)))
+
+(defn set-timezone!
+  "Save the timezone preference for a user."
+  [username tz]
+  ;; Ensure user exists first
+  (when-not (user-known? username)
+    (user-add username 0))  ; Add with dummy chatid if needed
+  (sql/execute! db ["UPDATE users SET timezone=? WHERE username=? COLLATE NOCASE"
+                    tz username]))
