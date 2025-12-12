@@ -119,7 +119,7 @@ public class Goat {
             //org.goat.module.WordGame.class,
             //org.goat.module.Remind.class,
             //org.goat.module.CountDown.class,  // Converted to Clojure
-            org.goat.module.Calc.class,
+            //org.goat.module.Calc.class,  // Converted to Clojure
             org.goat.module.More.class,
             //org.goat.module.DiceRoll.class,
             //org.goat.module.Weather.class
@@ -137,6 +137,7 @@ public class Goat {
                 modController.loadInAllChannels(defaultModules[i]);
             modController.loadInAllChannels("Wordle");
             modController.loadInAllChannels("CoreCommands");
+			modController.loadInAllChannels("Calc");
 			modController.loadInAllChannels("Capture");
 			modController.loadInAllChannels("Countdown");
 			modController.loadInAllChannels("WordStats");
