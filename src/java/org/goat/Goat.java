@@ -1,8 +1,6 @@
 package org.goat;
 
 import org.goat.core.*;
-//import org.goat.module.Core;
-//import org.goat.module.ModuleCommands;
 import static org.goat.util.Passwords.*;
 
 import java.io.*;
@@ -19,8 +17,6 @@ public class Goat {
     public static ModuleController modController = new ModuleController() ;
     public static String[] argv = {""};
     public static ServerConnection sc;
-
-    private static Users users = new Users() ;
 
     public static void main(String[] args) {
         argv=args;
@@ -172,12 +168,4 @@ public class Goat {
         return getPropsFromFile(GOAT_PROPS_FILE) ;
     }
 
-    public static Users getUsers() {
-        if (null == users) {
-            users = new Users() ;
-            return users ;
-        } else {
-            return users;
-        }
-    }
 }

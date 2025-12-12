@@ -15,9 +15,6 @@ import java.util.HashSet;
 import java.util.Set;
 import java.io.File;
 
-import com.google.common.jimfs.Configuration;
-import com.google.common.jimfs.Jimfs;
-
 /**
  * <p>Contains lots of info about the bot and its environment.
  *
@@ -28,19 +25,6 @@ public class BotStats {
     private static BotStats instance;
     private String token;
 
-    //in memory file system for those APIs that insist on passing Files
-    private FileSystem fs = Jimfs.newFileSystem(Configuration.unix());
-
-    public Path memoryFile(String name, byte[] bytes) {
-        Path path = fs.getPath(name);
-        try {
-            Files.write(path, bytes);
-        } catch (IOException e) {
-            System.err.println("IO Exception writing to memory - are we out of memory?");
-            System.exit(1);
-        }
-        return path;
-    }
     /**
      * Made this a CopyOnWriteArrayList to hopefully avoid the concurrent modification exceptions.
      * In theory, it should avoid the problems we have had, but will be much, much slower for write operations
