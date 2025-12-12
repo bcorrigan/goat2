@@ -2,6 +2,7 @@
   "Module for dictionary lookups using DICT protocol"
   (:require [org.goat.core.macros :refer [defmodule]]
             [org.goat.core.message :as msg]
+            [org.goat.core.command-parser :as parser]
             [org.goat.util.dict-client :as dict]
             [org.goat.util.str :as str-util]
             [clojure.string :as str])
@@ -12,35 +13,6 @@
 ;; Configuration
 (def ^:private dict-host "dict.org")
 (def ^:private dict-port 2628)
-
-;; Parameter Parsing (Pure Clojure replacement for CommandParser)
-
-(defn- parse-parameters
-  "Parse command parameters like 'dict=web1913 num=2 remaining text'.
-   Returns {:params {:dict ... :num ...} :text 'remaining text'}"
-  [text]
-  (when text
-    (let [trimmed (str/trim text)
-          tokens (str/split trimmed #"\s+")
-          ;; Separate key=value pairs from remaining text
-          {params true words false}
-          (group-by #(str/includes? % "=") tokens)
-          ;; Parse key=value pairs
-          param-map (reduce (fn [acc token]
-                             (let [[k v] (str/split token #"=" 2)]
-                               (assoc acc (keyword k) v)))
-                           {}
-                           params)
-          ;; Remaining text
-          remaining (str/join " " words)]
-      {:params param-map
-       :text remaining})))
-
-(defn- get-param
-  "Get parameter value, supporting aliases.
-   e.g., (get-param params :dict :dictionary) returns value of :dict or :dictionary"
-  [params & keys]
-  (some params keys))
 
 ;; Connection Management
 
@@ -177,21 +149,17 @@
   "Main definition lookup handler"
   [m thesaurus?]
   (let [text (msg/mod-text m)
-        parsed (parse-parameters text)
+        parsed (parser/parse-parameters text)
         params (:params parsed)
         ;; Get dictionary parameter
-        dict-param (get-param params :dict :dictionary)
+        dict-param (parser/get-param params :dict :dictionary)
         dictionary (cond
                      thesaurus? "moby-thesaurus"
                      dict-param dict-param
                      :else "*")
         ;; Get number parameter
-        num-param (get-param params :num :number)
-        num (if num-param
-              (try
-                (Integer/parseInt num-param)
-                (catch NumberFormatException e 1))
-              1)
+        num-param (parser/get-param params :num :number)
+        num (parser/parse-int num-param 1)
         ;; Get word to define
         word-text (:text parsed)
         word (if (str/blank? word-text)
