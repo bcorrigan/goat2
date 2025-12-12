@@ -4,6 +4,7 @@
 
 (defprotocol MessageContext
   "Protocol for interacting with messages in a Clojurian way"
+  (send-msg [this] "Send this message")
   (reply [this text] "Send a reply to this message")
   (reply-image [this img] "Send an image reply to this message")
   (reply-document [this bytes filename] "Send a document reply to this message")
@@ -18,10 +19,15 @@
   (has-image? [this] "True if this message has an image")
   (has-document? [this] "True if this message has a document")
   (get-document-bytes [this] "Get the document bytes")
-  (get-document-filename [this] "Get the document filename"))
+  (get-document-filename [this] "Get the document filename")
+  (has-next-page? [this] "True if this message has a next page for pagination")
+  (create-next-page [this] "Create and return the next page message"))
 
 (deftype MessageWrapper [^Message msg]
   MessageContext
+  (send-msg [_]
+    (.send msg))
+
   (reply [_ text]
     (.reply msg text))
 
@@ -66,7 +72,13 @@
     (.getDocumentBytes msg))
 
   (get-document-filename [_]
-    (.getDocumentFilename msg)))
+    (.getDocumentFilename msg))
+
+  (has-next-page? [_]
+    (.hasNextPage msg))
+
+  (create-next-page [_]
+    (.createNextPage msg)))
 
 (defn wrap-message
   "Wraps a Java Message object in a Clojurian MessageWrapper"
@@ -77,6 +89,9 @@
 ;; This allows modules to use protocol methods with both wrapped and unwrapped messages
 (extend-protocol MessageContext
   org.goat.core.Message
+  (send-msg [this]
+    (.send this))
+
   (reply [this text]
     (.reply this text))
 
@@ -121,7 +136,13 @@
     (.getDocumentBytes this))
 
   (get-document-filename [this]
-    (.getDocumentFilename this)))
+    (.getDocumentFilename this))
+
+  (has-next-page? [this]
+    (.hasNextPage this))
+
+  (create-next-page [this]
+    (.createNextPage this)))
 
 ;; Convenience functions that work with either wrapped or unwrapped messages
 (defn unwrap

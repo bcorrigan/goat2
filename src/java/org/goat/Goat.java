@@ -120,7 +120,7 @@ public class Goat {
             //org.goat.module.Remind.class,
             //org.goat.module.CountDown.class,  // Converted to Clojure
             //org.goat.module.Calc.class,  // Converted to Clojure
-            org.goat.module.More.class,
+            //org.goat.module.More.class,  // Converted to Clojure
             //org.goat.module.DiceRoll.class,
             //org.goat.module.Weather.class
             //CljTest.class
@@ -146,6 +146,7 @@ public class Goat {
 			modController.loadInAllChannels("Define");
 			modController.loadInAllChannels("Weather");
 			modController.loadInAllChannels("DiceRoll");
+			modController.loadInAllChannels("More");
             /*ModuleCommands moduleCommands = (ModuleCommands) modController.getLoaded("ModuleCommands");
             moduleCommands.modControl = modController;
             moduleCommands.inAllChannels = true;*/
