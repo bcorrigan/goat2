@@ -31,7 +31,8 @@
   (get-document-bytes [this] "Get the document bytes")
   (get-document-filename [this] "Get the document filename")
   (has-next-page? [this] "True if this message has a next page for pagination")
-  (create-next-page [this] "Create and return the next page message"))
+  (create-next-page [this] "Create and return the next page message")
+  (fmt [this] "Get the formatter for this message's platform"))
 
 ;; =============================================================================
 ;; Protocol Implementation for Maps
@@ -98,7 +99,12 @@
     (pager/has-next-page? (:message/chat-id this)))
 
   (create-next-page [this]
-    (pager/create-next-page-message this)))
+    (pager/create-next-page-message this))
+
+  (fmt [this]
+    (require 'org.goat.core.format)
+    ((resolve 'org.goat.core.format/formatter)
+     (or (:platform/type this) :telegram))))
 
 ;; =============================================================================
 ;; Helper Functions
@@ -191,6 +197,20 @@
   "Shorthand for get-document-filename"
   [msg]
   (get-document-filename msg))
+
+(defn fmt
+  "Shorthand for getting formatter from message.
+
+   Returns a map with formatting keys like :bold, :end-bold, etc.
+   appropriate for the message's platform.
+
+   Example:
+   (let [f (fmt m)]
+     (str (:bold f) \"Hello\" (:end-bold f)))"
+  [msg]
+  (require 'org.goat.core.format)
+  ((resolve 'org.goat.core.format/formatter)
+   (or (:platform/type msg) :telegram)))
 
 ;; =============================================================================
 ;; Backward Compatibility Shims (for migration)

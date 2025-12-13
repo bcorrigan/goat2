@@ -1,8 +1,8 @@
 (ns org.goat.module.DiceRoll
   (:require [org.goat.core.macros :refer [defmodule]]
             [org.goat.core.message :as msg]
-            [clojure.string :as str])
-  (:import [org.goat.core Constants]))
+            [org.goat.core.format :as fmt]
+            [clojure.string :as str]))
 
 ;; ============================================================================
 ;; Parsing Functions
@@ -95,17 +95,17 @@
 
 (defn- format-group
   "Format a single dice group like '• 10d6: [3, 2, 5, 4, 1, 6, 2, 3, 4, 2] = 32'."
-  [group]
+  [f group]
   (str "  • " (:count group) "d" (:size group) ": "
        (format-dice-results (:dice group))
-       " = " Constants/BOLD (:total group) Constants/END_BOLD))
+       " = " (fmt/bold f (:total group))))
 
 (defn- format-roll
   "Format complete roll output with emoji and all groups."
-  [username groups]
+  [f username groups]
   (let [grand-total (reduce + 0 (map :total groups))
-        group-lines (map format-group groups)
-        total-line (str "  " Constants/BOLD "Total: " grand-total Constants/END_BOLD)]
+        group-lines (map (partial format-group f) groups)
+        total-line (str "  " (fmt/bold f (str "Total: " grand-total)))]
     (str "🎲 " username " rolled:\n"
          (str/join "\n" group-lines) "\n"
          total-line)))
@@ -135,7 +135,7 @@
               (if (= validation :ok)
                 ;; Roll and format
                 (let [groups (roll-groups terms)
-                      output (format-roll username groups)]
+                      output (format-roll (msg/fmt m) username groups)]
                   (msg/reply m output))
                 ;; Validation failed
                 (msg/reply m "It is so funny to make me try and throw more dice than exist in the universe.")))

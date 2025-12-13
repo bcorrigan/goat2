@@ -3,11 +3,11 @@
   (:require [org.goat.core.macros :refer [defmodule]]
             [org.goat.core.message :as msg]
             [org.goat.core.command-parser :as parser]
+            [org.goat.core.format :as fmt]
             [org.goat.util.dict-client :as dict]
             [org.goat.util.str :as str-util]
             [clojure.string :as str])
-  (:import [org.goat.core Constants]
-           [java.net ConnectException UnknownHostException]))
+  (:import [java.net ConnectException UnknownHostException]))
 
 ;; Configuration
 (def ^:private dict-host "dict.org")
@@ -36,31 +36,27 @@
 
 (defn- format-definition
   "Format a single definition for display with nice formatting"
-  [def]
-  (format "📖 %s%s%s (%s%s%s):\n%s"
-          Constants/BOLD
-          (str-util/escape-html (:word def))
-          Constants/END_BOLD
-          Constants/BOLD
-          (:database-short def)
-          Constants/END_BOLD
+  [f def]
+  (format "📖 %s (%s):\n%s"
+          (fmt/bold f (str-util/escape-html (:word def)))
+          (fmt/bold f (:database-short def))
           (str-util/escape-html (:definition def))))
 
 (defn- format-availability
   "Format availability message showing definition counts per dictionary"
-  [defs]
+  [f defs]
   (when (> (count defs) 1)
     (let [grouped (group-by :database-short defs)
           formatted (str/join " • "
                              (map (fn [[db defs]]
-                                    (str Constants/BOLD db Constants/END_BOLD
+                                    (str (fmt/bold f db)
                                          " (" (count defs) ")"))
                                   grouped))]
       (str "📚 " formatted))))
 
 (defn- format-suggestions
   "Format spelling suggestions with nice formatting"
-  [matches]
+  [f matches]
   (when (seq matches)
     (let [words (->> matches
                      (map :match)
@@ -68,7 +64,7 @@
                      distinct
                      (take 10)  ; Limit to 10 suggestions
                      (map str-util/escape-html)
-                     (map #(str Constants/BOLD % Constants/END_BOLD))
+                     (map #(fmt/bold f %))
                      (str/join ", "))]
       (str "✨ Did you mean: " words "?"))))
 
@@ -94,9 +90,10 @@
   (with-dict-connection m
     (fn [conn]
       (try
-        (let [dbs (dict/get-databases conn)
+        (let [f (msg/fmt m)
+              dbs (dict/get-databases conn)
               db-names (map :short dbs)
-              formatted-names (map #(str Constants/BOLD % Constants/END_BOLD) db-names)
+              formatted-names (map #(fmt/bold f %) db-names)
               result (str "📚 Available dictionaries:\n"
                          (str/join ", " formatted-names))]
           (msg/reply m result))
@@ -115,17 +112,19 @@
       (with-dict-connection m
         (fn [conn]
           (try
-            (let [db-info (dict/get-db-info conn code)
+            (let [f (msg/fmt m)
+                  db-info (dict/get-db-info conn code)
                   escaped-info (str-util/escape-html db-info)
-                  line (str "📗 " Constants/BOLD code Constants/END_BOLD ":\n" escaped-info)]
+                  line (str "📗 " (fmt/bold f code) ":\n" escaped-info)]
               (msg/reply m line))
             (catch IllegalArgumentException e
               ;; Database not found - show available databases
-              (let [dbs (dict/get-databases conn)
+              (let [f (msg/fmt m)
+                    dbs (dict/get-databases conn)
                     db-names (map :short dbs)
-                    formatted-names (map #(str Constants/BOLD % Constants/END_BOLD) db-names)
+                    formatted-names (map #(fmt/bold f %) db-names)
                     all-dbs (str/join ", " formatted-names)
-                    line (str "❌ Dictionary " Constants/BOLD code Constants/END_BOLD " not found.\n"
+                    line (str "❌ Dictionary " (fmt/bold f code) " not found.\n"
                              "📚 Available dictionaries: " all-dbs)]
                 (msg/reply m line)))
             (catch Exception e
@@ -134,7 +133,8 @@
 (defn- handle-define
   "Main definition lookup handler"
   [m thesaurus?]
-  (let [text (msg/mod-text m)
+  (let [f (msg/fmt m)
+        text (msg/mod-text m)
         parsed (parser/parse-parameters text)
         params (:params parsed)
         ;; Get dictionary parameter
@@ -173,7 +173,7 @@
               ;; Validate dictionary if specified
               (when (and (not= dictionary "*")
                         (not (contains? db-names dictionary)))
-                (msg/reply m (str "❌ " Constants/BOLD dictionary Constants/END_BOLD " is not a valid dictionary."))
+                (msg/reply m (str "❌ " (fmt/bold f dictionary) " is not a valid dictionary."))
                 (handle-dictionaries m)
                 (throw (ex-info "Invalid dictionary" {:dictionary dictionary})))
 
@@ -184,29 +184,29 @@
                 (cond
                   ;; No definitions found
                   (empty? definitions)
-                  (let [reply (str "❌ No definitions found for " Constants/BOLD word Constants/END_BOLD
+                  (let [reply (str "❌ No definitions found for " (fmt/bold f word)
                                   (when (not= dictionary "*")
-                                    (str " in dictionary " Constants/BOLD dictionary Constants/END_BOLD))
+                                    (str " in dictionary " (fmt/bold f dictionary)))
                                   ".")]
                     (if (empty? matches)
                       (msg/reply m (str reply "\nCouldn't find any alternate spelling suggestions."))
-                      (msg/reply m (str reply "\n" (format-suggestions matches)))))
+                      (msg/reply m (str reply "\n" (format-suggestions f matches)))))
 
                   ;; Requested definition number too high
                   (> num (count definitions))
-                  (let [line (str "❌ I don't have " num " definitions for " Constants/BOLD word Constants/END_BOLD
+                  (let [line (str "❌ I don't have " num " definitions for " (fmt/bold f word)
                                  (when (not= dictionary "*")
-                                   (str " in dictionary " Constants/BOLD dictionary Constants/END_BOLD))
+                                   (str " in dictionary " (fmt/bold f dictionary)))
                                  ".")]
                     (msg/reply m line))
 
                   ;; Return requested definition
                   :else
                   (let [def (nth definitions (dec num))
-                        text (format-definition def)]
+                        text (format-definition f def)]
                     (msg/reply m text)
                     ;; Show availability if multiple definitions
-                    (when-let [avail (format-availability definitions)]
+                    (when-let [avail (format-availability f definitions)]
                       (msg/reply m avail))))))
             (catch clojure.lang.ExceptionInfo e
               ;; Already handled - validation error

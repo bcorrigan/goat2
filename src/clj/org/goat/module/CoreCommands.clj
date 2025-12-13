@@ -1,9 +1,9 @@
 (ns org.goat.module.CoreCommands
   (:require [org.goat.core.macros :refer [defmodule]]
             [org.goat.core.message :as msg]
+            [org.goat.core.format :as fmt]
             [org.goat.db.users :as users]
-            [org.goat.util.str :as str-util])
-  (:import [org.goat.core Constants]))
+            [org.goat.util.str :as str-util]))
 
 (def init (System/currentTimeMillis))
 
@@ -66,7 +66,7 @@
 
       :uptime (msg/reply m (get-enhanced-uptime))
 
-      :goat (msg/reply m (str Constants/BOLD "🐐 Goat!" Constants/END_BOLD))
+      :goat (msg/reply m (fmt/bold (msg/fmt m) "🐐 Goat!"))
 
       :version (msg/reply m (get-detailed-version-info))
 

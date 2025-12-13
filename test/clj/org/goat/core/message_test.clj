@@ -81,3 +81,70 @@
         :other #(reset! result "wrong"))
 
       (is (= "matched!" @result)))))
+
+(deftest test-fmt-telegram
+  (testing "fmt returns Telegram formatter for :telegram messages"
+    (let [msg (msg-parse/create-message
+               :chat-id 12345
+               :text "goat test"
+               :sender "alice"
+               :private? false
+               :platform-type :telegram)
+          f (fmt msg)]
+      (is (map? f))
+      (is (= "<b>" (:bold f)))
+      (is (= "</b>" (:end-bold f)))
+      (is (= "<u>" (:underline f)))
+      (is (= "</u>" (:end-underline f))))))
+
+(deftest test-fmt-cli
+  (testing "fmt returns CLI formatter for :cli messages"
+    (let [msg (msg-parse/create-message
+               :chat-id 12345
+               :text "goat test"
+               :sender "alice"
+               :private? false
+               :platform-type :cli)
+          f (fmt msg)]
+      (is (map? f))
+      (is (= "" (:bold f)))
+      (is (= "" (:end-bold f)))
+      (is (= "" (:underline f)))
+      (is (= "" (:end-underline f))))))
+
+(deftest test-fmt-default-platform
+  (testing "fmt defaults to :telegram when :platform/type is missing"
+    (let [msg (msg-parse/create-message
+               :chat-id 12345
+               :text "goat test"
+               :sender "alice"
+               :private? false)
+          f (fmt msg)]
+      (is (map? f))
+      (is (= "<b>" (:bold f)))
+      (is (= "</b>" (:end-bold f))))))
+
+(deftest test-fmt-shorthand
+  (testing "fmt shorthand function works"
+    (let [msg (msg-parse/create-message
+               :chat-id 12345
+               :text "goat test"
+               :sender "alice"
+               :private? false
+               :platform-type :telegram)]
+      (is (= (fmt msg) (fmt msg)))
+      (is (map? (fmt msg)))
+      (is (= "<b>" (:bold (fmt msg)))))))
+
+(deftest test-fmt-integration
+  (testing "fmt integrates with format helpers"
+    (require 'org.goat.core.format)
+    (let [msg (msg-parse/create-message
+               :chat-id 12345
+               :text "goat test"
+               :sender "alice"
+               :private? false
+               :platform-type :telegram)
+          f (fmt msg)
+          formatted ((resolve 'org.goat.core.format/bold) f "Hello")]
+      (is (= "<b>Hello</b>" formatted)))))

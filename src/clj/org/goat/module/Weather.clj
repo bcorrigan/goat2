@@ -1,11 +1,11 @@
 (ns org.goat.module.Weather
   (:require [org.goat.core.macros :refer [defmodule]]
             [org.goat.core.message :as msg]
+            [org.goat.core.format :as fmt]
             [org.goat.db.users :as users]
             [org.httpkit.client :as http]
             [clojure.string :as str])
-  (:import [org.goat.core Constants]
-           [org.goat.suntimes SunTimes Time SunTimesException]
+  (:import [org.goat.suntimes SunTimes Time SunTimesException]
            [org.goat.util PhaseOfMoon]
            [java.util Date TimeZone GregorianCalendar Calendar]
            [java.text SimpleDateFormat]))
@@ -545,8 +545,9 @@
 
 (defn format-weather-report
   "Format complete weather report with all NOAA data plus enhancements."
-  [weather-data username]
-  (let [{:keys [station temperature-f temperature-c dew-point-c wind-direction
+  [m weather-data username]
+  (let [f (msg/fmt m)
+        {:keys [station temperature-f temperature-c dew-point-c wind-direction
                 wind-mph wind-gust sky-conditions weather-type humidity
                 latitude longitude report-year report-month report-day
                 report-hour report-minute minutes-ago processed-lines]} weather-data
@@ -591,19 +592,19 @@
          (when (and (> temp-f-num 0) (> wind-mph-num 0)
                     (<= temp-f-num 50.0) (> wind-mph-num 3.0)
                     (not= windchill-val temp-f-num))
-           (str "🥶 " Constants/BOLD "Windchill:" Constants/END_BOLD " "
+           (str "🥶 " (fmt/bold f "Windchill:") " "
                 (format "%.1fC" (f-to-c windchill-val)) "\n"))
          ;; Add sunrise/sunset if available
          (when-not (or (str/blank? sunrise-str) (str/blank? sunset-str))
-           (str "🌅 " Constants/BOLD "Sunrise:" Constants/END_BOLD " " sunrise-str "\n"
-                "🌇 " Constants/BOLD "Sunset:" Constants/END_BOLD " " sunset-str "\n"))
+           (str "🌅 " (fmt/bold f "Sunrise:") " " sunrise-str "\n"
+                "🌇 " (fmt/bold f "Sunset:") " " sunset-str "\n"))
          ;; Add moon phase
-         "🌙 " Constants/BOLD "Moon:" Constants/END_BOLD " " moon "\n"
+         "🌙 " (fmt/bold f "Moon:") " " moon "\n"
          ;; Add report age if available
          (when (> minutes-ago 0)
            (str "⏰ Reported " (long minutes-ago) " minutes ago.\n"))
          ;; Add score
-         "📊 " Constants/BOLD "Score: " Constants/END_BOLD score-rounded)))
+         "📊 " (fmt/bold f "Score: ") score-rounded)))
 
 ;; ============================================================================
 ;; Command Handler
@@ -624,7 +625,7 @@
         (if (str/blank? station)
             (msg/reply m (str "I don't know where you are, " username
                               ", perhaps you should tell me by looking at "
-                              Constants/BOLD " " codes-url " " Constants/END_BOLD
+                              (fmt/bold (msg/fmt m) (str " " codes-url " "))
                               " and telling me where you are."))
             (if is-raw
               (let [result (fetch-metar station)]
@@ -640,7 +641,7 @@
               (let [result (fetch-decoded-weather station)]
                 (if (:success result)
                   (let [weather-data (parse-weather-response (:success result) station)]
-                    (msg/reply m (format-weather-report weather-data username)))
+                    (msg/reply m (format-weather-report m weather-data username)))
                   (msg/reply m (cond
                                  (= (:error result) :timeout)
                                  (str "I got bored waiting for the weather report for " station)
@@ -666,7 +667,7 @@
           (let [result (fetch-decoded-weather station)]
             (if (:success result)
               (let [weather-data (parse-weather-response (:success result) station)
-                    report (format-weather-report weather-data username)]
+                    report (format-weather-report m weather-data username)]
                 ;; Save station if report contains the station code
                 (when (str/includes? report station)
                   (users/set-weather-station! username station))

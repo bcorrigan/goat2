@@ -5,9 +5,9 @@
   (:require [org.goat.core.macros :refer [defmodule]]
             [org.goat.core.message :as msg]
             [org.goat.core.message-parse :as msg-parse]
+            [org.goat.core.format :as fmt]
             [clojure.string :as str])
-  (:import [org.goat.core Constants]
-           [org.goat.jcalc Calculator CalculatorException]
+  (:import [org.goat.jcalc Calculator CalculatorException]
            [org.goat.util CountdownSolver]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -228,7 +228,8 @@
       ;; Someone answered
       (if (= (:value best-answer) best-possible)
         ;; Best possible achieved
-        (let [reply-text (str Constants/BOLD (:username best-answer) Constants/END_BOLD
+        (let [f (fmt/formatter :telegram)
+              reply-text (str (fmt/bold f (:username best-answer))
                               " has won with " (:value best-answer) "!")]
           (reply-to-game chat-key
                          (if (not= best-possible target)
@@ -253,7 +254,7 @@
                 (Thread/sleep 50000)
                 (when (game-active? chat-key)
                   (reply-to-game chat-key
-                                 (str Constants/BOLD "10 secs.." Constants/END_BOLD))
+                                 (fmt/bold (fmt/formatter :telegram) "10 secs.."))
 
                   ;; 10 second warning period
                   (Thread/sleep 10000)
@@ -273,14 +274,13 @@
   (if (game-active? chat-key)
     (msg/reply m "We're already playing a game, smart one.")
     (let [chat-id (msg/chat-id m)
-          {:keys [target-number source-numbers]} (start-new-game! chat-key chat-id)]
+          {:keys [target-number source-numbers]} (start-new-game! chat-key chat-id)
+          f (msg/fmt m)]
       (start-game-timer! chat-key)
       (msg/reply m
-                 (str Constants/UNDERLINE Constants/BOLD "***"
-                      Constants/END_BOLD Constants/END_UNDERLINE
-                      " New Numbers: " Constants/BOLD
-                      (format-numbers source-numbers) Constants/END_BOLD
-                      " Target: " Constants/BOLD target-number Constants/END_BOLD)))))
+                 (str (fmt/bold-underline f "***")
+                      " New Numbers: " (fmt/bold f (format-numbers source-numbers))
+                      " Target: " (fmt/bold f target-number))))))
 
 (defn- handle-answer-attempt
   "Handle user's answer attempt during active game.
@@ -319,7 +319,7 @@
 
                 ;; Good but not perfect - acknowledge
                 (msg/reply m
-                           (str Constants/BOLD username Constants/END_BOLD
+                           (str (fmt/bold (msg/fmt m) username)
                                 " has the best answer so far: " value
                                 ". Just " this-dist " off the target of "
                                 target "!"))))))))))

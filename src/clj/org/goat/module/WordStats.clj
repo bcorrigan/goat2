@@ -2,8 +2,7 @@
   (:require [org.goat.core.macros :refer [defmodule]]
             [org.goat.core.message :as msg]
             [org.goat.db.user-stats :as db]
-            [clojure.string :as str])
-  (:import [org.goat.core Constants]))
+            [clojure.string :as str]))
 
 ;; ============================================================================
 ;; Swear Word List
