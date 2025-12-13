@@ -33,19 +33,6 @@
       (msg/reply m "Couldn't talk to dict server.")
       nil)))
 
-;; WordGame Integration
-
-(defn- get-fallback-word
-  "Get last winning word from WordGame module if available"
-  [m]
-  (try
-    (when-let [wordgame-mod (.getLoaded (Goat/modController) "WordGame")]
-      (when (or (.inAllChannels wordgame-mod)
-                (.contains (.getChannels wordgame-mod) (msg/get-chatname m)))
-        (.getLastWinningWord wordgame-mod (msg/get-chatname m))))
-    (catch Exception e
-      nil)))
-
 ;; Response Formatting
 
 (defn- format-definition
@@ -162,9 +149,7 @@
         num (parser/parse-int num-param 1)
         ;; Get word to define
         word-text (:text parsed)
-        word (if (str/blank? word-text)
-               (get-fallback-word m)
-               word-text)]
+        word (when-not (str/blank? word-text) word-text)]
 
     ;; Validate number parameter
     (cond

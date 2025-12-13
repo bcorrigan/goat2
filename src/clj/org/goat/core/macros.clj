@@ -1,8 +1,9 @@
 (ns org.goat.core.macros
   "Macros for simplifying Goat module creation"
   (:require [org.goat.core.message :as msg]
-            [clojure.string :as str])
-  (:import [org.goat.core Module]))
+            [org.goat.core.module-protocol :as mp]
+            [org.goat.core.registry :as registry]
+            [clojure.string :as str]))
 
 (defn- extract-options
   "Extract options from defmodule body, returning [options remaining-body]"
@@ -42,7 +43,10 @@
      (~(symbol (str "-" to-method)) ~'this ~'m)))
 
 (defmacro defmodule
-  "Define a Goat module with automatic Java interop and message wrapping.
+  "Define a pure Clojure Goat module.
+
+  Generates pure Clojure code implementing IModule protocol.
+  Modules are registered in the static registry at namespace load time.
 
   Usage:
   (defmodule ModuleName
@@ -51,10 +55,10 @@
     :receive-messages :all  ; or :unclaimed or :commands (default)
 
     (defn process-channel-message [m]
-      ; m is automatically wrapped - use (get-command m), (reply m text), etc.
-      (case (get-command m)
-        :cmd1 (reply m \"Hello!\")
-        :cmd2 (reply m \"World!\")))
+      ; m is automatically wrapped - use (msg/command m), (msg/reply m text), etc.
+      (case (msg/command m)
+        :cmd1 (msg/reply m \"Hello!\")
+        :cmd2 (msg/reply m \"World!\")))
 
     ; process-private-message auto-implemented if not provided
     )"
@@ -62,67 +66,75 @@
   (let [[options remaining-body] (extract-options body)
         commands (or (:commands options) [])
         wants-private (get options :wants-private true)
-        ; Map Clojure-style keywords to Java constants
         receive-messages (or (:receive-messages options) :commands)
+        ; Map to Clojure keywords instead of Java constants
         message-type (case receive-messages
-                       :all 'org.goat.core.Module/WANT_ALL_MESSAGES
-                       :unclaimed 'org.goat.core.Module/WANT_UNCLAIMED_MESSAGES
-                       :commands 'org.goat.core.Module/WANT_COMMAND_MESSAGES)
+                       :all :all
+                       :unclaimed :unclaimed
+                       :commands :commands)
 
         ; Find function definitions
         channel-fn (find-defn-by-name remaining-body 'process-channel-message)
         private-fn (find-defn-by-name remaining-body 'process-private-message)
 
-        ; Generate the namespace qualified class name
-        ; Convert dashes to underscores for Java compatibility
-        current-ns (str/replace (str (ns-name *ns*)) "-" "_")
-        ; If the namespace already ends with the module name, use it directly
-        ; Otherwise append the module name
-        class-name (if (str/ends-with? current-ns (str "." module-name))
-                     (symbol current-ns)
-                     (symbol (str current-ns "." module-name)))
+        ; Generate dispatch function name
+        dispatch-fn-name (symbol (str (name module-name) "-dispatch"))
+        metadata-name (symbol (str (name module-name) "-metadata"))
 
-        ; Transform function definitions
-        channel-method (when channel-fn
-                        (transform-message-fn channel-fn "processChannelMessage"))
-        private-method (when private-fn
-                        (transform-message-fn private-fn "processPrivateMessage"))
+        ; Extract function body and parameter
+        channel-impl (when channel-fn
+                       (let [[_ _ [msg-param] & fn-body] channel-fn]
+                         `(fn [~'msg]
+                            (let [~msg-param (msg/wrap-message ~'msg)]
+                              ~@fn-body))))
 
-        ; Auto-generate missing method (delegate to the other)
-        auto-delegation (cond
-                         (and channel-fn (not private-fn))
-                         (generate-delegation "processPrivateMessage" "processChannelMessage")
+        private-impl (when private-fn
+                       (let [[_ _ [msg-param] & fn-body] private-fn]
+                         `(fn [~'msg]
+                            (let [~msg-param (msg/wrap-message ~'msg)]
+                              ~@fn-body))))
 
-                         (and private-fn (not channel-fn))
-                         (generate-delegation "processChannelMessage" "processPrivateMessage")
+        ; Auto-delegation - if only one handler defined, use it for both
+        final-dispatch (cond
+                         (and channel-impl private-impl)
+                         `(fn [msg#]
+                            (if (.isPrivate msg#)
+                              (~private-impl msg#)
+                              (~channel-impl msg#)))
 
-                         :else nil)]
+                         channel-impl
+                         channel-impl
+
+                         private-impl
+                         private-impl
+
+                         :else
+                         `(fn [~'msg] nil))]
 
     `(do
-       ; Generate the Java class
-       (gen-class
-         :name ~class-name
-         :extends org.goat.core.Module)
+       ; Define the dispatch function with exception handling
+       (defn ~dispatch-fn-name [msg#]
+         (try
+           (~final-dispatch msg#)
+           (catch Exception e#
+             (.printStackTrace e#)
+             (when (.hasText msg#)
+               (.reply msg# (str ~(name module-name) " caused an exception: "
+                                 (.getLocalizedMessage e#)))))))
 
-       ; Generate getCommands method
-       (defn ~'-getCommands [~'_]
-         (into-array String ~(mapv name commands)))
+       ; Create module metadata
+       (def ~metadata-name
+         (mp/map->ModuleMetadata
+           {:module-name ~(name module-name)
+            :commands ~(vec commands)
+            :message-type ~message-type
+            :wants-private ~wants-private
+            :dispatch-fn ~dispatch-fn-name}))
 
-       ; Generate messageType method if specified
-       ~(when (not= message-type 'org.goat.core.Module/WANT_COMMAND_MESSAGES)
-          `(defn ~'-messageType [~'_]
-             ~message-type))
+       ; Register module immediately when namespace loads
+       (registry/register-module! ~metadata-name)
 
-       ; Generate wantsPrivate field if specified
-       ~(when (not wants-private)
-          `(def ~'wantsPrivate false))
-
-       ; Include the transformed method definitions
-       ~channel-method
-       ~private-method
-       ~auto-delegation
-
-       ; Include any other definitions from the body
+       ; Include any helper functions from body
        ~@(filter #(not (and (seq? %)
                            (= 'defn (first %))
                            (contains? #{'process-channel-message 'process-private-message}

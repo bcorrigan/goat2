@@ -3,6 +3,8 @@
    [clojure.edn :as edn]
    [clojure.set :as set]
    [clojure.string :as str]
+   [org.goat.core.macros :refer [defmodule]]
+   [org.goat.core.message :as message]
    [org.goat.db.users :as users]
    [org.goat.db.words :as words]
    [org.goat.util.str :as strutil]
@@ -10,10 +12,7 @@
    [org.goat.wordle.gfx :as gfx]
    [org.goat.wordle.str :as msg])
   (:import
-   (org.goat.core BotStats Module))
-  (:gen-class
-   :extends org.goat.core.Module
-   :exposes {WANT_ALL_MESSAGES {:get WANT_ALL_MESSAGES}}))
+   (org.goat.core BotStats Message)))
 
 (def max-guesses 6)
 (def A-Z (set (map char (concat (range 65 91)))))
@@ -221,9 +220,9 @@
 
 (defn reply-both
   "Reply to two chats"
-  [m1 m2 msg]
-  (.reply m1 msg)
-  (.reply m2 msg))
+  [m1 m2 text]
+  (message/reply m1 text)
+  (message/reply m2 text))
 
 (defn clear-game!
   "For a given chatid, remove all the game state entirely.
@@ -242,8 +241,8 @@
       (locking playing
         (if (= @playing 2)
           (do
-            (.reply m (str "I'm afraid that " other-user " is not as speedy as you, but I will keep you posted in the main chat."))
-            (.reply other-msg (str this-user " just finished, " other-user ", better get your skates on!"))
+            (message/reply m (str "I'm afraid that " other-user " is not as speedy as you, but I will keep you posted in the main chat."))
+            (message/reply other-msg (str this-user " just finished, " other-user ", better get your skates on!"))
             (set-gameprop challenge-key :first-game (get-game chat-key))
             (reset! playing 1))
           (when (= @playing 1)
@@ -256,8 +255,8 @@
                   reply          (partial reply-both m other-msg)]
               (reset! playing 0)
               (reply "The challenge has concluded!")
-              (.replyWithImage m combined-image)
-              (.replyWithImage other-msg combined-image)
+              (message/reply-image m combined-image)
+              (message/reply-image other-msg combined-image)
               (let [p1-guesses (count (get-fgameprop challenge-key :guesses))
                     p2-guesses (count (get-gameprop chat-key :guesses))
                     p1-won     (get-fgameprop challenge-key :won)
@@ -295,8 +294,8 @@
   set user to elspeth. If the game in progress is an elspeth game, then
   it always continues as an elspeth game."
   [m chat-key]
-  (let [has-elspeth (str/includes? (str/lower-case (.getText m)) "elspeth")
-        sender      (.getSender m)]
+  (let [has-elspeth (str/includes? (str/lower-case (message/text m)) "elspeth")
+        sender      (message/sender m)]
     (if (playing? chat-key)
       (if (= "Elspeth" (get-gameprop chat-key :user))
         "Elspeth"
@@ -340,10 +339,10 @@
         hits (:hits worddata)]
     (new-game! chat-key word size definition hits user difficulty nil)
     (when (= "Elspeth" user)
-      (.reply m "I hope you enjoy the game Elspeth!"))
+      (message/reply m "I hope you enjoy the game Elspeth!"))
     (when (= difficulty :hard)
-      (.reply m (str "Ohh, feeling cocky, are we, " user "?")))
-    (.replyWithImage m (get-board-img chat-key))))
+      (message/reply m (str "Ohh, feeling cocky, are we, " user "?")))
+    (message/reply-image m (get-board-img chat-key))))
 
 (defn handle-guess [m chat-key guess user]
   ;; CRITICAL: Calculate analytics BEFORE adding the guess to game state
@@ -391,7 +390,7 @@
           remaining-count (analytics/allowed-words-for-facts updated-facts :count)]
       (add-to-col! chat-key :remaining-words-history remaining-count))
     
-    (.replyWithImage m (get-board-img chat-key))
+    (message/reply-image m (get-board-img chat-key))
 
     ;; Provide analytics feedback if we calculated it successfully
     (when analytics-feedback
@@ -405,26 +404,26 @@
                 (and (>= (:rating analytics-feedback) 9)
                      (> (:possible-answers-count analytics-feedback) 4))
                 (<= (:rating analytics-feedback) 3))
-        (.reply m (:feedback-msg analytics-feedback))))
+        (message/reply m (:feedback-msg analytics-feedback))))
 
     ;; Continue with existing game logic
     (when (and (not (won? chat-key))
                (< (guesses-made chat-key) max-guesses))
-      (.reply m (letter-help chat-key))
+      (message/reply m (letter-help chat-key))
 
       ;; Warn if next guess will be the last (after 5 guesses made, before guess 6)
       (when (= (guesses-made chat-key) (dec max-guesses))
-        (.reply m (msg/last-chance-message)))
+        (message/reply m (msg/last-chance-message)))
 
       (when (and (> (guesses-made chat-key) 2)
                  (no-progress? chat-key))
-        (.reply m (rand-nth msg/no-progress-responses))))))
+        (message/reply m (rand-nth msg/no-progress-responses))))))
 
 (defn handle-win [m chat-key]
   (set-gameprop chat-key :won true)
   (let [guesses-count (guesses-made chat-key)
         congrats-msg (rand-nth (get msg/win-responses guesses-count))]
-    (.reply m congrats-msg))
+    (message/reply m congrats-msg))
 
   ;; Check for lucky guess (many possible words before winning guess)
   (let [remaining-history (get-gameprop chat-key :remaining-words-history)
@@ -432,9 +431,9 @@
         possible-before-win (when (seq remaining-history)
                              (last remaining-history))]
     (when (and possible-before-win (>= possible-before-win 5))
-      (.reply m (format "LUCKY GUESS!!! That was a %d:1 shot and you made it!!!" possible-before-win))))
+      (message/reply m (format "LUCKY GUESS!!! That was a %d:1 shot and you made it!!!" possible-before-win))))
 
-  (.reply m (str "Definition: " (get-gameprop chat-key :answerdef)))
+  (message/reply m (str "Definition: " (get-gameprop chat-key :answerdef)))
 
   (let [pbs (clear-game! chat-key m)
         user (get-gameprop chat-key :user)
@@ -442,18 +441,18 @@
         won-rate-150 (:won-rate-150 pbs)
         guess-rate-20 (:guess-rate-20 pbs)]
     (when (and (some? streak) (zero? (mod streak 5)))
-      (.reply m (format "Well done %s!! Your PB streak is now %s." user streak)))
+      (message/reply m (format "Well done %s!! Your PB streak is now %s." user streak)))
     (when (some? won-rate-150)
-      (.reply m (format "NEW PB!!! Well done %s!! Your PB win rate is now %s." user won-rate-150)))
+      (message/reply m (format "NEW PB!!! Well done %s!! Your PB win rate is now %s." user won-rate-150)))
     (when (some? guess-rate-20)
-      (.reply m (format "NEW PB!!! Well done %s!! Your PB guess rate is now %s." user guess-rate-20)))))
+      (message/reply m (format "NEW PB!!! Well done %s!! Your PB guess rate is now %s." user guess-rate-20)))))
 
 (defn handle-loss [m chat-key]
   (set-gameprop chat-key :won false)
-  (.reply m (rand-nth msg/lose-responses))
-  (.reply m (format (rand-nth msg/lose-reveal-responses)
+  (message/reply m (rand-nth msg/lose-responses))
+  (message/reply m (format (rand-nth msg/lose-reveal-responses)
                     (get-gameprop chat-key :answer)))
-  (.reply m (format (rand-nth msg/definition-reveal-responses)
+  (message/reply m (format (rand-nth msg/definition-reveal-responses)
                     (get-gameprop chat-key :answer)
                     (get-gameprop chat-key :answerdef)))
   (clear-game! chat-key m))
@@ -475,27 +474,27 @@
       (handle-guess m chat-key guess user)
       (when (or (won? chat-key) (= max-guesses (guesses-made chat-key)))
         (handle-game-end m chat-key)))
-    (.reply m (rand-nth msg/invalid-guess-responses))))
+    (message/reply m (rand-nth msg/invalid-guess-responses))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; COMMAND HANDLING FNS ;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defn handle-stats-command [m chat-key user]
-  (.replyWithImage m (gfx/get-img-sync chat-key {:user user :type :stats})))
+  (message/reply-image m (gfx/get-img-sync chat-key {:user user :type :stats})))
 
 (defn handle-statsvs-command [m chat-key user]
-  (let [opponent (str/trim (.getModText m))]
+  (let [opponent (str/trim (message/mod-text m))]
     (if (users/user-known? opponent)
       (let [days          7
             user-wins     (users/count-recent-wins user opponent days)
             opponent-wins (users/count-recent-wins opponent user days)
             draws         (users/count-recent-draws user opponent days)]
-        (.replyWithImage m (gfx/get-img-sync chat-key {:user-wins user-wins :opponent-wins opponent-wins :draws draws :user user :opponent opponent :type :pie})))
-      (.reply m "Er, who is that?"))))
+        (message/reply-image m (gfx/get-img-sync chat-key {:user-wins user-wins :opponent-wins opponent-wins :draws draws :user user :opponent opponent :type :pie})))
+      (message/reply m "Er, who is that?"))))
 
 (defn handle-league-command [m chat-key user]
-  (let [mod-text (str/trim (.getModText m))
+  (let [mod-text (str/trim (message/mod-text m))
         parts (str/split mod-text #"\s+")
         opponent (first parts)
         time-period (when (> (count parts) 1) (str/lower-case (second parts)))
@@ -513,18 +512,18 @@
                               (if (= games-played 1) "" "s")
                               user user-points
                               opponent opponent-points)]
-        (.reply m reply-msg))
-      (.reply m "Er, who is that?"))))
+        (message/reply m reply-msg))
+      (message/reply m "Er, who is that?"))))
 
 (defn handle-streak-command [m user]
   (let [streak     (users/get-streak user)
         streak-msg (msg/get-streak-msg streak user)]
-    (.reply m streak-msg)))
+    (message/reply m streak-msg)))
 
 (defn handle-challenge [m user challenge-user size difficulty]
   (if (users/user-known? user)
     (if (= (str/lower-case challenge-user) (str/lower-case user))
-      (.reply m "You can't challenge yourself, silly.")
+      (message/reply m "You can't challenge yourself, silly.")
       (let [user1-chatid   (users/user-chat challenge-user)
             user2-chatid   (users/user-chat user)
             user1-chat-key (keyword (str user1-chatid))
@@ -536,57 +535,54 @@
                  (playing? user1-chat-key)
                  (playing? user2-chat-key))
           (do
-            (new-challenge! challenge-key user1-chat-key user2-chat-key (.getChatId m) user challenge-user m)
-            (.reply m "Starting a challenge match!! Let's go!")
+            (new-challenge! challenge-key user1-chat-key user2-chat-key (message/chat-id m) user challenge-user m)
+            (message/reply m "Starting a challenge match!! Let's go!")
             (let [worddata (words/get-word difficulty size)
                   word (:word worddata)
                   definition (:definition worddata)
                   hits (:hits worddata)]
               (new-game! user1-chat-key word size definition hits challenge-user difficulty challenge-key)
-              (.replyWithImage user1-msg (get-board-img user1-chat-key))
+              (message/reply-image user1-msg (get-board-img user1-chat-key))
               (new-game! user2-chat-key word size definition hits user difficulty challenge-key)
-              (.replyWithImage user2-msg (get-board-img user2-chat-key))))
-          (.reply m "There's already a challenge match being played! Can't have too much challenge."))))
-    (.reply m (str "I can't message you privately, " user
+              (message/reply-image user2-msg (get-board-img user2-chat-key))))
+          (message/reply m "There's already a challenge match being played! Can't have too much challenge."))))
+    (message/reply m (str "I can't message you privately, " user
                    ", please message me privately the word \"setchat\" and try again."))))
 
 (defn handle-wordle-command [m chat-key user trailing]
   (if-not (playing? chat-key)
     (let [size (parse-size trailing)
-          challenge-user (users/user-known? (get-challenge (.getModText m)))
+          challenge-user (users/user-known? (get-challenge (message/mod-text m)))
           difficulty (get-difficulty trailing)]
       (cond
         (or (> size 10) (< size 2))
-            (.reply m "Don't be an eejit. I won't do more than 10 or less than 2.")
+            (message/reply m "Don't be an eejit. I won't do more than 10 or less than 2.")
         challenge-user
             (handle-challenge m user challenge-user size difficulty)
         :else (start-new-game m chat-key user size difficulty)))
-    (.reply m "We're already playing a game, smart one.")))
+    (message/reply m "We're already playing a game, smart one.")))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; MODULE ENTRY POINT ;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(defn -processChannelMessage [_ m]
-  ;; Skip messages without text (e.g., document uploads)
-  (when (.hasText m)
-    (let [chat-key (keyword (str (.getChatId m)))
-          guess    (str/upper-case (.getText m))
-          command  (str/lower-case (or (.getModCommand m) ""))
-          trailing (str/lower-case (.getText m))
-          user     (get-user m chat-key)]
-      (case command
-        "stats"   (handle-stats-command m chat-key user)
-        "statsvs" (handle-statsvs-command m chat-key user)
-        "league"  (handle-league-command m chat-key user)
-        "streak"  (handle-streak-command m user)
-        "wordle"  (handle-wordle-command m chat-key user trailing)
-        (when (playing? chat-key)
-          (handle-gameplay m chat-key guess user))))))
+(defmodule Wordle
+  :commands [:wordle :streak :stats :statsvs :league]
+  :receive-messages :all
 
-(defn -processPrivateMessage [this m] (-processChannelMessage this m))
-
-(defn -getCommands [_] (into-array String '("wordle" "streak" "stats" "statsvs" "league")))
-
-(defn -messageType [_]
-  Module/WANT_ALL_MESSAGES)
+  (defn process-channel-message [m]
+    ;; Skip messages without text (e.g., document uploads)
+    (when (message/has-text? m)
+      (let [chat-key (keyword (str (message/chat-id m)))
+            guess    (str/upper-case (message/text m))
+            command  (message/command m)  ; Returns keyword or nil
+            trailing (str/lower-case (message/text m))
+            user     (get-user m chat-key)]
+        (case command
+          :stats   (handle-stats-command m chat-key user)
+          :statsvs (handle-statsvs-command m chat-key user)
+          :league  (handle-league-command m chat-key user)
+          :streak  (handle-streak-command m user)
+          :wordle  (handle-wordle-command m chat-key user trailing)
+          (when (playing? chat-key)
+            (handle-gameplay m chat-key guess user)))))))

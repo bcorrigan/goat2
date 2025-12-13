@@ -3,6 +3,9 @@ package org.goat;
 import org.goat.core.*;
 import static org.goat.util.Passwords.*;
 
+import clojure.java.api.Clojure;
+import clojure.lang.IFn;
+
 import java.io.*;
 import java.net.URL;
 import java.util.Locale;
@@ -14,7 +17,6 @@ public class Goat {
     private static boolean testMode;
     public static LinkedBlockingQueue<Message> inqueue = new LinkedBlockingQueue<Message>();
     public static LinkedBlockingQueue<Message> outqueue = new LinkedBlockingQueue<Message>();
-    public static ModuleController modController = new ModuleController() ;
     public static String[] argv = {""};
     public static ServerConnection sc;
 
@@ -44,13 +46,33 @@ public class Goat {
             System.out.println("We appear to be connected.\n");
         }
 
-        loadDefaultModules(modController);
+        // Initialize Clojure module system
         try {
-            Thread.sleep(100);   //lets give the logon a chance to progress before adding messages to queues
-        } catch (InterruptedException e) {
+            IFn require = Clojure.var("clojure.core", "require");
+            require.invoke(Clojure.read("org.goat.core.init"));
+
+            IFn init = Clojure.var("org.goat.core.init", "init!");
+            init.invoke();
+        } catch (Exception e) {
+            System.err.println("Failed to initialize Clojure module system:");
             e.printStackTrace();
         }
-        new MessageDispatcher(modController);
+
+        // Old Java module loading (commented out - now using pure Clojure modules)
+        // loadDefaultModules(modController);
+        // try {
+        //     Thread.sleep(100);   //lets give the logon a chance to progress before adding messages to queues
+        // } catch (InterruptedException e) {
+        //     e.printStackTrace();
+        // }
+        // new MessageDispatcher(modController);
+
+        // Keep the main thread alive (core.async go-loops are daemon threads)
+        try {
+            Thread.currentThread().join();
+        } catch (InterruptedException e) {
+            System.out.println("Bot shutting down...");
+        }
     }
 
     private static void parseArgs(String[] args) {
@@ -110,46 +132,6 @@ public class Goat {
         System.out.println("  -test                Run in CLI test mode (stdin/stdout instead of Telegram)");
     }
 
-    private void loadDefaultModules(ModuleController modController) {
-        Class<?>[] defaultModules = {
-            //org.goat.module.WordGame.class,
-            //org.goat.module.Remind.class,
-            //org.goat.module.CountDown.class,  // Converted to Clojure
-            //org.goat.module.Calc.class,  // Converted to Clojure
-            //org.goat.module.More.class,  // Converted to Clojure
-            //org.goat.module.DiceRoll.class,
-            //org.goat.module.Weather.class
-            //CljTest.class
-            /*goat.module.ModuleCommands.class,
-              goat.module.NickServ.class,
-              goat.module.Help.class,
-              goat.module.Auth.class,
-              goat.module.Core.class,
-              goat.module.UserManagement.class,
-              goat.module.ServerCommands.class*/
-        } ;
-        try {
-            for(int i=0; i<defaultModules.length; i++)
-                modController.loadInAllChannels(defaultModules[i]);
-            modController.loadInAllChannels("Wordle");
-            modController.loadInAllChannels("CoreCommands");
-			modController.loadInAllChannels("Calc");
-			modController.loadInAllChannels("Capture");
-			modController.loadInAllChannels("Countdown");
-			modController.loadInAllChannels("WordStats");
-			modController.loadInAllChannels("Freezer");
-			modController.loadInAllChannels("Remind");
-			modController.loadInAllChannels("Define");
-			modController.loadInAllChannels("Weather");
-			modController.loadInAllChannels("DiceRoll");
-			modController.loadInAllChannels("More");
-            /*ModuleCommands moduleCommands = (ModuleCommands) modController.getLoaded("ModuleCommands");
-            moduleCommands.modControl = modController;
-            moduleCommands.inAllChannels = true;*/
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
 
     private void setDefaultStats() {
         // syntax is ugly here because we're accessing a scala companion object

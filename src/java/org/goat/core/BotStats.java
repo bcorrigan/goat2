@@ -25,12 +25,8 @@ public class BotStats {
     private static BotStats instance;
     private String token;
 
-    /**
-     * Made this a CopyOnWriteArrayList to hopefully avoid the concurrent modification exceptions.
-     * In theory, it should avoid the problems we have had, but will be much, much slower for write operations
-     * But who cares! we only really write to the list at startup. Big whoop.
-     */
-    private List<Module> modules = new CopyOnWriteArrayList<Module>();
+    // Module tracking removed - now handled by Clojure registry
+    // private List<Module> modules = new CopyOnWriteArrayList<Module>();
 
     private BotStats() {
         //pass
@@ -162,51 +158,13 @@ public class BotStats {
         this.commands = commands;
     }
 
-    public List<Module> getModules() {
-        return modules;
-    }
-
-    public void rebuildCommands() {
-        BotStats.getInstance().setCommands(new HashSet<String>());
-        for (Module mod : getModules()) {
-            addCommands(mod.getCommands());
-        }
-    }
-
-    public boolean isLoadedCommand(String s) {
-        return StringUtil.stringInArray(s, getCommands().toArray(new String[0]));
-    }
-
-    public void addCommands(String[] commands) {
-        BotStats.getInstance().getCommands().addAll(Arrays.asList(commands));
-    }
-
-    public void setModules(List<Module> modules) {
-        this.modules = modules;
-    }
-
-    public void addModule(Module module) {
-        modules.add(module);
-    }
-
-    public void removeModule(Module module) {
-        modules.remove(module);
-
-        rebuildCommands();
-    }
-
-    /**
-     * @return All the module names of all loaded modules
-     */
-    public String[] getModuleNames() {
-        Module mod;
-        String[] modNames = new String[modules.size()];
-        for (int i = 0; i < modules.size(); i++) {
-            mod = modules.get(i);
-            modNames[i] = mod.moduleName;
-        }
-        return modNames;
-    }
+    // Module management methods removed - now handled by Clojure registry
+    // public List<Module> getModules() { return modules; }
+    // public void rebuildCommands() { ... }
+    // public void setModules(List<Module> modules) { this.modules = modules; }
+    // public void addModule(Module module) { modules.add(module); }
+    // public void removeModule(Module module) { modules.remove(module); rebuildCommands(); }
+    // public String[] getModuleNames() { ... }
 
     public boolean isTesting() {
         return testing;

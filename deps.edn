@@ -8,7 +8,6 @@
         org.telegram/telegrambots-extensions {:mvn/version "9.2.0"}
         org.json/json {:mvn/version "20250517"}
         org.apache.commons/commons-lang3 {:mvn/version "3.20.0"}
-        org.reflections/reflections {:mvn/version "0.10.2"}
         com.zoho/hawking {:mvn/version "0.1.9"}
         org.clojure/java.jdbc {:mvn/version "0.7.12"}
         org.xerial/sqlite-jdbc {:mvn/version "3.51.1.0"}
@@ -35,7 +34,7 @@
    :ns-default build}
 
   :run
-  {:main-opts ["-m" "org.goat.Goat"]}
+  {:extra-paths ["target/classes"]}
 
   :repl
   {:extra-deps {nrepl/nrepl {:mvn/version "1.5.1"}

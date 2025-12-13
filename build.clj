@@ -51,7 +51,11 @@
   (println "AOT compiling Clojure sources...")
   (let [;; Core infrastructure namespaces (always needed)
         core-namespaces '[org.goat.core.message
-                          org.goat.core.macros]
+                          org.goat.core.macros
+                          org.goat.core.module-protocol
+                          org.goat.core.registry
+                          org.goat.core.dispatcher
+                          org.goat.core.init]
         ;; Auto-discover all module namespaces
         module-namespaces (discover-namespaces "src/clj" "org/goat/module")
         ;; Auto-discover all db namespaces
