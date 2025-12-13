@@ -142,7 +142,7 @@
 
 ;; CLI platform for testing.
 ;; Captures all sends to an atom for verification.
-(defrecord CLIPlatform [output-atom]
+(defrecord CLIPlatform [output-atom capture?]
   Platform
 
   (send-text [this chat-id text options]
@@ -150,8 +150,11 @@
                :chat-id chat-id
                :text text
                :options options}]
-      (swap! output-atom conj msg)
-      (println (format "[CLI %s] %s" chat-id text))
+      (when capture?
+        (swap! output-atom conj msg))
+      (if capture?
+        (println (format "[CLI %s] %s" chat-id text))
+        (println text))
       msg))
 
   (send-image [this chat-id image options]
@@ -159,8 +162,11 @@
                :chat-id chat-id
                :image image
                :options options}]
-      (swap! output-atom conj msg)
-      (println (format "[CLI %s] <image>" chat-id))
+      (when capture?
+        (swap! output-atom conj msg))
+      (println (if capture?
+                 (format "[CLI %s] <image>" chat-id)
+                 "[IMAGE: Cannot display images in CLI mode]"))
       msg))
 
   (send-document [this chat-id bytes filename options]
@@ -169,8 +175,11 @@
                :filename filename
                :size (count bytes)
                :options options}]
-      (swap! output-atom conj msg)
-      (println (format "[CLI %s] <document: %s (%d bytes)>" chat-id filename (count bytes)))
+      (when capture?
+        (swap! output-atom conj msg))
+      (println (if capture?
+                 (format "[CLI %s] <document: %s (%d bytes)>" chat-id filename (count bytes))
+                 (format "[DOCUMENT: %s (%d bytes)]" filename (count bytes))))
       msg))
 
   (download-document [this file-id]
@@ -195,16 +204,20 @@
   (->TelegramPlatform client))
 
 (defn create-cli-platform
-  "Create a CLI platform instance for testing.
+  "Create a CLI platform instance.
 
-   Optional arguments:
-   - output-atom: Atom to capture output (default: new atom)
+   For testing: captures output to atom and prints with [CLI ...] prefix
+   For interactive: just prints to stdout
+
+   Options:
+   - :capture? - If true, capture to atom (default: true for testing)
+   - :output-atom - Atom to capture to (default: new atom)
 
    Returns: CLIPlatform record"
-  ([]
-   (create-cli-platform (atom [])))
-  ([output-atom]
-   (->CLIPlatform output-atom)))
+  [& {:keys [capture? output-atom]
+      :or {capture? true
+           output-atom (atom [])}}]
+  (->CLIPlatform output-atom capture?))
 
 ;; =============================================================================
 ;; Examples and Testing

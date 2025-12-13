@@ -92,10 +92,19 @@
   ;; Start connection
   (if (config/test-mode?)
     (do
-      (println "Starting in CLI test mode...")
-      ;; TODO: Implement CLI connection
-      (println "CLI test mode not yet implemented")
-      (System/exit 1))
+      (println "\n=== CLI Test Mode ===")
+      (println "Type commands directly (e.g., 'roll 3d6' or 'goat, wordle')")
+      (println "Commands can be with or without 'goat,' prefix")
+      (println "Press Ctrl+C to exit")
+      (println "=====================\n")
+      (flush)
+
+      (if (conn/start-cli-connection :debug? false)
+        (log/info "CLI test mode started successfully")
+        (do
+          (println "Failed to start CLI test mode")
+          (System/exit 1))))
+
     (do
       (print "Connecting to Telegram... ")
       (flush)

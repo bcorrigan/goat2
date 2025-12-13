@@ -48,7 +48,7 @@
   [telegram-msg platform-inst]
   (let [chat-id (.getChatId telegram-msg)
         sender (if-let [from (.getFrom telegram-msg)]
-                (.getUserName from)
+                (.getFirstName from)
                 "unknown")
         text (.getText telegram-msg)
         chat (if-let [c (.getChat telegram-msg)]
@@ -154,6 +154,49 @@
         (System/exit 2)))))
 
 ;; =============================================================================
+;; CLI Input Handler (stdin → Bot)
+;; =============================================================================
+
+(defn- start-cli-input-handler
+  "Start CLI input handler that reads from stdin.
+   Runs in a future (separate thread) for blocking I/O.
+
+   Reads lines from System/in and creates message maps,
+   putting them on incoming-chan for processing."
+  [platform-inst debug?]
+  (future
+    (try
+      (when debug?
+        (log/debug "CLI InputHandler starting..."))
+
+      (let [reader (java.io.BufferedReader. (java.io.InputStreamReader. System/in))]
+        ;; Read loop
+        (loop []
+          (when (:running? @connection-state)
+            (when-let [line (.readLine reader)]
+              (when-not (clojure.string/blank? line)
+                (try
+                  ;; Create message from stdin
+                  (let [msg (msg-parse/create-message
+                              :chat-id 123456
+                              :sender "CLIUser"
+                              :private? true
+                              :text line
+                              :platform-type :cli)]
+                    (when debug?
+                      (log/debug "CLI input:" line))
+                    (channels/put-incoming! msg))
+                  (catch Exception e
+                    (log/error e "Error creating message from CLI input"))))
+              (recur))))
+
+        (when debug?
+          (log/debug "CLI InputHandler stopped")))
+
+      (catch Exception e
+        (log/error e "CLI InputHandler error")))))
+
+;; =============================================================================
 ;; Output Handler (Bot → Telegram)
 ;; =============================================================================
 
@@ -252,13 +295,52 @@
         (.printStackTrace e)
         false))))
 
+(defn start-cli-connection
+  "Start CLI connection for testing mode.
+
+   Reads from stdin, processes through modules, writes to stdout.
+   Uses the same channel infrastructure as Telegram connection.
+
+   Options:
+   - :debug? - Enable debug logging (default: false)"
+  [& {:keys [debug?] :or {debug? false}}]
+  (if (:running? @connection-state)
+    (do
+      (log/warn "Connection already running")
+      false)
+    (try
+      (log/info "Starting CLI test mode connection...")
+
+      ;; Create CLI platform (no capture, direct stdout)
+      (let [cli-platform (platform/create-cli-platform :capture? false)]
+
+        ;; Start handlers
+        (let [input-future (start-cli-input-handler cli-platform debug?)
+              output-chan (start-output-handler cli-platform)]
+
+          ;; Update state
+          (swap! connection-state assoc
+                 :running? true
+                 :platform cli-platform
+                 :platform-type :cli
+                 :input-handler input-future
+                 :output-handler output-chan)
+
+          (log/info "CLI connection started successfully")
+          true))
+
+      (catch Exception e
+        (log/error e "Failed to start CLI connection")
+        (.printStackTrace e)
+        false))))
+
 (defn stop-connection
-  "Stop the Telegram connection.
+  "Stop the active connection (Telegram or CLI).
 
    Gracefully shuts down InputHandler and OutputHandler."
   []
   (when (:running? @connection-state)
-    (log/info "Stopping Telegram connection...")
+    (log/info "Stopping connection...")
 
     ;; Close channels (signals handlers to stop)
     (channels/close-channels!)
@@ -282,7 +364,7 @@
                               :output-handler nil
                               :polling-app nil})
 
-    (log/info "Telegram connection stopped")
+    (log/info "Connection stopped")
     true))
 
 (defn reconnect
