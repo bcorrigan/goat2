@@ -5,6 +5,7 @@
    [clojure.string :as str]
    [org.goat.core.macros :refer [defmodule]]
    [org.goat.core.message :as message]
+   [org.goat.core.message-parse :as msg-parse]
    [org.goat.db.users :as users]
    [org.goat.db.words :as words]
    [org.goat.util.str :as strutil]
@@ -12,7 +13,7 @@
    [org.goat.wordle.gfx :as gfx]
    [org.goat.wordle.str :as msg])
   (:import
-   (org.goat.core BotStats Message)))
+   (org.goat.core BotStats)))
 
 (def max-guesses 6)
 (def A-Z (set (map char (concat (range 65 91)))))
@@ -235,7 +236,7 @@
           other-user    (other-user chat-key)
           this-user     (get-gameprop chat-key :user)
           other-chatid  (users/user-chat other-user)
-          other-msg     (new org.goat.core.Message other-chatid "" true "goat")
+          other-msg     (msg-parse/create-message :chat-id other-chatid :sender "goat" :private? true :text "")
           playing       (get-gameprop challenge-key :playing)]
       ;; If both players press enter simultaneously, they could end up entering this code at the same moment?
       (locking playing
@@ -528,8 +529,8 @@
             user2-chatid   (users/user-chat user)
             user1-chat-key (keyword (str user1-chatid))
             user2-chat-key (keyword (str user2-chatid))
-            user1-msg      (new org.goat.core.Message user1-chatid "" true "goat")
-            user2-msg      (new org.goat.core.Message user2-chatid "" true "goat")
+            user1-msg      (msg-parse/create-message :chat-id user1-chatid :sender "goat" :private? true :text "")
+            user2-msg      (msg-parse/create-message :chat-id user2-chatid :sender "goat" :private? true :text "")
             challenge-key  (combine-keys user1-chat-key user2-chat-key)]
         (if-not (or
                  (playing? user1-chat-key)

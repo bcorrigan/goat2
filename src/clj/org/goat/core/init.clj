@@ -21,8 +21,7 @@
             [org.goat.module.Remind]
             [org.goat.module.Define]
             [org.goat.module.More]
-            [org.goat.module.Wordle])
-  (:import [org.goat Goat]))
+            [org.goat.module.Wordle]))
 
 (defn init!
   "Initialize the Clojure module system.
@@ -68,7 +67,7 @@
 
     ;; Start dispatcher
     (println "\n✓ Starting core.async dispatcher...")
-    (dispatcher/start! Goat/inqueue)
+    (dispatcher/start!)
 
     (println "\n========================================")
     (println "Clojure module system initialized!")

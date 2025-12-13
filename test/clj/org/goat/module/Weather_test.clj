@@ -175,7 +175,7 @@
     (msg-utils/with-clean-replies
       (let [msg (msg-utils/mock-command-message "weather" ""
                   {:sender "testuser"})]
-        (sut/-processChannelMessage nil msg)
+        (sut/process-channel-message nil msg)
         (is (= 1 (msg-utils/reply-count)))
         (is (msg-utils/replied-with? "I don't know where you are"))
         (is (msg-utils/replied-with? "stations.txt"))))))
@@ -185,7 +185,7 @@
     (msg-utils/with-clean-replies
       (let [msg (msg-utils/mock-command-message "weathar" ""
                   {:sender "testuser2"})]
-        (sut/-processChannelMessage nil msg)
+        (sut/process-channel-message nil msg)
         (is (= 1 (msg-utils/reply-count)))
         ;; Should process as weather command
         (is (msg-utils/replied-with? "where you are"))))))
@@ -195,7 +195,7 @@
     (msg-utils/with-clean-replies
       (let [msg (msg-utils/mock-command-message "metar" ""
                   {:sender "testuser3"})]
-        (sut/-processChannelMessage nil msg)
+        (sut/process-channel-message nil msg)
         (is (= 1 (msg-utils/reply-count)))))))
 
 ;; ============================================================================

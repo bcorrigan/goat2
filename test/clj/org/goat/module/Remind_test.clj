@@ -65,7 +65,7 @@
                   "remind"
                   "me tomorrow at 3pm to buy milk"
                   {:sender "alice" :chat-id 123})]
-        (sut/-processChannelMessage nil msg)
+        (sut/process-channel-message nil msg)
 
         ;; Should get confirmation
         (is (msg-utils/replied-with? "I'll remind"))
@@ -87,7 +87,7 @@
                   "remind"
                   "bob in 2 hours to finish report"
                   {:sender "alice" :chat-id 123})]
-        (sut/-processChannelMessage nil msg)
+        (sut/process-channel-message nil msg)
 
         (is (msg-utils/replied-with? "I'll remind"))
         (is (msg-utils/replied-with? "bob"))
@@ -108,7 +108,7 @@
                   "remind"
                   "something wrong"
                   {:sender "alice" :chat-id 123})]
-        (sut/-processChannelMessage nil msg)
+        (sut/process-channel-message nil msg)
 
         (is (msg-utils/replied-with? "One-time Reminders:"))
         (is (msg-utils/replied-with? "Examples:"))
@@ -123,7 +123,7 @@
                   "remind"
                   ""
                   {:sender "alice" :chat-id 123})]
-        (sut/-processChannelMessage nil msg)
+        (sut/process-channel-message nil msg)
 
         (is (msg-utils/replied-with? "One-time Reminders:"))))))
 
@@ -134,7 +134,7 @@
                   "remind"
                   "bob tomorrow check email"
                   {:sender "alice" :chat-id 123})]
-        (sut/-processChannelMessage nil msg)
+        (sut/process-channel-message nil msg)
 
         (is (msg-utils/replied-with? "One-time Reminders:"))))))
 
@@ -149,7 +149,7 @@
                   "remind"
                   "me tomorrow to check email"
                   {:sender "alice" :chat-id 123})]
-        (sut/-processChannelMessage nil msg)
+        (sut/process-channel-message nil msg)
 
         (is (msg-utils/replied-with? "I'll remind"))
 
@@ -165,7 +165,7 @@
                   "remind"
                   "me in 2 hours to call mom"
                   {:sender "alice" :chat-id 123})]
-        (sut/-processChannelMessage nil msg)
+        (sut/process-channel-message nil msg)
 
         (is (msg-utils/replied-with? "I'll remind"))
 
@@ -184,7 +184,7 @@
                   "remind"
                   "me xyzabc to do something"
                   {:sender "alice" :chat-id 123})]
-        (sut/-processChannelMessage nil msg)
+        (sut/process-channel-message nil msg)
 
         (is (msg-utils/replied-with? "couldn't understand"))
 
@@ -198,7 +198,7 @@
                   "remind"
                   "me yesterday to check logs"
                   {:sender "alice" :chat-id 123})]
-        (sut/-processChannelMessage nil msg)
+        (sut/process-channel-message nil msg)
 
         (is (msg-utils/replied-with? "past"))
         (is (msg-utils/replied-with? "Great Scott"))
@@ -218,7 +218,7 @@
                    "remind"
                    "me tomorrow to task1"
                    {:sender "alice" :chat-id 123})]
-        (sut/-processChannelMessage nil msg1))
+        (sut/process-channel-message nil msg1))
 
       (msg-utils/clear-replies!)
 
@@ -227,7 +227,7 @@
                    "remind"
                    "bob in 2 hours to task2"
                    {:sender "alice" :chat-id 123})]
-        (sut/-processChannelMessage nil msg2))
+        (sut/process-channel-message nil msg2))
 
       (msg-utils/clear-replies!)
 
@@ -236,7 +236,7 @@
                    "remind"
                    "me tomorrow to task3"
                    {:sender "bob" :chat-id 456})]
-        (sut/-processChannelMessage nil msg3))
+        (sut/process-channel-message nil msg3))
 
       ;; Check Alice's reminders (as target)
       (let [alice-reminders (db/get-user-reminders "alice")]
@@ -260,7 +260,7 @@
                   "remind"
                   "ME tomorrow to check email"
                   {:sender "alice" :chat-id 123})]
-        (sut/-processChannelMessage nil msg)
+        (sut/process-channel-message nil msg)
 
         (is (msg-utils/replied-with? "I'll remind"))
 
@@ -276,7 +276,7 @@
                    "remind"
                    "me tomorrow to task1"
                    {:sender "alice" :chat-id 123})]
-        (sut/-processChannelMessage nil msg1))
+        (sut/process-channel-message nil msg1))
 
       (msg-utils/clear-replies!)
 
@@ -284,7 +284,7 @@
                    "remind"
                    "me tomorrow to task2"
                    {:sender "alice" :chat-id 456})]
-        (sut/-processChannelMessage nil msg2))
+        (sut/process-channel-message nil msg2))
 
       ;; Both should be created with their respective chat IDs
       (let [reminders (db/get-user-reminders "alice")]
@@ -488,7 +488,7 @@
                   "remind"
                   "me every 5 seconds to breathe"
                   {:sender "alice" :chat-id 123})]
-        (sut/-processChannelMessage nil msg)
+        (sut/process-channel-message nil msg)
 
         ;; Should get confirmation with (recurring) marker
         (is (msg-utils/replied-with? "I'll remind"))
@@ -528,7 +528,7 @@
                   "remind"
                   "me every 5 seconds to blink"
                   {:sender "bob" :chat-id 456})]
-        (sut/-processChannelMessage nil msg)
+        (sut/process-channel-message nil msg)
 
         ;; Fire first instance
         (let [r1 (first (db/get-pending-reminders))
@@ -561,7 +561,7 @@
                   "remind"
                   "me every 5 seconds to test"
                   {:sender "charlie" :chat-id 789})]
-        (sut/-processChannelMessage nil msg)
+        (sut/process-channel-message nil msg)
 
         (let [first-instance (first (db/get-pending-reminders))
               parent-id (or (:parent_reminder_id first-instance)
@@ -593,7 +593,7 @@
                   "reminders"
                   ""
                   {:sender "alice" :chat-id 123})]
-        (sut/-processChannelMessage nil msg)
+        (sut/process-channel-message nil msg)
 
         (is (msg-utils/replied-with? "no pending reminders"))))))
 
@@ -612,7 +612,7 @@
                   "reminders"
                   ""
                   {:sender "alice" :chat-id 123})]
-        (sut/-processChannelMessage nil msg)
+        (sut/process-channel-message nil msg)
 
         (is (msg-utils/replied-with? "Your Reminders"))
         (is (msg-utils/replied-with? "buy milk"))
@@ -635,7 +635,7 @@
                   "reminders"
                   ""
                   {:sender "alice" :chat-id 123})]
-        (sut/-processChannelMessage nil msg)
+        (sut/process-channel-message nil msg)
 
         (is (msg-utils/replied-with? "weekly meeting"))
         (is (msg-utils/replied-with? "every monday"))))))
@@ -663,7 +663,7 @@
                   "reminders"
                   "remove 1"
                   {:sender "alice" :chat-id 123})]
-        (sut/-processChannelMessage nil msg)
+        (sut/process-channel-message nil msg)
 
         (is (msg-utils/replied-with? "Cancelled reminder"))
         (is (msg-utils/replied-with? "first task")))
@@ -702,7 +702,7 @@
                     "reminders"
                     "remove 1"
                     {:sender "alice" :chat-id 123})]
-          (sut/-processChannelMessage nil msg)
+          (sut/process-channel-message nil msg)
 
           (is (msg-utils/replied-with? "Cancelled recurring reminder")))
 
@@ -725,7 +725,7 @@
                   "reminders"
                   "remove 5"
                   {:sender "alice" :chat-id 123})]
-        (sut/-processChannelMessage nil msg)
+        (sut/process-channel-message nil msg)
 
         (is (msg-utils/replied-with? "Invalid reminder number"))))))
 
@@ -739,7 +739,7 @@
                   "remind"
                   "me every third friday at 3pm starting 12/12/25 to check timesheet"
                   {:sender "alice" :chat-id 123})]
-        (sut/-processChannelMessage nil msg)
+        (sut/process-channel-message nil msg)
 
         ;; Should confirm creation
         (is (msg-utils/replied-with? "I'll remind"))

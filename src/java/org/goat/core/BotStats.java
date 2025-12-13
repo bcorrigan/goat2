@@ -98,7 +98,7 @@ public class BotStats {
         this.token = token;
     }
 
-    protected String getToken() {
+    public String getToken() {
         return token;
     }
 

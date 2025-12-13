@@ -1,59 +1,82 @@
 (ns org.goat.core.message-test
   (:require [clojure.test :refer :all]
-            [org.goat.core.message :refer :all])
-  (:import [org.goat.core Message]))
+            [org.goat.core.message :refer :all]
+            [org.goat.core.message-parse :as msg-parse]
+            [org.goat.testutils.message :as msg-utils]))
 
-(deftest test-message-wrapper
-  (testing "MessageWrapper protocol implementation"
-    (let [;; Create a mock message - we'll use the existing Message constructor
-          mock-msg (Message. 12345 "goat: test message" false "testuser")
-          wrapped (wrap-message mock-msg)]
+(deftest test-message-protocol-with-maps
+  (testing "MessageContext protocol implementation for maps"
+    (let [msg (msg-parse/create-message
+               :chat-id 12345
+               :text "goat test message"
+               :sender "testuser"
+               :private? false)]
 
       (testing "get-command returns keyword"
-        (is (= :test (get-command wrapped))))
+        (is (= :test (get-command msg))))
 
       (testing "get-text returns full text"
-        (is (= "goat: test message" (get-text wrapped))))
+        (is (= "goat test message" (get-text msg))))
 
       (testing "get-mod-text returns text after command"
-        (is (= "message" (get-mod-text wrapped))))
+        (is (= "message" (get-mod-text msg))))
 
       (testing "get-sender returns sender"
-        (is (= "testuser" (get-sender wrapped))))
+        (is (= "testuser" (get-sender msg))))
 
       (testing "get-chat-id returns chat ID"
-        (is (= 12345 (get-chat-id wrapped))))
+        (is (= 12345 (get-chat-id msg))))
 
       (testing "private? returns boolean"
-        (is (= false (private? wrapped))))
+        (is (= false (private? msg))))
 
       (testing "has-text? returns boolean"
-        (is (= true (has-text? wrapped)))))))
+        (is (= true (has-text? msg)))))))
+
+(deftest test-message-reply
+  (testing "Reply functionality with map-based messages"
+    (msg-utils/with-clean-replies
+      (let [msg (msg-parse/create-message
+                 :chat-id 12345
+                 :text "goat test"
+                 :sender "alice"
+                 :private? false)]
+
+        (testing "reply sends message"
+          (reply msg "Hello, alice!")
+          (is (= 1 (msg-utils/reply-count)))
+          (is (msg-utils/replied-with? "Hello, alice!")))))))
 
 (deftest test-helper-functions
   (testing "Helper function utilities"
-    (let [mock-msg (Message. 12345 "goat: test message" false "testuser")
-          wrapped (wrap-message mock-msg)]
+    (let [msg (msg-parse/create-message
+               :chat-id 12345
+               :text "goat test message"
+               :sender "testuser"
+               :private? false)]
 
-      (testing "command-matches? works with keywords"
-        (is (command-matches? wrapped :test :other))
-        (is (not (command-matches? wrapped :wrong :bad))))
+      (testing "command shorthand works"
+        (is (= :test (command msg))))
 
-      (testing "unwrap extracts Java message"
-        (is (identical? mock-msg (unwrap wrapped)))
-        (is (identical? mock-msg (unwrap mock-msg))))
+      (testing "text shorthand works"
+        (is (= "goat test message" (text msg))))
 
-      (testing "ensure-wrapped handles both types"
-        (is (instance? org.goat.core.message.MessageWrapper (ensure-wrapped mock-msg)))
-        (is (identical? wrapped (ensure-wrapped wrapped)))))))
+      (testing "sender shorthand works"
+        (is (= "testuser" (sender msg))))
+
+      (testing "chat-id shorthand works"
+        (is (= 12345 (chat-id msg)))))))
 
 (deftest test-case-command
-  (testing "case-command routing"
-    (let [mock-msg (Message. 12345 "goat: test message" false "testuser")
-          wrapped (wrap-message mock-msg)
+  (testing "case-command routing with maps"
+    (let [msg (msg-parse/create-message
+               :chat-id 12345
+               :text "goat test message"
+               :sender "testuser"
+               :private? false)
           result (atom nil)]
 
-      (case-command wrapped
+      (case-command msg
         :test #(reset! result "matched!")
         :other #(reset! result "wrong"))
 

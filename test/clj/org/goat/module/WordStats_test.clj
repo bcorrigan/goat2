@@ -267,7 +267,7 @@
          :last_updated (System/currentTimeMillis)})
 
       (let [msg (msg-utils/mock-command-message "wordstats" nil {:sender "alice" :chat-id 123})]
-        (sut/-processChannelMessage nil msg)
+        (sut/process-channel-message nil msg)
 
         ;; Verify response contains key stats
         (is (msg-utils/replied-with? "Word Stats"))
@@ -280,7 +280,7 @@
   (testing "Handles user with no stats gracefully"
     (msg-utils/with-clean-replies
       (let [msg (msg-utils/mock-command-message "wordstats" nil {:sender "nobody" :chat-id 999})]
-        (sut/-processChannelMessage nil msg)
+        (sut/process-channel-message nil msg)
 
         (is (msg-utils/replied-with? "No statistics available"))))))
 
@@ -299,7 +299,7 @@
          :last_updated (System/currentTimeMillis)})
 
       (let [msg (msg-utils/mock-command-message "purity" nil {:sender "alice" :chat-id 123})]
-        (sut/-processChannelMessage nil msg)
+        (sut/process-channel-message nil msg)
 
         (is (msg-utils/replied-with? "PURE"))
         (is (msg-utils/replied-with? "50 messages"))
@@ -321,7 +321,7 @@
          :last_updated (System/currentTimeMillis)})
 
       (let [msg (msg-utils/mock-command-message "purity" nil {:sender "bob" :chat-id 456})]
-        (sut/-processChannelMessage nil msg)
+        (sut/process-channel-message nil msg)
 
         (is (msg-utils/replied-with? "IMPURE"))
         (is (msg-utils/replied-with? "clean up your act"))))))
@@ -347,7 +347,7 @@
 
       (let [msg (msg-utils/mock-command-message "wordstats" nil {:sender "alice" :chat-id 123})]
         ;; Simulate module processing
-        (sut/-processChannelMessage nil msg)
+        (sut/process-channel-message nil msg)
 
         (is (msg-utils/replied-with? "Word Stats"))))))
 
@@ -367,6 +367,6 @@
 
       (let [msg (msg-utils/mock-command-message "purity" nil {:sender "bob" :chat-id 456})]
         ;; Simulate module processing
-        (sut/-processChannelMessage nil msg)
+        (sut/process-channel-message nil msg)
 
         (is (msg-utils/replied-with? "Purity Report"))))))

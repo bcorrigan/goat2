@@ -1,19 +1,25 @@
 (ns org.goat.testutils.message
-  "General Message mocking utility for unit tests.
-   
-   Provides comprehensive mocking functionality for org.goat.core.Message objects,
-   supporting all common usage patterns across modules including Capture, Wordle, etc."
-  (:import (org.goat.core Message)
-           (java.awt.image RenderedImage BufferedImage)
+  "Message mocking utility for unit tests.
+
+   Provides comprehensive mocking functionality for map-based messages,
+   supporting all common usage patterns across modules."
+  (:require [org.goat.core.message-parse :as msg-parse]
+            [org.goat.core.channels :as channels]
+            [clojure.string :as str])
+  (:import (java.awt.image BufferedImage)
            (java.awt Graphics2D Color)))
 
-(def ^:private reply-log 
+;; =============================================================================
+;; Reply Capture
+;; =============================================================================
+
+(def ^:private reply-log
   "Atom to capture all replies sent during testing"
   (atom []))
 
 (defn get-replies
   "Get all replies sent by mock messages during testing.
-   Returns vector of {:text string :image RenderedImage} maps."
+   Returns vector of message maps."
   []
   @reply-log)
 
@@ -22,7 +28,11 @@
   []
   (reset! reply-log []))
 
-(defn- create-mock-image 
+;; =============================================================================
+;; Mock Message Creation
+;; =============================================================================
+
+(defn- create-mock-image
   "Creates a simple test image for mocking image replies"
   []
   (let [img (BufferedImage. 100 50 BufferedImage/TYPE_INT_RGB)
@@ -35,109 +45,84 @@
     img))
 
 (defn mock-message
-  "Creates a mock org.goat.core.Message object for testing.
+  "Creates a mock message map for testing.
 
    Options map supports:
-   - :text         - The message text (default: 'test message')
-   - :chat-id      - Chat ID as Long (default: 123)
-   - :sender       - Who sent the message (default: 'test-user')
-   - :chat-name    - Name of chat room (default: 'test-chat')
-   - :is-private   - Whether message is private/1-1 (default: false)
-   - :capture-replies - Whether to capture .reply() calls (default: true)
-   - :document-bytes - Byte array for document content (default: nil)
+   - :text              - The message text (default: 'test message')
+   - :chat-id           - Chat ID as Long (default: 123)
+   - :sender            - Who sent the message (default: 'test-user')
+   - :chatname          - Name of chat room (default: 'test-chat')
+   - :private?          - Whether message is private/1-1 (default: false)
+   - :authorized?       - Whether from bot owner (default: false)
+   - :document-bytes    - Byte array for document content (default: nil)
    - :document-filename - Filename for document (default: nil)
+   - :bot-name          - Bot name for parsing (default: 'goat')
 
-   The mock supports all key Message methods and captures reply calls for testing.
+   Returns a message map that can be used with all message protocol functions.
 
    Example usage:
    (mock-message {:text 'wordle 5 hard' :sender 'alice' :chat-id 456})
    (mock-message {:text 'Check out https://example.com'})
-   (mock-message {:sender 'bob' :is-private true})
+   (mock-message {:sender 'bob' :private? true})
    (mock-message {:document-bytes csv-bytes :document-filename 'data.csv'})"
 
   ([] (mock-message {}))
-  ([{:keys [text chat-id sender chat-name is-private capture-replies document-bytes document-filename]
+  ([{:keys [text chat-id sender chatname private? authorized?
+            document-bytes document-filename bot-name]
      :or {text "test message"
           chat-id 123
           sender "test-user"
-          chat-name "test-chat"
-          is-private false
-          capture-replies true
-          document-bytes nil
-          document-filename nil}}]
-   
-   ;; Create the actual Message object using the constructor
-   ;; This handles all the parsing logic (modCommand, modText, etc.)
-   (let [base-msg (Message. chat-id text is-private sender)]
-     
-     ;; If we need reply capture, wrap with a proxy
-     (if capture-replies
-       (let [mock-msg (proxy [Message] [chat-id text is-private sender]
-                        ;; Delegate all getters to the real message
-                        (getText [] (.getText base-msg))
-                        (getChatId [] (.getChatId base-msg))
-                        (getSender [] (.getSender base-msg))
-                        (getChatname [] (.getChatname base-msg))
-                        (getModCommand [] (.getModCommand base-msg))
-                        (getModText [] (.getModText base-msg))
-                        (isPrivate [] (.isPrivate base-msg))
-                        (hasText [] (.hasText base-msg))
-                        (hasImage [] (.hasImage base-msg))
-                        (hasDocument [] (some? document-bytes))
-                        (getDocumentBytes [] document-bytes)
-                        (getDocumentFilename [] document-filename)
+          chatname "test-chat"
+          private? false
+          authorized? false
+          bot-name "goat"}}]
 
-                        ;; Override reply methods to capture
-                        (reply [msg-text]
-                          (swap! reply-log conj {:type :text :content msg-text}))
-
-                        (replyWithImage [img]
-                          (swap! reply-log conj {:type :image :content img}))
-
-                        (replyWithDocument [bytes filename]
-                          (swap! reply-log conj {:type :document :content bytes :filename filename})))]
-         ;; Document data is already handled via proxy methods above
-         mock-msg)
-
-       ;; Otherwise just return the real message (possibly with document set)
-       (let [msg base-msg]
-         (when (and document-bytes document-filename)
-           (.setIncomingDocument msg document-filename document-bytes))
-         msg)))))
+   ;; Use msg-parse/create-message to build the message map
+   ;; This ensures proper parsing of commands, etc.
+   (msg-parse/create-message
+    :chat-id chat-id
+    :sender sender
+    :private? private?
+    :text text
+    :chatname chatname
+    :authorized? authorized?
+    :bot-name bot-name
+    :document-bytes document-bytes
+    :document-filename document-filename)))
 
 (defn mock-command-message
   "Convenience function to create a message with a bot command.
-   
+
    Creates a message like 'goat command args' that would trigger module processing.
-   
+
    Args:
-   - command: The command name (e.g. 'wordle', 'stats')  
+   - command: The command name (e.g. 'wordle', 'stats')
    - args: Additional arguments (optional, can be string or collection)
    - opts: Additional options map (same as mock-message)
-   
+
    Examples:
    (mock-command-message 'wordle' '5 hard')
    (mock-command-message 'stats' nil {:sender 'alice'})
    (mock-command-message 'wordle' ['challenge' 'bob'] {:chat-id 999})"
-  
+
   ([command] (mock-command-message command nil {}))
-  ([command args] (mock-command-message command args {}))  
+  ([command args] (mock-command-message command args {}))
   ([command args opts]
-   (let [bot-name "goat" ; Could be made configurable
+   (let [bot-name (or (:bot-name opts) "goat")
          args-str (cond
                     (nil? args) ""
                     (string? args) args
-                    (coll? args) (clojure.string/join " " args)
+                    (coll? args) (str/join " " args)
                     :else (str args))
-         full-text (str bot-name " " command 
+         full-text (str bot-name " " command
                        (when (seq args-str) (str " " args-str)))]
      (mock-message (assoc opts :text full-text)))))
 
 (defn mock-guess-message
   "Convenience function for wordle-style guess messages.
-   
+
    Creates a message with just a word guess (no bot prefix).
-   
+
    Example: (mock-guess-message 'HOUSE' {:sender 'alice'})"
   ([guess] (mock-guess-message guess {}))
   ([guess opts]
@@ -147,71 +132,159 @@
   "Convenience function for private/DM messages."
   ([text] (mock-private-message text {}))
   ([text opts]
-   (mock-message (assoc opts :text text :is-private true))))
+   (mock-message (assoc opts :text text :private? true))))
 
-;; Testing utilities
+;; =============================================================================
+;; Reply Capture Mechanism
+;; =============================================================================
+
+(defn capture-outgoing-message!
+  "Capture an outgoing message instead of sending it.
+   Used by with-clean-replies to intercept replies during testing.
+   Note: Must be public for with-clean-replies macro expansion."
+  [msg]
+  (swap! reply-log conj msg)
+  true)
 
 (defmacro with-clean-replies
-  "Execute body with a clean reply log, automatically clearing before and after."
+  "Execute body with reply capture enabled.
+
+   Automatically intercepts all outgoing messages (replies) and captures them
+   for testing assertions. Clears reply log before and after execution.
+
+   Example:
+   (with-clean-replies
+     (let [msg (mock-message {:text 'wordle 5'})]
+       (process-message msg))
+     (is (replied-with? 'game started'))
+     (is (= 1 (reply-count))))"
   [& body]
   `(do
      (clear-replies!)
      (try
-       ~@body
+       (with-redefs [channels/put-outgoing! capture-outgoing-message!]
+         ~@body)
        (finally
          (clear-replies!)))))
+
+;; =============================================================================
+;; Reply Assertion Utilities
+;; =============================================================================
 
 (defn replied-with?
   "Check if any reply contains the given text (case-insensitive substring match)."
   [text]
-  (some #(and (= :text (:type %))
-             (clojure.string/includes? 
-              (clojure.string/lower-case (:content %))
-              (clojure.string/lower-case text)))
+  (some #(and (:message/text %)
+              (str/includes?
+               (str/lower-case (:message/text %))
+               (str/lower-case text)))
         (get-replies)))
 
 (defn replied-with-image?
   "Check if any image reply was sent."
   []
-  (some #(= :image (:type %)) (get-replies)))
+  (some #(:message.attachment/image %) (get-replies)))
+
+(defn replied-with-document?
+  "Check if any document reply was sent."
+  []
+  (some #(:message.attachment/document-bytes %) (get-replies)))
 
 (defn reply-count
   "Count total number of replies sent."
   []
   (count (get-replies)))
 
-(defn text-reply-count  
+(defn text-reply-count
   "Count number of text replies sent."
   []
-  (count (filter #(= :text (:type %)) (get-replies))))
+  (count (filter :message/text (get-replies))))
 
 (defn image-reply-count
   "Count number of image replies sent."
   []
-  (count (filter #(= :image (:type %)) (get-replies))))
-
-(defn replied-with-document?
-  "Check if any document reply was sent."
-  []
-  (some #(= :document (:type %)) (get-replies)))
+  (count (filter :message.attachment/image (get-replies))))
 
 (defn document-reply-count
   "Count number of document replies sent."
   []
-  (count (filter #(= :document (:type %)) (get-replies))))
+  (count (filter :message.attachment/document-bytes (get-replies))))
 
 (defn get-document-reply
-  "Get the first document reply, or nil if none.
-   Returns map with :content (bytes) and :filename."
+  "Get the first document reply, or nil if none."
   []
-  (first (filter #(= :document (:type %)) (get-replies))))
+  (first (filter :message.attachment/document-bytes (get-replies))))
 
 (defn get-document-content
   "Get the content (byte array) of the first document reply, or nil."
   []
-  (:content (get-document-reply)))
+  (:message.attachment/document-bytes (get-document-reply)))
 
 (defn get-document-filename
   "Get the filename of the first document reply, or nil."
   []
-  (:filename (get-document-reply)))
+  (:message.attachment/document-filename (get-document-reply)))
+
+(defn get-text-replies
+  "Get all text reply contents as a vector of strings."
+  []
+  (mapv :message/text
+        (filter :message/text (get-replies))))
+
+(defn get-first-reply-text
+  "Get the text of the first reply, or nil if no replies."
+  []
+  (:message/text (first (get-replies))))
+
+(defn get-last-reply-text
+  "Get the text of the last reply, or nil if no replies."
+  []
+  (:message/text (last (get-replies))))
+
+;; =============================================================================
+;; Advanced Assertions
+;; =============================================================================
+
+(defn replied-exactly?
+  "Check if exactly one reply was sent with the given text (exact match, case-sensitive)."
+  [text]
+  (and (= 1 (reply-count))
+       (= text (:message/text (first (get-replies))))))
+
+(defn replied-to-chat?
+  "Check if any reply was sent to the specified chat-id."
+  [chat-id]
+  (some #(= chat-id (:message/chat-id %)) (get-replies)))
+
+(defn reply-contains-all?
+  "Check if any single reply contains all the given substrings."
+  [& substrings]
+  (some (fn [reply]
+          (when-let [text (:message/text reply)]
+            (let [lower-text (str/lower-case text)]
+              (every? #(str/includes? lower-text (str/lower-case %))
+                      substrings))))
+        (get-replies)))
+
+;; =============================================================================
+;; Examples and Testing
+;; =============================================================================
+
+(comment
+  ;; Create mock messages
+  (def msg1 (mock-message {:text "hello world" :sender "alice"}))
+  (def msg2 (mock-command-message "wordle" "5 hard" {:sender "bob"}))
+  (def msg3 (mock-private-message "secret message" {:sender "charlie"}))
+
+  ;; Test with reply capture
+  (with-clean-replies
+    (let [msg (mock-message {:text "test"})]
+      (require '[org.goat.core.message :as m])
+      (m/reply msg "This is a reply")
+      (m/reply msg "Another reply"))
+
+    (replied-with? "reply")        ;; => true
+    (reply-count)                  ;; => 2
+    (get-text-replies)             ;; => ["This is a reply" "Another reply"]
+    (get-first-reply-text))        ;; => "This is a reply"
+  )

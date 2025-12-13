@@ -4,7 +4,7 @@
   This protocol replaces the Java Module.java abstract class with a pure
   Clojure solution. Modules implement this protocol via the defmodule macro.")
 
-(defprotocol IModule
+(defprotocol Module
   "Protocol for Goat modules.
 
   Modules don't implement this directly - the defmodule macro generates
@@ -37,7 +37,7 @@
    wants-private  ; Boolean - true if module wants private messages
    dispatch-fn]   ; Function (fn [msg] ...) - the actual message processor
 
-  IModule
+  Module
   (get-module-name [this] module-name)
   (get-commands [this] commands)
   (get-message-type [this] message-type)

@@ -1,9 +1,7 @@
 (ns org.goat.module.TestCapture
   (:require [org.goat.module.Capture :as sut]
             [org.goat.testutils.message :as msg-utils]
-            [clojure.test :as t :refer [deftest is testing]])
-  (:import (org.goat.core Message)
-           (org.goat Goat)))
+            [clojure.test :as t :refer [deftest is testing]]))
 
 (deftest test-extract-url
   (is (= "https://example.com/bum?thingy=this5"

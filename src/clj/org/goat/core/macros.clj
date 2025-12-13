@@ -45,7 +45,7 @@
 (defmacro defmodule
   "Define a pure Clojure Goat module.
 
-  Generates pure Clojure code implementing IModule protocol.
+  Generates pure Clojure code implementing Module protocol.
   Modules are registered in the static registry at namespace load time.
 
   Usage:
@@ -133,6 +133,19 @@
 
        ; Register module immediately when namespace loads
        (registry/register-module! ~metadata-name)
+
+       ; Expose process-channel-message and process-private-message as public functions for testing
+       ~@(when channel-fn
+           (let [[_ _ [msg-param] & fn-body] channel-fn]
+             [`(defn ~'process-channel-message [~msg-param]
+                 (let [~msg-param (msg/wrap-message ~msg-param)]
+                   ~@fn-body))]))
+
+       ~@(when private-fn
+           (let [[_ _ [msg-param] & fn-body] private-fn]
+             [`(defn ~'process-private-message [~msg-param]
+                 (let [~msg-param (msg/wrap-message ~msg-param)]
+                   ~@fn-body))]))
 
        ; Include any helper functions from body
        ~@(filter #(not (and (seq? %)

@@ -4,6 +4,7 @@
   numbers and basic math operators (+, -, *, /, parentheses)."
   (:require [org.goat.core.macros :refer [defmodule]]
             [org.goat.core.message :as msg]
+            [org.goat.core.message-parse :as msg-parse]
             [clojure.string :as str])
   (:import [org.goat.core Constants]
            [org.goat.jcalc Calculator CalculatorException]
@@ -202,8 +203,8 @@
   Creates new Message for timer replies."
   [chat-key text]
   (when-let [chat-id (get-in @state [chat-key :chat-id])]
-    (let [m (org.goat.core.Message. chat-id "" false "goat")]
-      (.reply m text))))
+    (let [m (msg-parse/create-message :chat-id chat-id :sender "goat" :private? false :text "")]
+      (msg/reply m text))))
 
 (defn- finalize-game
   "End game and display solution/winner.

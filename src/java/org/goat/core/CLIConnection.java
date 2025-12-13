@@ -1,9 +1,9 @@
 package org.goat.core;
 
-import org.goat.Goat;
+import clojure.java.api.Clojure;
+import clojure.lang.IFn;
 
 import java.io.*;
-import java.util.concurrent.LinkedBlockingQueue;
 
 /**
  * CLI-based connection for local testing.
@@ -12,9 +12,6 @@ import java.util.concurrent.LinkedBlockingQueue;
  * @author bc
  */
 public class CLIConnection extends Thread {
-
-    private static LinkedBlockingQueue<Message> inqueue = Goat.inqueue;
-    private static LinkedBlockingQueue<Message> outqueue = Goat.outqueue;
 
     private InputHandler ih;
     private OutputHandler oh;
@@ -35,26 +32,41 @@ public class CLIConnection extends Thread {
     }
 
     /**
-     * Reads from stdin and creates Message objects
+     * Reads from stdin and creates message maps via Clojure
      */
     class InputHandler extends Thread {
         private volatile boolean keeprunning = true;
 
         public void run() {
-            setName("CLI Input Handler (stdin -> inqueue)");
+            setName("CLI Input Handler (stdin -> incoming-chan)");
             BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
             String line;
 
             try {
+                // Load Clojure namespaces
+                IFn require = Clojure.var("clojure.core", "require");
+                require.invoke(Clojure.read("org.goat.core.message-parse"));
+                require.invoke(Clojure.read("org.goat.core.channels"));
+
+                IFn createMessage = Clojure.var("org.goat.core.message-parse", "create-message");
+                IFn putIncoming = Clojure.var("org.goat.core.channels", "put-incoming!");
+
                 while (keeprunning && (line = reader.readLine()) != null) {
                     if (line.trim().isEmpty()) {
                         continue;
                     }
 
-                    // Create a test message
-                    // chatId: 123456L, text: user input, isPrivate: true, sender: "TestUser"
-                    Message m = new Message(123456L, line, true, "TestUser");
-                    inqueue.add(m);
+                    // Create a test message map
+                    // chatId: 123456L, text: user input, private?: true, sender: "TestUser"
+                    Object msg = createMessage.invoke(
+                        Clojure.read(":chat-id"), 123456L,
+                        Clojure.read(":text"), line,
+                        Clojure.read(":sender"), "TestUser",
+                        Clojure.read(":private?"), true
+                    );
+
+                    // Put on incoming channel
+                    putIncoming.invoke(msg);
                 }
             } catch (IOException e) {
                 System.err.println("Error reading from stdin: " + e.getMessage());
@@ -68,38 +80,47 @@ public class CLIConnection extends Thread {
     }
 
     /**
-     * Reads from outqueue and writes to stdout
+     * Reads from outgoing channel and writes to stdout
      */
     class OutputHandler extends Thread {
         private volatile boolean keeprunning = true;
 
         public OutputHandler() {
-            setName("CLI Output Handler (outqueue -> stdout)");
+            setName("CLI Output Handler (outgoing-chan -> stdout)");
         }
 
         public void run() {
-            while (keeprunning) {
-                try {
-                    Message m = outqueue.take();
-                    if (!keeprunning)
+            try {
+                // Load Clojure namespaces
+                IFn require = Clojure.var("clojure.core", "require");
+                require.invoke(Clojure.read("org.goat.core.channels"));
+                require.invoke(Clojure.read("org.goat.core.message"));
+
+                IFn takeOutgoing = Clojure.var("org.goat.core.channels", "take-outgoing!");
+                IFn getText = Clojure.var("org.goat.core.message", "text");
+                IFn hasImage = Clojure.var("org.goat.core.message", "has-image?");
+
+                while (keeprunning) {
+                    // Take message from outgoing channel (blocking)
+                    Object msg = takeOutgoing.invoke();
+                    if (!keeprunning || msg == null)
                         break;
 
                     // Handle text messages
-                    if (m.hasText()) {
-                        System.out.println(m.getText());
+                    Object textObj = getText.invoke(msg);
+                    if (textObj != null) {
+                        System.out.println(textObj.toString());
                     }
 
                     // Handle image messages
-                    if (m.hasImage()) {
+                    Object hasImageResult = hasImage.invoke(msg);
+                    if (hasImageResult != null && (Boolean) hasImageResult) {
                         System.out.println("[IMAGE: Cannot display images in CLI mode]");
                     }
-
-                } catch (InterruptedException e) {
-                    // Thread interrupted, continue
-                } catch (Exception e) {
-                    System.err.println("Unexpected exception in CLI OutputHandler: " + e.getMessage());
-                    e.printStackTrace();
                 }
+            } catch (Exception e) {
+                System.err.println("Unexpected exception in CLI OutputHandler: " + e.getMessage());
+                e.printStackTrace();
             }
         }
 

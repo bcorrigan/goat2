@@ -9,16 +9,12 @@ import clojure.lang.IFn;
 import java.io.*;
 import java.net.URL;
 import java.util.Locale;
-import java.util.concurrent.LinkedBlockingQueue;
 
 
 public class Goat {
     private static boolean showhelp;
     private static boolean testMode;
-    public static LinkedBlockingQueue<Message> inqueue = new LinkedBlockingQueue<Message>();
-    public static LinkedBlockingQueue<Message> outqueue = new LinkedBlockingQueue<Message>();
     public static String[] argv = {""};
-    public static ServerConnection sc;
 
     public static void main(String[] args) {
         argv=args;
@@ -36,17 +32,7 @@ public class Goat {
             System.exit(0);
         }
 
-        if (testMode) {
-            // CLI test mode - use stdin/stdout
-            new CLIConnection();
-        } else {
-            // Normal mode - connect to Telegram
-            System.out.print("Connecting to telegram... ");
-            sc = new ServerConnection(); //lets init the connection..
-            System.out.println("We appear to be connected.\n");
-        }
-
-        // Initialize Clojure module system
+        // Initialize Clojure module system first
         try {
             IFn require = Clojure.var("clojure.core", "require");
             require.invoke(Clojure.read("org.goat.core.init"));
@@ -56,6 +42,29 @@ public class Goat {
         } catch (Exception e) {
             System.err.println("Failed to initialize Clojure module system:");
             e.printStackTrace();
+        }
+
+        // Start connection (Telegram or CLI)
+        if (testMode) {
+            // CLI test mode - use stdin/stdout
+            System.out.println("Starting in CLI test mode...");
+            // TODO: Implement CLI connection using Clojure
+            new CLIConnection();
+        } else {
+            // Normal mode - connect to Telegram
+            System.out.print("Connecting to telegram... ");
+            try {
+                IFn require = Clojure.var("clojure.core", "require");
+                require.invoke(Clojure.read("org.goat.core.connection"));
+
+                IFn startConnection = Clojure.var("org.goat.core.connection", "start-connection");
+                startConnection.invoke();
+                System.out.println("We appear to be connected.\n");
+            } catch (Exception e) {
+                System.err.println("Failed to start Telegram connection:");
+                e.printStackTrace();
+                System.exit(1);
+            }
         }
 
         // Old Java module loading (commented out - now using pure Clojure modules)

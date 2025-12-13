@@ -1,11 +1,21 @@
 (ns org.goat.core.message
-  "Clojurian wrapper and utilities for the Java Message class"
-  (:import [org.goat.core Message]))
+  "Clojure message protocol and utilities for map-based messages.
+
+   Messages are represented as Clojure maps with namespaced keywords.
+   This namespace provides the MessageContext protocol for working with
+   messages in a functional, idiomatic way."
+  (:require [org.goat.core.channels :as channels]
+            [org.goat.core.pager :as pager]
+            [org.goat.core.message-parse :as msg-parse]))
+
+;; =============================================================================
+;; MessageContext Protocol
+;; =============================================================================
 
 (defprotocol MessageContext
   "Protocol for interacting with messages in a Clojurian way"
-  (send-msg [this] "Send this message")
-  (reply [this text] "Send a reply to this message")
+  (send-msg [this] "Send this message to the outgoing channel")
+  (reply [this text] "Send a text reply to this message")
   (reply-image [this img] "Send an image reply to this message")
   (reply-document [this bytes filename] "Send a document reply to this message")
   (get-command [this] "Get the command as a keyword (e.g. :wordle)")
@@ -23,208 +33,222 @@
   (has-next-page? [this] "True if this message has a next page for pagination")
   (create-next-page [this] "Create and return the next page message"))
 
-(deftype MessageWrapper [^Message msg]
-  MessageContext
-  (send-msg [_]
-    (.send msg))
+;; =============================================================================
+;; Protocol Implementation for Maps
+;; =============================================================================
 
-  (reply [_ text]
-    (.reply msg text))
-
-  (reply-image [_ img]
-    (.replyWithImage msg img))
-
-  (reply-document [_ bytes filename]
-    (.replyWithDocument msg bytes filename))
-
-  (get-command [_]
-    (when-let [cmd (.getModCommand msg)]
-      (keyword cmd)))
-
-  (get-text [_]
-    (.getText msg))
-
-  (get-mod-text [_]
-    (.getModText msg))
-
-  (get-sender [_]
-    (.getSender msg))
-
-  (get-chat-id [_]
-    (.getChatId msg))
-
-  (get-chatname [_]
-    (.getChatname msg))
-
-  (private? [_]
-    (.isPrivate msg))
-
-  (has-text? [_]
-    (.hasText msg))
-
-  (has-image? [_]
-    (.hasImage msg))
-
-  (has-document? [_]
-    (.hasDocument msg))
-
-  (get-document-bytes [_]
-    (.getDocumentBytes msg))
-
-  (get-document-filename [_]
-    (.getDocumentFilename msg))
-
-  (has-next-page? [_]
-    (.hasNextPage msg))
-
-  (create-next-page [_]
-    (.createNextPage msg)))
-
-(defn wrap-message
-  "Wraps a Java Message object in a Clojurian MessageWrapper"
-  [^Message msg]
-  (MessageWrapper. msg))
-
-;; Extend the protocol to work directly with Java Message objects
-;; This allows modules to use protocol methods with both wrapped and unwrapped messages
 (extend-protocol MessageContext
-  org.goat.core.Message
+  clojure.lang.IPersistentMap
+
   (send-msg [this]
-    (.send this))
+    (channels/put-outgoing! this)
+    this)
 
   (reply [this text]
-    (.reply this text))
+    (let [reply-msg (pager/create-paged-reply this text)]
+      (send-msg reply-msg)))
 
   (reply-image [this img]
-    (.replyWithImage this img))
+    (let [reply-msg (msg-parse/create-reply this :image img)]
+      (send-msg reply-msg)))
 
   (reply-document [this bytes filename]
-    (.replyWithDocument this bytes filename))
+    (let [reply-msg (msg-parse/create-reply this
+                                           :document-bytes bytes
+                                           :document-filename filename)]
+      (send-msg reply-msg)))
 
   (get-command [this]
-    (when-let [cmd (.getModCommand this)]
-      (keyword cmd)))
+    (:message/command this))
 
   (get-text [this]
-    (.getText this))
+    (:message/text this))
 
   (get-mod-text [this]
-    (.getModText this))
+    (or (:message/command-args this) ""))
 
   (get-sender [this]
-    (.getSender this))
+    (:message/sender this))
 
   (get-chat-id [this]
-    (.getChatId this))
+    (:message/chat-id this))
 
   (get-chatname [this]
-    (.getChatname this))
+    (:message/chatname this))
 
   (private? [this]
-    (.isPrivate this))
+    (:message/private? this))
 
   (has-text? [this]
-    (.hasText this))
+    (boolean (:message/text this)))
 
   (has-image? [this]
-    (.hasImage this))
+    (msg-parse/has-image? this))
 
   (has-document? [this]
-    (.hasDocument this))
+    (msg-parse/has-document? this))
 
   (get-document-bytes [this]
-    (.getDocumentBytes this))
+    (:message.attachment/document-bytes this))
 
   (get-document-filename [this]
-    (.getDocumentFilename this))
+    (:message.attachment/document-filename this))
 
   (has-next-page? [this]
-    (.hasNextPage this))
+    (pager/has-next-page? (:message/chat-id this)))
 
   (create-next-page [this]
-    (.createNextPage this)))
+    (pager/create-next-page-message this)))
 
-;; Convenience functions that work with either wrapped or unwrapped messages
-(defn unwrap
-  "Extract the underlying Java Message from a wrapper, or return as-is if already unwrapped"
-  [msg-or-wrapper]
-  (if (instance? MessageWrapper msg-or-wrapper)
-    (.-msg msg-or-wrapper)
-    msg-or-wrapper))
+;; =============================================================================
+;; Helper Functions
+;; =============================================================================
 
-(defn ensure-wrapped
-  "Ensure we have a wrapped message, wrapping if necessary"
-  [msg-or-wrapper]
-  (if (instance? MessageWrapper msg-or-wrapper)
-    msg-or-wrapper
-    (wrap-message msg-or-wrapper)))
-
-;; Additional helper functions for common patterns
 (defn command-matches?
-  "Check if the message command matches any of the given keywords"
-  [msg-wrapper & commands]
-  (contains? (set commands) (get-command msg-wrapper)))
+  "Check if the message command matches any of the given keywords.
+
+   Example:
+   (command-matches? msg :wordle :stats :help)"
+  [msg & commands]
+  (contains? (set commands) (get-command msg)))
 
 (defn reply-when
-  "Reply with text only if condition is true"
-  [msg-wrapper condition text]
+  "Reply with text only if condition is true.
+
+   Example:
+   (reply-when msg (authorized? msg) 'Admin command executed')"
+  [msg condition text]
   (when condition
-    (reply msg-wrapper text)))
+    (reply msg text)))
 
 (defn reply-format
-  "Reply with formatted text (like format)"
-  [msg-wrapper fmt & args]
-  (reply msg-wrapper (apply format fmt args)))
+  "Reply with formatted text (like format).
+
+   Example:
+   (reply-format msg 'Hello, %s! Your score is %d' name score)"
+  [msg fmt & args]
+  (reply msg (apply format fmt args)))
 
 (defn case-command
-  "Convenience macro for command routing with keywords"
-  [msg-wrapper & clauses]
-  (let [cmd (get-command msg-wrapper)]
+  "Convenience function for command routing with keywords.
+
+   Example:
+   (case-command msg
+     :wordle #(handle-wordle msg)
+     :stats #(handle-stats msg))"
+  [msg & clauses]
+  (let [cmd (get-command msg)]
     (loop [remaining clauses]
       (cond
         (empty? remaining) nil
         (= (first remaining) cmd) ((second remaining))
         :else (recur (drop 2 remaining))))))
 
-;; For working with multiple replies in sequence
 (defn reply-all
-  "Send multiple replies in sequence"
-  [msg-wrapper & texts]
-  (doseq [text texts]
-    (reply msg-wrapper text)))
+  "Send multiple replies in sequence.
 
-;; Additional convenience functions
+   Example:
+   (reply-all msg 'Line 1' 'Line 2' 'Line 3')"
+  [msg & texts]
+  (doseq [text texts]
+    (reply msg text)))
+
+;; =============================================================================
+;; Shorthand Accessors
+;; =============================================================================
+
 (defn sender
   "Shorthand for get-sender"
-  [msg-wrapper]
-  (get-sender msg-wrapper))
+  [msg]
+  (get-sender msg))
 
 (defn chat-id
   "Shorthand for get-chat-id"
-  [msg-wrapper]
-  (get-chat-id msg-wrapper))
+  [msg]
+  (get-chat-id msg))
 
 (defn command
   "Shorthand for get-command"
-  [msg-wrapper]
-  (get-command msg-wrapper))
+  [msg]
+  (get-command msg))
 
 (defn text
   "Shorthand for get-text"
-  [msg-wrapper]
-  (get-text msg-wrapper))
+  [msg]
+  (get-text msg))
 
 (defn mod-text
   "Shorthand for get-mod-text"
-  [msg-wrapper]
-  (get-mod-text msg-wrapper))
+  [msg]
+  (get-mod-text msg))
 
 (defn document-bytes
   "Shorthand for get-document-bytes"
-  [msg-wrapper]
-  (get-document-bytes msg-wrapper))
+  [msg]
+  (get-document-bytes msg))
 
 (defn document-filename
   "Shorthand for get-document-filename"
-  [msg-wrapper]
-  (get-document-filename msg-wrapper))
+  [msg]
+  (get-document-filename msg))
+
+;; =============================================================================
+;; Backward Compatibility Shims (for migration)
+;; =============================================================================
+
+;; These functions are no-ops since messages are already maps,
+;; but provided for backward compatibility during migration
+
+(defn wrap-message
+  "No-op: messages are already maps. Provided for backward compatibility."
+  [msg]
+  msg)
+
+(defn unwrap
+  "No-op: messages are already maps. Provided for backward compatibility."
+  [msg]
+  msg)
+
+(defn ensure-wrapped
+  "No-op: messages are already maps. Provided for backward compatibility."
+  [msg]
+  msg)
+
+;; =============================================================================
+;; Examples and Testing
+;; =============================================================================
+
+(comment
+  ;; Create a message
+  (require '[org.goat.core.message-parse :as mp])
+  (def msg (mp/create-message :chat-id 123
+                              :sender "alice"
+                              :private? false
+                              :text "wordle 5"))
+
+  ;; Access message fields
+  (get-sender msg)         ;; => "alice"
+  (sender msg)             ;; => "alice" (shorthand)
+  (get-command msg)        ;; => :wordle
+  (command msg)            ;; => :wordle (shorthand)
+  (get-mod-text msg)       ;; => "5"
+  (mod-text msg)           ;; => "5" (shorthand)
+
+  ;; Send a reply
+  (reply msg "Your wordle game has started!")
+
+  ;; Send a formatted reply
+  (reply-format msg "Hello, %s!" (sender msg))
+
+  ;; Command routing
+  (case-command msg
+    :wordle #(println "Starting wordle")
+    :stats #(println "Showing stats"))
+
+  ;; Check command
+  (command-matches? msg :wordle :stats :help)  ;; => true
+
+  ;; Pagination
+  (has-next-page? msg)     ;; => false (initially)
+  (create-next-page msg)   ;; => next page message if available
+  )

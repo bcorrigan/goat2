@@ -2,13 +2,13 @@
   "Reminder module - allows users to set time-based reminders with natural language"
   (:require [org.goat.core.macros :refer [defmodule]]
             [org.goat.core.message :as msg]
+            [org.goat.core.message-parse :as msg-parse]
             [org.goat.db.reminders :as db]
             [clojure.core.async :refer [go-loop timeout <!]]
             [clojure.string :as str]
             [clojure.edn :as edn])
   (:import [com.zoho.hawking HawkingTimeParser]
            [com.zoho.hawking.datetimeparser.configuration HawkingConfiguration]
-           [org.goat.core Message]
            [java.time Instant ZonedDateTime ZoneId DayOfWeek]
            [java.time.format DateTimeFormatter]
            [java.time.temporal TemporalAdjusters]))
@@ -472,8 +472,12 @@
             reminder-text (str target_user ", " setter-name " asked me to remind you to " message)
             ;; Ensure chat_id is a Long object
             chat-id-long (Long/valueOf (long chat_id))
-            msg (Message. chat-id-long reminder-text false target_user)]
-        (.send msg)
+            msg (msg-parse/create-message
+                 :chat-id chat-id-long
+                 :text reminder-text
+                 :sender "goat"
+                 :private? false)]
+        (msg/send-msg msg)
         (println (str "✓ Fired reminder #" reminder_id " for " target_user ": " message)))
 
       ;; If recurring, generate next instance
