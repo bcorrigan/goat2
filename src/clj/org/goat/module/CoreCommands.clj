@@ -1,9 +1,9 @@
 (ns org.goat.module.CoreCommands
   (:require [org.goat.core.macros :refer [defmodule]]
             [org.goat.core.message :as msg]
-            [org.goat.db.users :as users])
-  (:import [org.goat.util StringUtil]
-           [org.goat.core Constants]))
+            [org.goat.db.users :as users]
+            [org.goat.util.str :as str-util])
+  (:import [org.goat.core Constants]))
 
 (def init (System/currentTimeMillis))
 
@@ -44,7 +44,7 @@
   []
   (let [now (System/currentTimeMillis)
         uptime-ms (- now init)
-        uptime-str (StringUtil/vshortDurationString uptime-ms)
+        uptime-str (str-util/vshort-duration-string uptime-ms)
         uptime-seconds (double (/ uptime-ms 1000))
         uptime-minutes (double (/ uptime-seconds 60))
         uptime-hours (double (/ uptime-minutes 60))
