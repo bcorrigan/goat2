@@ -6,8 +6,7 @@
             [org.goat.util.dict-client :as dict]
             [org.goat.util.str :as str-util]
             [clojure.string :as str])
-  (:import [org.goat Goat]
-           [org.goat.core Constants]
+  (:import [org.goat.core Constants]
            [java.net ConnectException UnknownHostException]))
 
 ;; Configuration

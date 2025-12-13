@@ -1,8 +1,7 @@
 package org.goat.util;
 
-import org.goat.core.BotStats;
-
 import java.io.UnsupportedEncodingException;
+import java.nio.charset.Charset;
 import java.net.URLDecoder;
 import java.util.ArrayList;
 import java.util.Date;
@@ -429,7 +428,7 @@ public class StringUtil {
         return nick.matches("[a-zA-Z0-9^{}\\[\\]`\\\\^_-|]+");
     }
 
-    private static Charset goatCharset = BotStats.getInstance().getCharset();
+    private static Charset goatCharset = Charset.forName("UTF-8");
     /**
      * Calculate the actual length in bytes of the supplied string, in goat's output encoding.
      * Slashnet limits messages by the byte, not by char length, so in these unicode heavy days

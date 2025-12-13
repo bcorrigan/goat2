@@ -49,14 +49,16 @@
 
 (defn compile-clojure [_]
   (println "AOT compiling Clojure sources...")
-  (let [;; Core infrastructure namespaces (always needed)
+  (let [;; Main entry point (must be compiled first)
+        main-namespace ['org.goat.main]
+        ;; Core infrastructure namespaces (always needed)
         core-namespaces (discover-namespaces "src/clj" "org/goat/core")
         ;; Auto-discover all module namespaces
         module-namespaces (discover-namespaces "src/clj" "org/goat/module")
         ;; Auto-discover all db namespaces
         db-namespaces (discover-namespaces "src/clj" "org/goat/db")
-        ;; Combine all namespaces
-        all-namespaces (vec (concat core-namespaces db-namespaces module-namespaces))]
+        ;; Combine all namespaces (main first, then rest)
+        all-namespaces (vec (concat main-namespace core-namespaces db-namespaces module-namespaces))]
 
     (println "Discovered namespaces to compile:")
     (doseq [ns all-namespaces]
@@ -76,8 +78,8 @@
     (b/uber {:class-dir class-dir
              :uber-file uber-file
              :basis basis
-             :main 'org.goat.Goat
-             :manifest {"Main-Class" "org.goat.Goat"}}))
+             :main 'org.goat.main
+             :manifest {"Main-Class" "org.goat.main"}}))
 
   (println "Uberjar created successfully!"))
 
@@ -91,8 +93,8 @@
     (b/jar {:class-dir class-dir
             :jar-file jar-file
             :basis basis
-            :main 'org.goat.Goat
-            :manifest {"Main-Class" "org.goat.Goat"}}))
+            :main 'org.goat.main
+            :manifest {"Main-Class" "org.goat.main"}}))
 
   (println "Jar created successfully!"))
 

@@ -11,13 +11,10 @@
    [org.goat.util.str :as strutil]
    [org.goat.wordle.analytics :as analytics]
    [org.goat.wordle.gfx :as gfx]
-   [org.goat.wordle.str :as msg])
-  (:import
-   (org.goat.core BotStats)))
+   [org.goat.wordle.str :as msg]))
 
 (def max-guesses 6)
 (def A-Z (set (map char (concat (range 65 91)))))
-(def bot (BotStats/getInstance))
 
 (def state
   "key is :game-states->chatid - returning

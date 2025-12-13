@@ -8,12 +8,12 @@
             [org.goat.core.channels :as channels]
             [org.goat.core.platform :as platform]
             [org.goat.core.message-parse :as msg-parse]
-            [org.goat.core.message-spec :as msg-spec])
+            [org.goat.core.message-spec :as msg-spec]
+            [org.goat.core.config :as config])
   (:import [org.telegram.telegrambots.longpolling TelegramBotsLongPollingApplication]
            [org.telegram.telegrambots.longpolling.util LongPollingSingleThreadUpdateConsumer]
            [org.telegram.telegrambots.meta.api.objects Update Document]
-           [org.telegram.telegrambots.client.okhttp OkHttpTelegramClient]
-           [org.goat.core BotStats]))
+           [org.telegram.telegrambots.client.okhttp OkHttpTelegramClient]))
 
 ;; =============================================================================
 ;; Connection State
@@ -131,7 +131,7 @@
   [platform-inst debug?]
   (future
     (try
-      (let [token (.getToken (BotStats/getInstance))
+      (let [token (config/get-token)
             consumer (create-input-consumer platform-inst debug?)
             polling-app (TelegramBotsLongPollingApplication.)]
 
@@ -229,7 +229,7 @@
       (log/info "Starting Telegram connection...")
 
       ;; Create Telegram client and platform
-      (let [token (.getToken (BotStats/getInstance))
+      (let [token (config/get-token)
             telegram-client (OkHttpTelegramClient. token)
             telegram-platform (platform/create-telegram-platform telegram-client)]
 

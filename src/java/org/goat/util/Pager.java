@@ -4,7 +4,6 @@ import static org.goat.core.Constants.*;
 import static org.goat.util.StringUtil.byteLength;
 import static org.goat.util.StringUtil.maxEncodeable;
 import static java.lang.Math.min;
-import org.goat.core.BotStats;
 
 import java.nio.charset.CharacterCodingException;
 
@@ -120,7 +119,6 @@ public class Pager {
     //    return getNext(maxBytes);
     //}
 
-    private static BotStats botStats = BotStats.getInstance();
     //":goat!goat@cloak-E4425697.edslocomb.com PRIVMSG #goat :"
     public String getNext() {
         return getNext(maxBytes);
