@@ -1,9 +1,59 @@
 (ns org.goat.core.config
-  "Bot configuration - replaces BotStats.java.
+  "Bot configuration and secrets management.
 
+   Replaces BotStats.java and Passwords.java.
    Provides access to bot configuration like Telegram token and bot name.
    Loads sensitive data from password file."
-  (:import [org.goat.util Passwords]))
+  (:require [clojure.java.io :as io])
+  (:import [java.util Properties]
+           [java.io FileInputStream]))
+
+;; =============================================================================
+;; Secrets Management (replaces Passwords.java)
+;; =============================================================================
+
+(def ^:private passwords-file "config/passwords.properties")
+(def ^:private goat-props-file "config/goat.properties")
+
+(defn- load-properties-file
+  "Load a Java properties file and return as a Clojure map.
+
+   Returns empty map if file doesn't exist or can't be loaded."
+  [filename]
+  (let [props (Properties.)]
+    (try
+      (with-open [input (FileInputStream. filename)]
+        (.load props input))
+      (into {} props)
+      (catch Exception e
+        (println "WARNING: Could not load properties from file" filename)
+        (.printStackTrace e)
+        {}))))
+
+(defn- load-secrets
+  "Load secrets from passwords.properties file.
+
+   Returns a map of all password/secret values."
+  []
+  (load-properties-file passwords-file))
+
+(defn get-secret
+  "Get a secret value by key.
+
+   Supports both string keys and keyword keys:
+   (get-secret \"telegram.token\")
+   (get-secret :telegram-token)
+
+   Keyword keys are converted to dot-notation:
+   :telegram-token → 'telegram.token'
+   :api-key → 'api.key'"
+  [key]
+  (let [secrets (load-secrets)
+        key-str (if (keyword? key)
+                  (-> (name key)
+                      (clojure.string/replace #"-" "."))
+                  key)]
+    (get secrets key-str)))
 
 ;; =============================================================================
 ;; Configuration State
@@ -59,8 +109,8 @@
    - Telegram token from password file (key: 'telegram.token')
    - Bot name from password file (key: 'nick', default: 'goat')"
   []
-  (let [token (Passwords/getPassword "telegram.token")
-        nick (Passwords/getPassword "nick")]
+  (let [token (get-secret :telegram-token)
+        nick (get-secret :nick)]
     (set-token! token)
     (when nick
       (set-bot-name! nick))))
