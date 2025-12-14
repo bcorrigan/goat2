@@ -1,8 +1,7 @@
 (ns org.goat.core.module-protocol
   "Core protocol defining the module abstraction for Goat modules.
 
-  This protocol replaces the Java Module.java abstract class with a pure
-  Clojure solution. Modules implement this protocol via the defmodule macro.")
+  Modules implement this protocol via the defmodule macro.")
 
 (defprotocol Module
   "Protocol for Goat modules.

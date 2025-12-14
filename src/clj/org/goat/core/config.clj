@@ -1,16 +1,11 @@
 (ns org.goat.core.config
   "Bot configuration and secrets management.
 
-   Replaces BotStats.java and Passwords.java.
    Provides access to bot configuration like Telegram token and bot name.
    Loads sensitive data from password file."
   (:require [clojure.java.io :as io])
   (:import [java.util Properties]
            [java.io FileInputStream]))
-
-;; =============================================================================
-;; Secrets Management (replaces Passwords.java)
-;; =============================================================================
 
 (def ^:private passwords-file "config/passwords.properties")
 (def ^:private goat-props-file "config/goat.properties")
@@ -55,18 +50,10 @@
                   key)]
     (get secrets key-str)))
 
-;; =============================================================================
-;; Configuration State
-;; =============================================================================
-
 (defonce config
   (atom {:bot-name "goat"
          :token nil
          :test-mode? false}))
-
-;; =============================================================================
-;; Configuration Access
-;; =============================================================================
 
 (defn get-token
   "Get the Telegram bot token."
@@ -98,10 +85,6 @@
   [enabled?]
   (swap! config assoc :test-mode? enabled?))
 
-;; =============================================================================
-;; Initialization
-;; =============================================================================
-
 (defn load-config!
   "Load configuration from password file and environment.
 
@@ -117,10 +100,6 @@
 
 ;; Load config when namespace is required
 (load-config!)
-
-;; =============================================================================
-;; Examples
-;; =============================================================================
 
 (comment
   ;; Get current config

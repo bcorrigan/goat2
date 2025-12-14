@@ -8,10 +8,6 @@
             [org.goat.core.pager :as pager]
             [org.goat.core.message-parse :as msg-parse]))
 
-;; =============================================================================
-;; MessageContext Protocol
-;; =============================================================================
-
 (defprotocol MessageContext
   "Protocol for interacting with messages in a Clojurian way"
   (send-msg [this] "Send this message to the outgoing channel")
@@ -33,10 +29,6 @@
   (has-next-page? [this] "True if this message has a next page for pagination")
   (create-next-page [this] "Create and return the next page message")
   (fmt [this] "Get the formatter for this message's platform"))
-
-;; =============================================================================
-;; Protocol Implementation for Maps
-;; =============================================================================
 
 (extend-protocol MessageContext
   clojure.lang.IPersistentMap
@@ -106,10 +98,6 @@
     ((resolve 'org.goat.core.format/formatter)
      (or (:platform/type this) :telegram))))
 
-;; =============================================================================
-;; Helper Functions
-;; =============================================================================
-
 (defn command-matches?
   "Check if the message command matches any of the given keywords.
 
@@ -158,10 +146,6 @@
   [msg & texts]
   (doseq [text texts]
     (reply msg text)))
-
-;; =============================================================================
-;; Shorthand Accessors
-;; =============================================================================
 
 (defn sender
   "Shorthand for get-sender"
@@ -212,13 +196,6 @@
   ((resolve 'org.goat.core.format/formatter)
    (or (:platform/type msg) :telegram)))
 
-;; =============================================================================
-;; Backward Compatibility Shims (for migration)
-;; =============================================================================
-
-;; These functions are no-ops since messages are already maps,
-;; but provided for backward compatibility during migration
-
 (defn wrap-message
   "No-op: messages are already maps. Provided for backward compatibility."
   [msg]
@@ -233,10 +210,6 @@
   "No-op: messages are already maps. Provided for backward compatibility."
   [msg]
   msg)
-
-;; =============================================================================
-;; Examples and Testing
-;; =============================================================================
 
 (comment
   ;; Create a message

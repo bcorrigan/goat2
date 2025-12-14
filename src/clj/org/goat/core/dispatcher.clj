@@ -145,10 +145,6 @@
   {:running? (some? @dispatcher-loop-chan)
    :channel-stats (channels/channel-stats)})
 
-;; =============================================================================
-;; Examples and Testing
-;; =============================================================================
-
 (comment
   ;; Start dispatcher
   (start!)

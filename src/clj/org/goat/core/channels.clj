@@ -1,15 +1,10 @@
 (ns org.goat.core.channels
   "core.async channels for message flow.
 
-   Replaces the Java LinkedBlockingQueue with idiomatic Clojure channels.
    - incoming-chan: Messages FROM Telegram (or other platforms) TO bot
    - outgoing-chan: Messages FROM bot TO Telegram (or other platforms)"
   (:require [clojure.core.async :as async]
             [clojure.tools.logging :as log]))
-
-;; =============================================================================
-;; Channel Definitions
-;; =============================================================================
 
 ;; Channel for incoming messages from Telegram.
 ;; ServerConnection's InputHandler puts messages here after parsing.
@@ -22,10 +17,6 @@
 ;; ServerConnection's OutputHandler takes from this channel and sends via Platform.
 ;; Buffer size: 100 messages
 (defonce outgoing-chan (async/chan 100))
-
-;; =============================================================================
-;; Channel Operations
-;; =============================================================================
 
 (defn put-incoming!
   "Put an incoming message on the incoming channel.
@@ -73,10 +64,6 @@
   []
   (async/<!! outgoing-chan))
 
-;; =============================================================================
-;; Channel Lifecycle
-;; =============================================================================
-
 (defn close-channels!
   "Close both incoming and outgoing channels.
 
@@ -98,10 +85,6 @@
   []
   {:incoming-buffer (count incoming-chan)
    :outgoing-buffer (count outgoing-chan)})
-
-;; =============================================================================
-;; Async Operations (for use in go blocks)
-;; =============================================================================
 
 (defn put-incoming-async!
   "Put an incoming message on the channel asynchronously.
@@ -149,10 +132,6 @@
   []
   (async/<! outgoing-chan))
 
-;; =============================================================================
-;; Monitoring and Debugging
-;; =============================================================================
-
 (defn tap-incoming
   "Tap the incoming channel for monitoring.
 
@@ -184,10 +163,6 @@
        (recur)))"
   [tap-chan]
   (async/tap (async/mult outgoing-chan) tap-chan))
-
-;; =============================================================================
-;; Examples and Testing
-;; =============================================================================
 
 (comment
   ;; Put and take messages (blocking)

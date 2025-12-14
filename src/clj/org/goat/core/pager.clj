@@ -2,17 +2,11 @@
   "Pagination logic for long messages.
 
    Long messages are automatically split into pages. This namespace manages
-   the pagination cache and provides functions to create paged messages.
-
-   Replaces org.goat.util.Pager with pure Clojure implementation."
+   the pagination cache and provides functions to create paged messages."
   (:require [org.goat.core.message-parse :as msg-parse]
             [clojure.string :as str])
   (:import [java.nio.charset Charset CharsetEncoder]
            [java.nio CharBuffer ByteBuffer]))
-
-;; =============================================================================
-;; Constants and Configuration
-;; =============================================================================
 
 (def ^:private utf-8-charset (Charset/forName "UTF-8"))
 (def ^:private default-max-bytes 4096) ; Telegram max is 4096 characters
@@ -24,10 +18,6 @@
 (def ^:private input-exceeded-msg
   (str " " bold "[" end-bold "no more — buffer protection engaged" bold "]" end-bold))
 (def ^:private max-input-chars (- (* default-max-bytes 17) (count input-exceeded-msg)))
-
-;; =============================================================================
-;; String Utility Functions
-;; =============================================================================
 
 (defn- byte-length
   "Calculate the byte length of a string in UTF-8 encoding."
@@ -56,16 +46,9 @@
       (str/replace #"\s+$" "")))
 
 (defn- smush
-  "Process text for pagination. Currently a no-op for Telegram.
-
-   In IRC days, this would condense whitespace and convert newlines to spaces.
-   Telegram supports larger messages and preserves newlines, so we don't need this."
+  "Process text for pagination. Currently a no-op."
   [text]
   text)
-
-;; =============================================================================
-;; Pager Implementation
-;; =============================================================================
 
 (defrecord PagerState
   [buffer        ; String - remaining text to paginate
@@ -187,18 +170,10 @@
         (.printStackTrace e)
         [(assoc pager :buffer "") "I didn't feel like encoding that for you."]))))
 
-;; =============================================================================
-;; Pagination State
-;; =============================================================================
-
 ;; Cache mapping chat-id to Pager instances.
 ;; When a long message is sent, the Pager is stored here and subsequent
 ;; pages are retrieved using the More module.
 (defonce pager-cache (atom {}))
-
-;; =============================================================================
-;; Pagination Functions
-;; =============================================================================
 
 (defn should-paginate?
   "Returns true if the text is long enough to require pagination."
@@ -293,10 +268,6 @@
    Useful for debugging and monitoring."
   []
   (set (keys @pager-cache)))
-
-;; =============================================================================
-;; Examples and Testing
-;; =============================================================================
 
 (comment
   ;; Check if text needs pagination

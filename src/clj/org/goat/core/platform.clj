@@ -12,10 +12,6 @@
            [java.io ByteArrayOutputStream ByteArrayInputStream InputStream]
            [javax.imageio ImageIO]))
 
-;; =============================================================================
-;; Platform Protocol
-;; =============================================================================
-
 (defprotocol Platform
   "Protocol for messaging platform operations.
 
@@ -63,10 +59,6 @@
 
   (platform-name [this]
     "Returns the name of this platform as a keyword (e.g., :telegram, :cli)"))
-
-;; =============================================================================
-;; Telegram Platform Implementation
-;; =============================================================================
 
 (defn- rendered-image->input-file
   "Convert a RenderedImage to an InputFile for Telegram.
@@ -136,12 +128,7 @@
   (platform-name [this]
     :telegram))
 
-;; =============================================================================
-;; CLI Platform Implementation (for testing)
-;; =============================================================================
-
-;; CLI platform for testing.
-;; Captures all sends to an atom for verification.
+;; CLI platform for testing. Captures all sends to an atom for verification.
 (defrecord CLIPlatform [output-atom capture?]
   Platform
 
@@ -189,10 +176,6 @@
   (platform-name [this]
     :cli))
 
-;; =============================================================================
-;; Platform Creation Helpers
-;; =============================================================================
-
 (defn create-telegram-platform
   "Create a Telegram platform instance.
 
@@ -218,10 +201,6 @@
       :or {capture? true
            output-atom (atom [])}}]
   (->CLIPlatform output-atom capture?))
-
-;; =============================================================================
-;; Examples and Testing
-;; =============================================================================
 
 (comment
   ;; Create CLI platform for testing

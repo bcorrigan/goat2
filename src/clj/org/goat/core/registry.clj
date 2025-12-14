@@ -1,9 +1,7 @@
 (ns org.goat.core.registry
   "Static module registry for all loaded modules.
 
-  Replaces the module tracking functionality from BotStats.java and
-  ModuleController.java. All modules are registered at startup (no dynamic
-  loading/unloading)."
+  All modules are registered at startup (no dynamic loading/unloading)."
   (:require [org.goat.core.module-protocol :as mp]))
 
 ;; Atom holding vector of ModuleMetadata records

@@ -1,7 +1,6 @@
 (ns org.goat.core.connection
   "Telegram connection management using core.async channels.
 
-   Replaces ServerConnection.java with idiomatic Clojure implementation.
    Manages InputHandler (Telegram → bot) and OutputHandler (bot → Telegram)."
   (:require [clojure.core.async :as async]
             [clojure.tools.logging :as log]
@@ -15,10 +14,6 @@
            [org.telegram.telegrambots.meta.api.objects Update Document]
            [org.telegram.telegrambots.client.okhttp OkHttpTelegramClient]))
 
-;; =============================================================================
-;; Connection State
-;; =============================================================================
-
 ;; Atom holding the current connection state.
 (defonce connection-state
   (atom {:running? false
@@ -26,10 +21,6 @@
          :input-handler nil
          :output-handler nil
          :polling-app nil}))
-
-;; =============================================================================
-;; Telegram Update → Message Conversion
-;; =============================================================================
 
 (defn- extract-telegram-message
   "Extract the Telegram message from an Update.
@@ -80,10 +71,6 @@
                  :message.attachment/type (conj (:message.attachment/type base-msg #{}) :document))
           base-msg))
       base-msg)))
-
-;; =============================================================================
-;; Input Handler (Telegram → Bot)
-;; =============================================================================
 
 (defn- process-single-update
   "Process a single Telegram Update into a message map and put on channel."
@@ -153,10 +140,6 @@
         (.printStackTrace e)
         (System/exit 2)))))
 
-;; =============================================================================
-;; CLI Input Handler (stdin → Bot)
-;; =============================================================================
-
 (defn- start-cli-input-handler
   "Start CLI input handler that reads from stdin.
    Runs in a future (separate thread) for blocking I/O.
@@ -195,10 +178,6 @@
 
       (catch Exception e
         (log/error e "CLI InputHandler error")))))
-
-;; =============================================================================
-;; Output Handler (Bot → Telegram)
-;; =============================================================================
 
 (defn- send-message-via-platform
   "Send a message using the platform protocol.
@@ -250,10 +229,6 @@
         (recur))
       ;; Channel closed, exit loop
       (log/info "OutputHandler stopped: outgoing channel closed"))))
-
-;; =============================================================================
-;; Connection Lifecycle
-;; =============================================================================
 
 (defn start-connection
   "Start the Telegram connection.
@@ -401,10 +376,6 @@
      :platform-type (when (:platform state)
                      (platform/platform-name (:platform state)))
      :channel-stats (channels/channel-stats)}))
-
-;; =============================================================================
-;; Examples and Testing
-;; =============================================================================
 
 (comment
   ;; Start connection

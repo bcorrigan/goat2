@@ -1,10 +1,7 @@
 (ns org.goat.core.init
   "Clojure module system initialization.
 
-  This namespace is responsible for initializing the pure Clojure module
-  system, loading all modules, and starting the dispatcher.
-
-  Called from Java Goat.java constructor via reflection."
+  Loads all modules and starts the dispatcher."
   (:require [org.goat.core.dispatcher :as dispatcher]
             [org.goat.core.registry :as registry]
             [clojure.string :as str]
@@ -26,12 +23,7 @@
 (defn init!
   "Initialize the Clojure module system.
 
-   Steps:
-   1. Modules are already registered via namespace loading (defmodule-clj auto-registers)
-   2. Start the core.async dispatcher
-   3. Log module count and details
-
-   This function is called once from Java Goat constructor."
+   Modules are registered via namespace loading, then the dispatcher is started."
   []
   (println "\n========================================")
   (println "Initializing Clojure module system...")
@@ -74,6 +66,6 @@
     (println "========================================\n")))
 
 (defn -init
-  "Called via reflection from Java: (init-method.invoke(null))"
+  "Entry point for initialization."
   []
   (init!))

@@ -7,10 +7,6 @@
   Returns parsed parameters and remaining text separately."
   (:require [clojure.string :as str]))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; PARAMETER PARSING ;;;;;;;;;;;;;;;;;;;;;
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
 (defn parse-parameters
   "Parse command parameters like 'dict=web1913 num=2 remaining text'.
 
@@ -79,10 +75,6 @@
     => nil"
   [params & keys]
   (some params keys))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; INTEGER PARSING ;;;;;;;;;;;;;;;;;;;;;;;
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defn parse-int
   "Parse a string to an integer, returning default-val on error.

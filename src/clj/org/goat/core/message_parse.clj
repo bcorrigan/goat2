@@ -1,15 +1,8 @@
 (ns org.goat.core.message-parse
-  "Pure functions for parsing message text and creating message maps.
-
-   This namespace extracts the parsing logic from Message.java constructor
-   and provides clean, functional APIs for message creation."
+  "Pure functions for parsing message text and creating message maps."
   (:require [clojure.string :as str]
             [org.goat.core.message-spec :as spec])
   (:import [java.util UUID]))
-
-;; =============================================================================
-;; Command Parsing
-;; =============================================================================
 
 (defn parse-command
   "Parse text to extract command and arguments.
@@ -62,10 +55,6 @@
       {:command (when command-word (keyword (str/lower-case command-word)))
        :command-args (str/trim command-args)
        :directly-addressed? directly-addressed?})))
-
-;; =============================================================================
-;; Message Creation
-;; =============================================================================
 
 (defn create-message
   "Create a message map from parameters.
@@ -208,10 +197,6 @@
       document-bytes (assoc :message.attachment/document-bytes document-bytes)
       document-filename (assoc :message.attachment/document-filename document-filename))))
 
-;; =============================================================================
-;; Utility Functions
-;; =============================================================================
-
 (defn has-text?
   "Returns true if message has text content."
   [msg]
@@ -234,10 +219,6 @@
    (command-matches? msg :wordle :stats :help)"
   [msg & commands]
   (contains? (set commands) (:message/command msg)))
-
-;; =============================================================================
-;; Examples and Testing
-;; =============================================================================
 
 (comment
   ;; Parse command examples

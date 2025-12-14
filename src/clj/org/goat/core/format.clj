@@ -9,10 +9,6 @@
      (str (bold f \"Hello\") \" world\"))
    => \"<b>Hello</b> world\"")
 
-;; =============================================================================
-;; Multimethod Dispatch
-;; =============================================================================
-
 (defmulti formatter
   "Return formatting map for a given platform type keyword.
 
@@ -29,10 +25,6 @@
    (formatter :telegram)
    => {:bold \"<b>\" :end-bold \"</b>\" ...}"
   identity)
-
-;; =============================================================================
-;; Platform Formatters
-;; =============================================================================
 
 (defmethod formatter :telegram [_]
   "Telegram HTML formatting tags.
@@ -76,10 +68,6 @@
    :end-pre ""
    :normal ""
    :reverse ""})
-
-;; =============================================================================
-;; Helper Functions
-;; =============================================================================
 
 (defn bold
   "Wrap text in bold formatting.
@@ -128,10 +116,6 @@
    => {:bold \"<b>\" :end-bold \"</b>\" ...}"
   [platform-type]
   (formatter platform-type))
-
-;; =============================================================================
-;; Examples
-;; =============================================================================
 
 (comment
   ;; Get formatters
