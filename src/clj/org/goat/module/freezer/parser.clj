@@ -260,15 +260,16 @@
               {:item-name item-name})))))))
 
 (defn parse-inventory-command
-  "Parse an inventory command like 'inventory garage' or 'list all'.
-   Returns a map with :freezer-name or :all true, or nil if not valid."
+  "Parse an inventory command like 'inventory garage' or 'inventory all'.
+   Returns a map with :freezer-name or :all true, or nil if not valid.
+   Only responds to messages starting with 'inventory'."
   [text]
   (let [text (str/trim text)
-        ;; Check for inventory keywords at start
-        inv-pattern #"^(?i)(inventory|list|show|check|what'?s?\s+in)\s*(.*)"
+        ;; Only match "inventory" at start (no other aliases)
+        inv-pattern #"^(?i)inventory\s*(.*)"
         match (re-matches inv-pattern text)]
     (when match
-      (let [rest-text (str/trim (nth match 2))]
+      (let [rest-text (str/trim (nth match 1))]
         (cond
           ;; Check for "all"
           (re-matches #"(?i)all" rest-text)

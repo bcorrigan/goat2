@@ -10,10 +10,6 @@
   (:import [java.time Instant LocalDate ZoneId]
            [java.time.format DateTimeFormatter]))
 
-;; ============================================================================
-;; Response Formatting
-;; ============================================================================
-
 (defn format-success
   "Format a success message with emoji"
   [text]
@@ -128,10 +124,6 @@
                   (str "• " (str/capitalize (:freezer_name f))
                        (when (= (:freezer_id f) user-default-id) " (your default)")))]
       (str "<b>🧊 Freezers:</b>\n" (str/join "\n" lines)))))
-
-;; ============================================================================
-;; Command Handlers
-;; ============================================================================
 
 (defn handle-add-item
   "Handle adding an item to a freezer.
@@ -635,36 +627,62 @@
          "• <code>set default freezer garage</code> - Set your default\n\n"
          "<i>All freezers are shared across the family!</i>")))
 
-;; ============================================================================
-;; Module Definition
-;; ============================================================================
-
 (defmodule Freezer
-  :commands [:freezer]
-  :receive-messages :all
+  :commands [:freezer :inventory
+             :add
+             :take :remove
+             :move
+             :find
+             :due
+             :export
+             :import]
+  :receive-messages :commands
   :wants-private true
 
   (defn process-channel-message [m]
-    (let [command (msg/command m)
-          text (if (= :freezer command)
-                 (msg/mod-text m)
-                 (msg/text m))]
+    (if (msg/has-document? m)
+      (handle-import-csv m)    
+      (let [command (msg/command m)
+            args (msg/mod-text m)]
 
-      (if (= :freezer command)
-        (handle-help m)
-        (if (msg/has-document? m)
+        (case command
+          ;; Help command
+          :freezer (handle-help m)
+
+          ;; Inventory - just pass args for "all" or freezer name
+          :inventory (handle-inventory m (parser/parse-inventory-command (str "inventory " args)))
+
+          ;; Add item
+          :add
+          (when-let [parsed (parser/parse-add-command (str "add " args))]
+            (handle-add-item m parsed))
+
+          ;; Remove item commands
+          (:take :remove)
+          (when-let [parsed (parser/parse-remove-command (str "take " args))]
+            (handle-remove-item m parsed))
+
+          ;; Move command
+          :move
+          (when-let [parsed (parser/parse-move-command (str "move " args))]
+            (handle-move-item m parsed))
+
+          ;; Search command
+          :find
+          (when-let [parsed (parser/parse-search-command (str "find " args))]
+            (handle-search m parsed))
+
+          ;; Due command
+          :due
+          (handle-due m {})
+
+          ;; Export command
+          :export
+          (handle-export-csv m)
+
+          ;; Import command
+          :import
           (handle-import-csv m)
-          (when text
-            (let [parsed (parser/parse-command text)]
-              (when parsed
-                (case (:type parsed)
-                  :add-item (handle-add-item m parsed)
-                  :remove-item (handle-remove-item m parsed)
-                  :move-item (handle-move-item m parsed)
-                  :inventory (handle-inventory m parsed)
-                  :freezer-management (handle-freezer-management m parsed)
-                  :search (handle-search m parsed)
-                  :due (handle-due m parsed)
-                  :export-csv (handle-export-csv m)
-                  :import-csv (handle-import-csv m)
-                  nil)))))))))
+
+          ;; Default
+          nil)))))
