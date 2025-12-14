@@ -45,7 +45,7 @@
   (b/javac {:src-dirs ["src/java"]
             :class-dir class-dir
             :basis basis
-            :javac-opts ["--release" "23"]}))
+            :javac-opts ["--release" "25"]}))
 
 (defn compile-clojure [_]
   (println "AOT compiling Clojure sources...")
@@ -63,9 +63,9 @@
     (println "Discovered namespaces to compile:")
     (doseq [ns all-namespaces]
       (println "  -" ns))
-
     (b/compile-clj {:basis basis
                     :ns-compile all-namespaces
+                    ;;:compile-opts {:direct-linking true}
                     :class-dir class-dir})))
 
 (defn uber [_]
