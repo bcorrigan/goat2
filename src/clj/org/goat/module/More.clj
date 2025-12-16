@@ -28,5 +28,5 @@
 (defmodule More
   :commands [:more :moar]
 
-  (defn process-channel-message [m]
+  (defn process-message [m]
     (handle-more m)))

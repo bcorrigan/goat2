@@ -568,7 +568,7 @@
   :commands [:wordle :streak :stats :statsvs :league]
   :receive-messages :all
 
-  (defn process-channel-message [m]
+  (defn process-message [m]
     ;; Skip messages without text (e.g., document uploads)
     (when (message/has-text? m)
       (let [chat-key (keyword (str (message/chat-id m)))

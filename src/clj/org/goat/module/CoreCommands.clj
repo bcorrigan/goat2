@@ -56,7 +56,7 @@
   :commands [:gc :mem :uptime :goat :version :setchat]
   :receive-messages :all
 
-  (defn process-channel-message [m]
+  (defn process-message [m]
     (case (msg/command m)
       :mem (msg/reply m (get-detailed-memory-info))
 

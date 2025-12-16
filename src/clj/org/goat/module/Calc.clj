@@ -80,5 +80,5 @@
 (defmodule Calc
   :commands [:calc]
 
-  (defn process-channel-message [m]
+  (defn process-message [m]
     (handle-calc m)))

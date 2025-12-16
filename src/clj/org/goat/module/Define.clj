@@ -221,7 +221,7 @@
 (defmodule Define
   :commands [:define :randef :dictionaries :dictionary :oed :thesaurus]
 
-  (defn process-channel-message [m]
+  (defn process-message [m]
     (case (msg/command m)
       :define (handle-define m false)
       :thesaurus (handle-define m true)

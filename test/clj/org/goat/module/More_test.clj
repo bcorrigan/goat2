@@ -32,7 +32,7 @@
   (testing "More command sends next page when available"
     (msg-utils/with-clean-replies
       (let [msg (create-mock-message-with-pages "more" "" true)]
-        (#'sut/process-channel-message msg)
+        (#'sut/process-message msg)
         (is (= 1 (msg-utils/reply-count))
             "Should send the next page")
         (is (msg-utils/replied-with? "next page content")
@@ -42,7 +42,7 @@
   (testing "Moar command (alternative spelling) works"
     (msg-utils/with-clean-replies
       (let [msg (create-mock-message-with-pages "moar" "" true)]
-        (#'sut/process-channel-message msg)
+        (#'sut/process-message msg)
         (is (= 1 (msg-utils/reply-count))
             "Should send the next page")))))
 
@@ -50,7 +50,7 @@
   (testing "More command does nothing when no next page available"
     (msg-utils/with-clean-replies
       (let [msg (create-mock-message-with-pages "more" "" false)]
-        (#'sut/process-channel-message msg)
+        (#'sut/process-message msg)
         (is (= 0 (msg-utils/reply-count))
             "Should not send any message when no next page")))))
 
@@ -58,7 +58,7 @@
   (testing "More command with additional text is ignored"
     (msg-utils/with-clean-replies
       (let [msg (create-mock-message-with-pages "more" "some extra text" true)]
-        (#'sut/process-channel-message msg)
+        (#'sut/process-message msg)
         (is (= 0 (msg-utils/reply-count))
             "Should ignore command with args")))))
 
@@ -66,7 +66,7 @@
   (testing "More command with only whitespace still triggers"
     (msg-utils/with-clean-replies
       (let [msg (create-mock-message-with-pages "more" "   " true)]
-        (#'sut/process-channel-message msg)
+        (#'sut/process-message msg)
         (is (= 1 (msg-utils/reply-count))
             "Should trigger with whitespace-only args")))))
 
@@ -81,7 +81,7 @@
             (.getPage fake-pager)
             (reset! pager/pager-cache {chat-key fake-pager})))
 
-        (#'sut/process-channel-message msg)
+        (#'sut/process-message msg)
         (is (= 1 (msg-utils/reply-count))
             "Should send next page in private message")))))
 

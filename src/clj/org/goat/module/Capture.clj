@@ -25,7 +25,7 @@
   :commands []
   :receive-messages :all
 
-  (defn process-channel-message [m]
+  (defn process-message [m]
     (let [urlinfo (extract-url m)
           cmd (message/command m)
           note (and cmd (= :note cmd))]

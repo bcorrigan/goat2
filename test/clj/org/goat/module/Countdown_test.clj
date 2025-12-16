@@ -202,7 +202,7 @@
     (msg-utils/with-clean-replies
       (let [msg (msg-utils/mock-command-message "countdown" ""
                                                  {:sender "alice" :chat-id 999})]
-        (sut/process-channel-message msg)
+        (sut/process-message msg)
 
         ;; Should have sent a reply
         (is (= 1 (msg-utils/reply-count)))
@@ -223,7 +223,7 @@
       ;; Start first game
       (let [msg1 (msg-utils/mock-command-message "countdown" ""
                                                   {:sender "alice" :chat-id 999})]
-        (#'sut/process-channel-message nil msg1)
+        (#'sut/process-message nil msg1)
         (is (= 1 (msg-utils/reply-count))))
 
       (msg-utils/clear-replies!)
@@ -231,7 +231,7 @@
       ;; Try to start second game
       (let [msg2 (msg-utils/mock-command-message "countdown" ""
                                                   {:sender "bob" :chat-id 999})]
-        (#'sut/process-channel-message nil msg2)
+        (#'sut/process-message nil msg2)
 
         ;; Should get error message
         (is (= 1 (msg-utils/reply-count)))
@@ -253,7 +253,7 @@
     (msg-utils/with-clean-replies
       ;; Submit answer: 75 (distance 25 from target, won't end game)
       (let [msg (msg-utils/mock-message {:text "75" :sender "alice" :chat-id 999})]
-        (sut/process-channel-message msg)
+        (sut/process-message msg)
 
         ;; Should have replied acknowledging best answer
         (is (>= (msg-utils/reply-count) 1))
@@ -280,7 +280,7 @@
     (msg-utils/with-clean-replies
       ;; Submit answer with number not in selection
       (let [msg (msg-utils/mock-message {:text "99+1" :sender "alice" :chat-id 999})]
-        (sut/process-channel-message msg)
+        (sut/process-message msg)
 
         ;; Should have replied with error
         (is (= 1 (msg-utils/reply-count)))
@@ -302,7 +302,7 @@
     (msg-utils/with-clean-replies
       ;; Submit answer with invalid operator (using valid numbers but invalid operator)
       (let [msg (msg-utils/mock-message {:text "25^7" :sender "alice" :chat-id 999})]
-        (sut/process-channel-message msg)
+        (sut/process-message msg)
 
         ;; Should have replied with error
         (is (= 1 (msg-utils/reply-count)))
@@ -324,13 +324,13 @@
     (msg-utils/with-clean-replies
       ;; First answer: 75 (distance 25)
       (let [msg1 (msg-utils/mock-message {:text "75" :sender "alice" :chat-id 999})]
-        (#'sut/process-channel-message nil msg1))
+        (#'sut/process-message nil msg1))
 
       (msg-utils/clear-replies!)
 
       ;; Better answer: 75+7 = 82 (distance 18, better than 75 but doesn't end game)
       (let [msg2 (msg-utils/mock-message {:text "75+7" :sender "bob" :chat-id 999})]
-        (#'sut/process-channel-message nil msg2)
+        (#'sut/process-message nil msg2)
 
         ;; Should acknowledge bob's better answer
         (is (msg-utils/replied-with? "bob"))
@@ -349,7 +349,7 @@
     (msg-utils/with-clean-replies
       ;; Send non-command message
       (let [msg (msg-utils/mock-message {:text "25+25" :sender "alice" :chat-id 999})]
-        (sut/process-channel-message msg)
+        (sut/process-message msg)
 
         ;; Should not reply (no game active)
         (is (= 0 (msg-utils/reply-count)))))))

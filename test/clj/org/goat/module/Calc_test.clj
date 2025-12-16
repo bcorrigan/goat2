@@ -68,7 +68,7 @@
     (msg-utils/with-clean-replies
       (let [msg (msg-utils/mock-command-message "calc" "2+2"
                                                  {:sender "alice" :chat-id 123})]
-        (sut/process-channel-message msg)
+        (sut/process-message msg)
 
         (is (= 1 (msg-utils/reply-count)))
         (is (msg-utils/replied-with? "4"))))))
@@ -78,7 +78,7 @@
     (msg-utils/with-clean-replies
       (let [msg (msg-utils/mock-command-message "calc" "(5+3)*7"
                                                  {:sender "bob" :chat-id 456})]
-        (sut/process-channel-message msg)
+        (sut/process-message msg)
 
         (is (= 1 (msg-utils/reply-count)))
         (is (msg-utils/replied-with? "56"))))))
@@ -88,7 +88,7 @@
     (msg-utils/with-clean-replies
       (let [msg (msg-utils/mock-command-message "calc" "6!"
                                                  {:sender "charlie" :chat-id 789})]
-        (sut/process-channel-message msg)
+        (sut/process-message msg)
 
         (is (= 1 (msg-utils/reply-count)))
         (is (msg-utils/replied-with? "720"))))))
@@ -98,7 +98,7 @@
     (msg-utils/with-clean-replies
       (let [msg (msg-utils/mock-command-message "calc" "2^10"
                                                  {:sender "dave" :chat-id 999})]
-        (sut/process-channel-message msg)
+        (sut/process-message msg)
 
         (is (= 1 (msg-utils/reply-count)))
         (is (msg-utils/replied-with? "1024"))))))
@@ -108,7 +108,7 @@
     (msg-utils/with-clean-replies
       (let [msg (msg-utils/mock-command-message "calc" ""
                                                  {:sender "eve" :chat-id 111})]
-        (sut/process-channel-message msg)
+        (sut/process-message msg)
 
         (is (= 1 (msg-utils/reply-count)))
         (is (msg-utils/replied-with? "Please provide an expression"))))))
@@ -118,7 +118,7 @@
     (msg-utils/with-clean-replies
       (let [msg (msg-utils/mock-command-message "calc" "2++3"
                                                  {:sender "frank" :chat-id 222})]
-        (sut/process-channel-message msg)
+        (sut/process-message msg)
 
         (is (= 1 (msg-utils/reply-count)))
         ;; Should reply with some error message
@@ -129,7 +129,7 @@
     (msg-utils/with-clean-replies
       (let [msg (msg-utils/mock-command-message "calc" "1/0"
                                                  {:sender "grace" :chat-id 333})]
-        (sut/process-channel-message msg)
+        (sut/process-message msg)
 
         (is (= 1 (msg-utils/reply-count)))
         ;; Should reply with some message (error or infinity)
@@ -141,7 +141,7 @@
       ;; 200! will definitely produce a very large number (> 256 chars)
       (let [msg (msg-utils/mock-command-message "calc" "200!"
                                                  {:sender "heidi" :chat-id 444})]
-        (sut/process-channel-message msg)
+        (sut/process-message msg)
 
         (is (= 1 (msg-utils/reply-count)))
         ;; Should include "digits:" in the reply for very large results
@@ -152,7 +152,7 @@
     (msg-utils/with-clean-replies
       (let [msg (msg-utils/mock-command-message "calc" "cos(0)"
                                                  {:sender "ivan" :chat-id 555})]
-        (sut/process-channel-message msg)
+        (sut/process-message msg)
 
         (is (= 1 (msg-utils/reply-count)))
         (is (msg-utils/replied-with? "1"))))))
@@ -162,7 +162,7 @@
     (msg-utils/with-clean-replies
       (let [msg (msg-utils/mock-command-message "calc" "sqrt(16)"
                                                  {:sender "judy" :chat-id 666})]
-        (sut/process-channel-message msg)
+        (sut/process-message msg)
 
         (is (= 1 (msg-utils/reply-count)))
         (is (msg-utils/replied-with? "4"))))))
@@ -172,7 +172,7 @@
     (msg-utils/with-clean-replies
       (let [msg (msg-utils/mock-command-message "calc" "3*3"
                                                  {:sender "karl" :chat-id 777 :is-private true})]
-        (sut/process-channel-message msg)
+        (sut/process-message msg)
 
         (is (= 1 (msg-utils/reply-count)))
         (is (msg-utils/replied-with? "9"))))))

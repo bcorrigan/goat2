@@ -332,7 +332,7 @@
   :commands [:countdown]
   :receive-messages :unclaimed
 
-  (defn process-channel-message [m]
+  (defn process-message [m]
     (let [chat-key (keyword (str (msg/chat-id m)))]
       (if (= (msg/command m) :countdown)
         ;; Start new game

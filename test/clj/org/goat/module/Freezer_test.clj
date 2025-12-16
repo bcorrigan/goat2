@@ -78,7 +78,7 @@
   (testing "Adding a freezer creates it in database"
     (msg-utils/with-clean-replies
       (let [msg (msg-utils/mock-message {:text "add freezer garage" :sender "alice"})]
-        (sut/process-channel-message nil msg)
+        (sut/process-message nil msg)
 
         ;; Verify success response
         (is (msg-utils/replied-with? "✅"))
@@ -95,7 +95,7 @@
     (msg-utils/with-clean-replies
       (db/add-freezer "garage")
       (let [msg (msg-utils/mock-message {:text "add freezer garage" :sender "alice"})]
-        (sut/process-channel-message nil msg)
+        (sut/process-message nil msg)
 
         (is (msg-utils/replied-with? "❌"))
         (is (msg-utils/replied-with? "already exists"))))))
@@ -104,7 +104,7 @@
   (testing "Listing freezers when none exist"
     (msg-utils/with-clean-replies
       (let [msg (msg-utils/mock-message {:text "list freezers" :sender "alice"})]
-        (sut/process-channel-message nil msg)
+        (sut/process-message nil msg)
 
         (is (msg-utils/replied-with? "No freezers found"))))))
 
@@ -114,7 +114,7 @@
       (db/add-freezer "garage")
       (db/add-freezer "kitchen")
       (let [msg (msg-utils/mock-message {:text "list freezers" :sender "alice"})]
-        (sut/process-channel-message nil msg)
+        (sut/process-message nil msg)
 
         (is (msg-utils/replied-with? "🧊 Freezers"))
         (is (msg-utils/replied-with? "Garage"))
@@ -125,7 +125,7 @@
     (msg-utils/with-clean-replies
       (db/add-freezer "garage")
       (let [msg (msg-utils/mock-message {:text "set default freezer garage" :sender "alice"})]
-        (sut/process-channel-message nil msg)
+        (sut/process-message nil msg)
 
         (is (msg-utils/replied-with? "✅"))
         (is (msg-utils/replied-with? "default freezer"))
@@ -142,7 +142,7 @@
         (db/add-item freezer-id "peas" 2 "bags" nil)
 
         (let [msg (msg-utils/mock-message {:text "delete freezer garage" :sender "alice"})]
-          (sut/process-channel-message nil msg)
+          (sut/process-message nil msg)
 
           (is (msg-utils/replied-with? "✅"))
           (is (msg-utils/replied-with? "Deleted"))
@@ -157,7 +157,7 @@
     (msg-utils/with-clean-replies
       (db/add-freezer "garage")
       (let [msg (msg-utils/mock-message {:text "rename freezer garage to big-garage" :sender "alice"})]
-        (sut/process-channel-message nil msg)
+        (sut/process-message nil msg)
 
         (is (msg-utils/replied-with? "✅"))
         (is (msg-utils/replied-with? "Renamed"))
@@ -178,7 +178,7 @@
         (db/set-default-freezer "alice" freezer-id)
 
         (let [msg (msg-utils/mock-message {:text "add 2 bags of peas" :sender "alice"})]
-          (sut/process-channel-message nil msg)
+          (sut/process-message nil msg)
 
           (is (msg-utils/replied-with? "✅"))
           (is (msg-utils/replied-with? "Added 2"))
@@ -202,7 +202,7 @@
       (db/add-freezer "kitchen")
 
       (let [msg (msg-utils/mock-message {:text "add 3 bags of peas to kitchen" :sender "alice"})]
-        (sut/process-channel-message nil msg)
+        (sut/process-message nil msg)
 
         (is (msg-utils/replied-with? "✅"))
         (is (msg-utils/replied-with? "Kitchen Freezer"))
@@ -220,7 +220,7 @@
         (db/set-default-freezer "alice" freezer-id)
 
         (let [msg (msg-utils/mock-message {:text "add 2 bags of peas expires Aug 2026" :sender "alice"})]
-          (sut/process-channel-message nil msg)
+          (sut/process-message nil msg)
 
           (is (msg-utils/replied-with? "✅"))
 
@@ -238,7 +238,7 @@
         (db/set-default-freezer "alice" freezer-id)
 
         (let [msg (msg-utils/mock-message {:text "add chicken expires 10/2027" :sender "alice"})]
-          (sut/process-channel-message nil msg)
+          (sut/process-message nil msg)
 
           (is (msg-utils/replied-with? "✅"))
 
@@ -257,7 +257,7 @@
         (db/add-item freezer-id "peas" 2 "bags" nil)
 
         (let [msg (msg-utils/mock-message {:text "add 3 bags of peas" :sender "alice"})]
-          (sut/process-channel-message nil msg)
+          (sut/process-message nil msg)
 
           (is (msg-utils/replied-with? "✅"))
           (is (msg-utils/replied-with? "You now have 5"))
@@ -271,7 +271,7 @@
   (testing "Adding item without default freezer fails"
     (msg-utils/with-clean-replies
       (let [msg (msg-utils/mock-message {:text "add peas" :sender "alice"})]
-        (sut/process-channel-message nil msg)
+        (sut/process-message nil msg)
 
         (is (msg-utils/replied-with? "❌"))
         (is (msg-utils/replied-with? "don't have a default freezer"))))))
@@ -284,7 +284,7 @@
   (testing "Inventory with no freezers"
     (msg-utils/with-clean-replies
       (let [msg (msg-utils/mock-message {:text "inventory" :sender "alice"})]
-        (sut/process-channel-message nil msg)
+        (sut/process-message nil msg)
 
         (is (msg-utils/replied-with? "❄️"))
         (is (msg-utils/replied-with? "No freezers found"))))))
@@ -294,7 +294,7 @@
     (msg-utils/with-clean-replies
       (db/add-freezer "garage")
       (let [msg (msg-utils/mock-message {:text "inventory" :sender "alice"})]
-        (sut/process-channel-message nil msg)
+        (sut/process-message nil msg)
 
         (is (msg-utils/replied-with? "🧊"))
         (is (msg-utils/replied-with? "Garage Freezer"))
@@ -309,7 +309,7 @@
         (db/add-item kitchen-id "chicken" 4 nil nil)
 
         (let [msg (msg-utils/mock-message {:text "inventory" :sender "alice"})]
-          (sut/process-channel-message nil msg)
+          (sut/process-message nil msg)
 
           (is (msg-utils/replied-with? "🧊"))
           (is (msg-utils/replied-with? "Garage Freezer"))
@@ -326,7 +326,7 @@
         (db/add-item freezer-id "peas" 2 "bags" nil expiry-ts)
 
         (let [msg (msg-utils/mock-message {:text "inventory" :sender "alice"})]
-          (sut/process-channel-message nil msg)
+          (sut/process-message nil msg)
 
           (is (msg-utils/replied-with? "expires"))
           (is (msg-utils/replied-with? "Aug 2026")))))))
@@ -342,7 +342,7 @@
             item-id (db/add-item freezer-id "peas" 5 "bags" nil)]
 
         (let [msg (msg-utils/mock-message {:text "take 2 of #1" :sender "alice"})]
-          (sut/process-channel-message nil msg)
+          (sut/process-message nil msg)
 
           (is (msg-utils/replied-with? "👌"))
           (is (msg-utils/replied-with? "Removed 2"))
@@ -359,7 +359,7 @@
             item-id (db/add-item freezer-id "peas" 2 "bags" nil)]
 
         (let [msg (msg-utils/mock-message {:text "take 2 of #1" :sender "alice"})]
-          (sut/process-channel-message nil msg)
+          (sut/process-message nil msg)
 
           (is (msg-utils/replied-with? "👌"))
           (is (msg-utils/replied-with? "Removed the last"))
@@ -375,7 +375,7 @@
         (db/add-item freezer-id "peas" 5 "bags" nil)
 
         (let [msg (msg-utils/mock-message {:text "remove 2 peas" :sender "alice"})]
-          (sut/process-channel-message nil msg)
+          (sut/process-message nil msg)
 
           (is (msg-utils/replied-with? "👌"))
           (is (msg-utils/replied-with? "Removed 2"))
@@ -385,7 +385,7 @@
   (testing "Removing non-existent item fails gracefully"
     (msg-utils/with-clean-replies
       (let [msg (msg-utils/mock-message {:text "take #99" :sender "alice"})]
-        (sut/process-channel-message nil msg)
+        (sut/process-message nil msg)
 
         (is (msg-utils/replied-with? "❌"))
         (is (msg-utils/replied-with? "couldn't find"))))))
@@ -403,7 +403,7 @@
         (db/add-item kitchen-id "chicken wings" 2 "bags" nil)
 
         (let [msg (msg-utils/mock-message {:text "find chicken" :sender "alice"})]
-          (sut/process-channel-message nil msg)
+          (sut/process-message nil msg)
 
           (is (msg-utils/replied-with? "🔍"))
           (is (msg-utils/replied-with? "chicken breasts"))
@@ -421,7 +421,7 @@
         (db/add-item freezer-id "peas" 2 "bags" nil)
 
         (let [msg (msg-utils/mock-message {:text "search pizza" :sender "alice"})]
-          (sut/process-channel-message nil msg)
+          (sut/process-message nil msg)
 
           (is (msg-utils/replied-with? "🔍"))
           (is (msg-utils/replied-with? "No items found")))))))
@@ -434,7 +434,7 @@
   (testing "Help command shows usage"
     (msg-utils/with-clean-replies
       (let [msg (msg-utils/mock-command-message "freezer" nil)]
-        (sut/process-channel-message nil msg)
+        (sut/process-message nil msg)
 
         (is (msg-utils/replied-with? "🧊 Freezer Management Help"))
         (is (msg-utils/replied-with? "add 2 bags of peas"))
@@ -450,34 +450,34 @@
     (msg-utils/with-clean-replies
       ;; 1. Create freezer
       (let [msg1 (msg-utils/mock-message {:text "add freezer garage" :sender "alice"})]
-        (sut/process-channel-message nil msg1)
+        (sut/process-message nil msg1)
         (is (msg-utils/replied-with? "created")))
 
       (msg-utils/clear-replies!)
 
       ;; 2. Set as default
       (let [msg2 (msg-utils/mock-message {:text "set default freezer garage" :sender "alice"})]
-        (sut/process-channel-message nil msg2)
+        (sut/process-message nil msg2)
         (is (msg-utils/replied-with? "default freezer")))
 
       (msg-utils/clear-replies!)
 
       ;; 3. Add items
       (let [msg3 (msg-utils/mock-message {:text "add 2 bags of peas expires Aug 2026" :sender "alice"})]
-        (sut/process-channel-message nil msg3)
+        (sut/process-message nil msg3)
         (is (msg-utils/replied-with? "Added 2")))
 
       (msg-utils/clear-replies!)
 
       (let [msg4 (msg-utils/mock-message {:text "add 4 chicken breasts" :sender "alice"})]
-        (sut/process-channel-message nil msg4)
+        (sut/process-message nil msg4)
         (is (msg-utils/replied-with? "Added 4")))
 
       (msg-utils/clear-replies!)
 
       ;; 4. Check inventory
       (let [msg5 (msg-utils/mock-message {:text "inventory" :sender "alice"})]
-        (sut/process-channel-message nil msg5)
+        (sut/process-message nil msg5)
         (is (msg-utils/replied-with? "Garage Freezer"))
         (is (msg-utils/replied-with? "2x bags of peas"))
         (is (msg-utils/replied-with? "4x chicken breasts"))
@@ -487,7 +487,7 @@
 
       ;; 5. Remove some
       (let [msg6 (msg-utils/mock-message {:text "take 1 of #1" :sender "alice"})]
-        (sut/process-channel-message nil msg6)
+        (sut/process-message nil msg6)
         (is (msg-utils/replied-with? "1 remaining")))
 
       (msg-utils/clear-replies!)
@@ -508,7 +508,7 @@
         ;; Alice uses garage
         (db/set-default-freezer "alice" garage-id)
         (let [msg1 (msg-utils/mock-message {:text "add peas" :sender "alice"})]
-          (sut/process-channel-message nil msg1)
+          (sut/process-message nil msg1)
           (is (msg-utils/replied-with? "Garage Freezer")))
 
         (msg-utils/clear-replies!)
@@ -516,13 +516,13 @@
         ;; Bob uses kitchen
         (db/set-default-freezer "bob" kitchen-id)
         (let [msg2 (msg-utils/mock-message {:text "add chicken" :sender "bob"})]
-          (sut/process-channel-message nil msg2)
+          (sut/process-message nil msg2)
           (is (msg-utils/replied-with? "Kitchen Freezer")))
 
         ;; Both see all items in inventory
         (msg-utils/clear-replies!)
         (let [msg3 (msg-utils/mock-message {:text "inventory" :sender "alice"})]
-          (sut/process-channel-message nil msg3)
+          (sut/process-message nil msg3)
           (is (msg-utils/replied-with? "Garage Freezer"))
           (is (msg-utils/replied-with? "Kitchen Freezer"))
           (is (msg-utils/replied-with? "peas"))
@@ -536,7 +536,7 @@
   (testing "Exporting CSV from empty database returns header only"
     (msg-utils/with-clean-replies
       (let [msg (msg-utils/mock-message {:text "export csv" :sender "alice"})]
-        (sut/process-channel-message nil msg)
+        (sut/process-message nil msg)
 
         ;; Verify document was sent
         (is (msg-utils/replied-with-document?) "Should send document")
@@ -575,7 +575,7 @@
 
         ;; Export CSV
         (let [msg (msg-utils/mock-message {:text "export" :sender "alice"})]
-          (sut/process-channel-message nil msg)
+          (sut/process-message nil msg)
 
           ;; Verify document was sent
           (is (msg-utils/replied-with-document?) "Should send document")
@@ -624,7 +624,7 @@
         (db/add-item freezer-id "Mom's \"Special\" Sauce" 1.0 nil nil nil)
 
         (let [msg (msg-utils/mock-message {:text "export csv" :sender "alice"})]
-          (sut/process-channel-message nil msg)
+          (sut/process-message nil msg)
 
           (let [csv-bytes (msg-utils/get-document-content)
                 csv-string (String. csv-bytes "UTF-8")
@@ -658,7 +658,7 @@
 
           ;; Export CSV
           (let [msg (msg-utils/mock-message {:text "download csv" :sender "alice"})]
-            (sut/process-channel-message nil msg)
+            (sut/process-message nil msg)
 
             (let [csv-bytes (msg-utils/get-document-content)
                   csv-string (String. csv-bytes "UTF-8")]
@@ -678,7 +678,7 @@
   (testing "Import command without file shows instructions"
     (msg-utils/with-clean-replies
       (let [msg (msg-utils/mock-message {:text "import csv" :sender "alice"})]
-        (sut/process-channel-message nil msg)
+        (sut/process-message nil msg)
 
         (is (msg-utils/replied-with? "📤") "Should show import icon")
         (is (msg-utils/replied-with? "CSV Import Instructions") "Should show instructions")
@@ -691,7 +691,7 @@
             msg (msg-utils/mock-message {:document-bytes text-bytes
                                          :document-filename "data.txt"
                                          :sender "alice"})]
-        (sut/process-channel-message nil msg)
+        (sut/process-message nil msg)
 
         (is (msg-utils/replied-with? "❌") "Should show error")
         (is (msg-utils/replied-with? "CSV file") "Should mention CSV file requirement")))))
@@ -708,7 +708,7 @@
             msg (msg-utils/mock-message {:document-bytes csv-bytes
                                          :document-filename "import.csv"
                                          :sender "alice"})]
-        (sut/process-channel-message nil msg)
+        (sut/process-message nil msg)
 
         (is (msg-utils/replied-with? "❌") "Should show error")
         (is (msg-utils/replied-with? "Unknown freezers found in CSV") "Should mention unknown freezers")
@@ -733,7 +733,7 @@
 
           ;; 2. Export CSV
           (let [export-msg (msg-utils/mock-message {:text "export csv" :sender "alice"})]
-            (sut/process-channel-message nil export-msg)
+            (sut/process-message nil export-msg)
 
             (is (msg-utils/replied-with-document?) "Should export document")
 
@@ -787,7 +787,7 @@
                 (let [import-msg (msg-utils/mock-message {:document-bytes modified-csv-bytes
                                                           :document-filename "freezer-import.csv"
                                                           :sender "alice"})]
-                  (sut/process-channel-message nil import-msg)
+                  (sut/process-message nil import-msg)
 
                   ;; Verify success message
                   (is (msg-utils/replied-with? "✅") "Should show success")
@@ -846,7 +846,7 @@
             msg (msg-utils/mock-message {:document-bytes csv-bytes
                                          :document-filename "import.csv"
                                          :sender "alice"})]
-        (sut/process-channel-message nil msg)
+        (sut/process-message nil msg)
 
         (is (msg-utils/replied-with? "❌") "Should show error")
         (is (msg-utils/replied-with? "Unknown freezers") "Should mention unknown freezers")

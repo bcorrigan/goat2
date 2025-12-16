@@ -28,20 +28,6 @@
                        (= fname (second %)))
                  body)))
 
-(defn- transform-message-fn
-  "Transform a function definition to auto-wrap the message parameter"
-  [defn-form java-method-name]
-  (let [[_ fn-name [msg-param] & fn-body] defn-form]
-    `(defn ~(symbol (str "-" java-method-name)) [~'this ~msg-param]
-       (let [~msg-param (msg/wrap-message ~msg-param)]
-         ~@fn-body))))
-
-(defn- generate-delegation
-  "Generate a delegation from one method to another"
-  [from-method to-method]
-  `(defn ~(symbol (str "-" from-method)) [~'this ~'m]
-     (~(symbol (str "-" to-method)) ~'this ~'m)))
-
 (defmacro defmodule
   "Define a pure Clojure Goat module.
 
@@ -54,102 +40,50 @@
     :wants-private true
     :receive-messages :all  ; or :unclaimed or :commands (default)
 
-    (defn process-channel-message [m]
+    (defn process-message [m]
       ; m is automatically wrapped - use (msg/command m), (msg/reply m text), etc.
       (case (msg/command m)
         :cmd1 (msg/reply m \"Hello!\")
-        :cmd2 (msg/reply m \"World!\")))
-
-    ; process-private-message auto-implemented if not provided
-    )"
+        :cmd2 (msg/reply m \"World!\"))))"
   [module-name & body]
   (let [[options remaining-body] (extract-options body)
         commands (or (:commands options) [])
         wants-private (get options :wants-private true)
         receive-messages (or (:receive-messages options) :commands)
-        ; Map to Clojure keywords instead of Java constants
         message-type (case receive-messages
                        :all :all
                        :unclaimed :unclaimed
                        :commands :commands)
 
-        ; Find function definitions
-        channel-fn (find-defn-by-name remaining-body 'process-channel-message)
-        private-fn (find-defn-by-name remaining-body 'process-private-message)
-
-        ; Generate dispatch function name
-        dispatch-fn-name (symbol (str (name module-name) "-dispatch"))
+        ; Find the process-message function
+        process-msg-fn (find-defn-by-name remaining-body 'process-message)
         metadata-name (symbol (str (name module-name) "-metadata"))
 
-        ; Extract function body and parameter
-        channel-impl (when channel-fn
-                       (let [[_ _ [msg-param] & fn-body] channel-fn]
-                         `(fn [~'msg]
-                            (let [~msg-param (msg/wrap-message ~'msg)]
-                              ~@fn-body))))
-
-        private-impl (when private-fn
-                       (let [[_ _ [msg-param] & fn-body] private-fn]
-                         `(fn [~'msg]
-                            (let [~msg-param (msg/wrap-message ~'msg)]
-                              ~@fn-body))))
-
-        ; Auto-delegation - if only one handler defined, use it for both
-        final-dispatch (cond
-                         (and channel-impl private-impl)
-                         `(fn [msg#]
-                            (if (.isPrivate msg#)
-                              (~private-impl msg#)
-                              (~channel-impl msg#)))
-
-                         channel-impl
-                         channel-impl
-
-                         private-impl
-                         private-impl
-
-                         :else
-                         `(fn [~'msg] nil))]
+        ; Extract and wrap message parameter
+        wrapped-process-msg (when process-msg-fn
+                             (let [[_ _ [msg-param] & fn-body] process-msg-fn]
+                               `(defn ~'process-message [~msg-param]
+                                  (let [~msg-param (msg/wrap-message ~msg-param)]
+                                    ~@fn-body))))]
 
     `(do
-       ; Define the dispatch function with exception handling
-       (defn ~dispatch-fn-name [msg#]
-         (try
-           (~final-dispatch msg#)
-           (catch Exception e#
-             (.printStackTrace e#)
-             (when (.hasText msg#)
-               (.reply msg# (str ~(name module-name) " caused an exception: "
-                                 (.getLocalizedMessage e#)))))))
+       ; Define process-message function first (exposed for testing)
+       ~wrapped-process-msg
 
-       ; Create module metadata
+       ; Include helper functions
+       ~@(filter #(not (and (seq? %)
+                           (= 'defn (first %))
+                           (= 'process-message (second %))))
+                remaining-body)
+
+       ; Create module metadata with process-message as process-fn
        (def ~metadata-name
          (mp/map->ModuleMetadata
            {:module-name ~(name module-name)
             :commands ~(vec commands)
             :message-type ~message-type
             :wants-private ~wants-private
-            :dispatch-fn ~dispatch-fn-name}))
+            :process-fn ~'process-message}))
 
-       ; Register module immediately when namespace loads
-       (registry/register-module! ~metadata-name)
-
-       ; Expose process-channel-message and process-private-message as public functions for testing
-       ~@(when channel-fn
-           (let [[_ _ [msg-param] & fn-body] channel-fn]
-             [`(defn ~'process-channel-message [~msg-param]
-                 (let [~msg-param (msg/wrap-message ~msg-param)]
-                   ~@fn-body))]))
-
-       ~@(when private-fn
-           (let [[_ _ [msg-param] & fn-body] private-fn]
-             [`(defn ~'process-private-message [~msg-param]
-                 (let [~msg-param (msg/wrap-message ~msg-param)]
-                   ~@fn-body))]))
-
-       ; Include any helper functions from body
-       ~@(filter #(not (and (seq? %)
-                           (= 'defn (first %))
-                           (contains? #{'process-channel-message 'process-private-message}
-                                     (second %))))
-                remaining-body))))
+       ; Register module when namespace loads
+       (registry/register-module! ~metadata-name))))

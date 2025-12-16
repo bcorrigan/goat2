@@ -324,7 +324,7 @@
   :commands [:wordstats :purity]
   :receive-messages :unclaimed
 
-  (defn process-channel-message [m]
+  (defn process-message [m]
     (let [text (msg/get-text m)
           username (msg/sender m)
           chatid (msg/chat-id m)

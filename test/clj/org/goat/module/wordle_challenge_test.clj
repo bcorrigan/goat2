@@ -28,7 +28,7 @@
                             :sender "alice"
                             :is-private false})]
         
-        (wordle/process-channel-message nil challenge-msg)
+        (wordle/process-message nil challenge-msg)
         (is (msg-utils/replied-with? "Starting a challenge match"))
         
         (let [alice-key :1001
@@ -44,25 +44,25 @@
             
             ;; Alice plays and wins
             (let [guess1-msg (msg-utils/mock-message {:text "CRANE" :chat-id 1001 :sender "alice" :is-private true})]
-              (wordle/process-channel-message nil guess1-msg))
+              (wordle/process-message nil guess1-msg))
             
             (let [guess2-msg (msg-utils/mock-message {:text "SLOTH" :chat-id 1001 :sender "alice" :is-private true})]
-              (wordle/process-channel-message nil guess2-msg))
+              (wordle/process-message nil guess2-msg))
             
             (let [alice-win-msg (msg-utils/mock-message {:text alice-word :chat-id 1001 :sender "alice" :is-private true})]
-              (wordle/process-channel-message nil alice-win-msg))
+              (wordle/process-message nil alice-win-msg))
             
             (msg-utils/clear-replies!)
             
             ;; Bob plays and wins
             (let [guess1-msg (msg-utils/mock-message {:text "ADIEU" :chat-id 1002 :sender "bob" :is-private true})]
-              (wordle/process-channel-message nil guess1-msg))
+              (wordle/process-message nil guess1-msg))
             
             (let [guess2-msg (msg-utils/mock-message {:text "ROAST" :chat-id 1002 :sender "bob" :is-private true})]
-              (wordle/process-channel-message nil guess2-msg))
+              (wordle/process-message nil guess2-msg))
             
             (let [bob-win-msg (msg-utils/mock-message {:text bob-word :chat-id 1002 :sender "bob" :is-private true})]
-              (wordle/process-channel-message nil bob-win-msg)
+              (wordle/process-message nil bob-win-msg)
               (is (msg-utils/replied-with? "challenge has concluded")))))))))
 
 (deftest test-challenge-state-inspection
@@ -77,7 +77,7 @@
                          {:chat-id 2000
                           :sender "alice" 
                           :is-private false})]
-      (wordle/process-channel-message nil challenge-msg)
+      (wordle/process-message nil challenge-msg)
       
       (let [alice-key :1001
             bob-key :1002
@@ -100,7 +100,7 @@
                          {:chat-id 2000
                           :sender "alice"
                           :is-private false})]
-      (wordle/process-channel-message nil challenge-msg)
+      (wordle/process-message nil challenge-msg)
       
       (let [alice-key :1001
             bob-key :1002
@@ -109,7 +109,7 @@
         
         ;; Alice finishes first
         (let [alice-win-msg (msg-utils/mock-message {:text answer :chat-id 1001 :sender "alice" :is-private true})]
-          (wordle/process-channel-message nil alice-win-msg)
+          (wordle/process-message nil alice-win-msg)
           
           ;; Check that Alice's data is cached as first-game (she finished while Bob still playing)
           (let [first-game-data (wordle/get-gameprop challenge-key :first-game)
@@ -124,7 +124,7 @@
         
         ;; Bob finishes second, completing the challenge
         (let [bob-win-msg (msg-utils/mock-message {:text answer :chat-id 1002 :sender "bob" :is-private true})]
-          (wordle/process-channel-message nil bob-win-msg)
+          (wordle/process-message nil bob-win-msg)
           ;; At this point challenge cleanup has occurred and challenge-key is removed
           )))))
 
@@ -140,7 +140,7 @@
                      {:chat-id 1001
                       :sender "alice"
                       :is-private true})]
-      (wordle/process-channel-message nil start-msg)
+      (wordle/process-message nil start-msg)
       
       (let [alice-key :1001]
         ;; Verify game started and history is initialized
@@ -149,7 +149,7 @@
         
         ;; Make first guess
         (let [guess1-msg (msg-utils/mock-message {:text "CRANE" :chat-id 1001 :sender "alice" :is-private true})]
-          (wordle/process-channel-message nil guess1-msg))
+          (wordle/process-message nil guess1-msg))
         
         ;; Check history has one entry
         (let [history1 (wordle/get-gameprop alice-key :remaining-words-history)]
@@ -158,7 +158,7 @@
         
         ;; Make second guess
         (let [guess2-msg (msg-utils/mock-message {:text "SLOTH" :chat-id 1001 :sender "alice" :is-private true})]
-          (wordle/process-channel-message nil guess2-msg))
+          (wordle/process-message nil guess2-msg))
         
         ;; Check history has two entries
         (let [history2 (wordle/get-gameprop alice-key :remaining-words-history)]
@@ -169,7 +169,7 @@
         ;; Make third guess (correct answer to end game)
         (let [answer (wordle/get-gameprop alice-key :answer)
               win-msg (msg-utils/mock-message {:text answer :chat-id 1001 :sender "alice" :is-private true})]
-          (wordle/process-channel-message nil win-msg)
+          (wordle/process-message nil win-msg)
           
           ;; Game should be cleared, but we can verify the pattern existed
           (is (not (wordle/playing? alice-key)) "Game should be finished")))))
@@ -183,7 +183,7 @@
                          {:chat-id 2000
                           :sender "alice"
                           :is-private false})]
-      (wordle/process-channel-message nil challenge-msg)
+      (wordle/process-message nil challenge-msg)
       
       (let [alice-key :1001
             bob-key :1002
@@ -191,7 +191,7 @@
         
         ;; Alice makes a guess
         (let [guess-msg (msg-utils/mock-message {:text "CRANE" :chat-id 1001 :sender "alice" :is-private true})]
-          (wordle/process-channel-message nil guess-msg))
+          (wordle/process-message nil guess-msg))
         
         ;; Verify Alice has remaining-words-history
         (let [alice-history (wordle/get-gameprop alice-key :remaining-words-history)]
@@ -200,7 +200,7 @@
         ;; Alice finishes
         (let [answer (wordle/get-gameprop alice-key :answer)
               win-msg (msg-utils/mock-message {:text answer :chat-id 1001 :sender "alice" :is-private true})]
-          (wordle/process-channel-message nil win-msg))
+          (wordle/process-message nil win-msg))
         
         ;; Verify Alice's remaining-words-history is cached in first-game
         (let [cached-history (wordle/get-fgameprop challenge-key :remaining-words-history)]
@@ -211,7 +211,7 @@
         ;; Bob finishes to complete challenge
         (let [answer (wordle/get-gameprop bob-key :answer)
               bob-win-msg (msg-utils/mock-message {:text answer :chat-id 1002 :sender "bob" :is-private true})]
-          (wordle/process-channel-message nil bob-win-msg))))))
+          (wordle/process-message nil bob-win-msg))))))
 
 (deftest test-end-to-end-with-counts
   "End-to-end test verifying remaining words counts are displayed on board images"
@@ -225,15 +225,15 @@
                      {:chat-id 1001
                       :sender "alice"
                       :is-private true})]
-      (wordle/process-channel-message nil start-msg)
+      (wordle/process-message nil start-msg)
       
       (let [alice-key :1001]
         ;; Make a few guesses
         (let [guess1-msg (msg-utils/mock-message {:text "CRANE" :chat-id 1001 :sender "alice" :is-private true})]
-          (wordle/process-channel-message nil guess1-msg))
+          (wordle/process-message nil guess1-msg))
         
         (let [guess2-msg (msg-utils/mock-message {:text "SLOTH" :chat-id 1001 :sender "alice" :is-private true})]
-          (wordle/process-channel-message nil guess2-msg))
+          (wordle/process-message nil guess2-msg))
         
         ;; Get the board image - this should now include counts
         (let [board-img (wordle/get-board-img alice-key)

@@ -169,7 +169,7 @@
     (msg-utils/with-clean-replies
       (let [msg (msg-utils/mock-command-message "roll" "3d6 + 2d20"
                   {:sender "alice"})]
-        (sut/process-channel-message msg)
+        (sut/process-message msg)
         (is (= 1 (msg-utils/reply-count)))
         (is (msg-utils/replied-with? "🎲"))
         (is (msg-utils/replied-with? "alice"))
@@ -183,7 +183,7 @@
     (msg-utils/with-clean-replies
       (let [msg (msg-utils/mock-command-message "roll" "d20"
                   {:sender "bob"})]
-        (sut/process-channel-message msg)
+        (sut/process-message msg)
         (is (= 1 (msg-utils/reply-count)))
         (is (msg-utils/replied-with? "bob"))
         (is (msg-utils/replied-with? "1d20"))))))
@@ -193,7 +193,7 @@
     (msg-utils/with-clean-replies
       (let [msg (msg-utils/mock-command-message "roll" "not-valid"
                   {:sender "alice"})]
-        (sut/process-channel-message msg)
+        (sut/process-message msg)
         (is (= 1 (msg-utils/reply-count)))
         (is (msg-utils/replied-with? "Sorry, I don't know how to do that."))))))
 
@@ -202,7 +202,7 @@
     (msg-utils/with-clean-replies
       (let [msg (msg-utils/mock-command-message "roll" "101d6"
                   {:sender "alice"})]
-        (sut/process-channel-message msg)
+        (sut/process-message msg)
         (is (= 1 (msg-utils/reply-count)))
         (is (msg-utils/replied-with? "I'm not rolling that many dice"))))))
 
@@ -211,7 +211,7 @@
     (msg-utils/with-clean-replies
       (let [msg (msg-utils/mock-command-message "roll" "100d6"
                   {:sender "alice"})]
-        (sut/process-channel-message msg)
+        (sut/process-message msg)
         (is (= 1 (msg-utils/reply-count)))
         (is (msg-utils/replied-with? "100d6"))
         (is (msg-utils/replied-with? "Total:"))))))
@@ -221,7 +221,7 @@
     (msg-utils/with-clean-replies
       (let [msg (msg-utils/mock-command-message "toss" ""
                   {:sender "alice"})]
-        (sut/process-channel-message msg)
+        (sut/process-message msg)
         (is (= 1 (msg-utils/reply-count)))
         (is (msg-utils/replied-with? "🪙"))
         (is (msg-utils/replied-with? "alice"))
@@ -233,7 +233,7 @@
     (msg-utils/with-clean-replies
       (let [msg (msg-utils/mock-command-message "toss" "coin"
                   {:sender "bob"})]
-        (sut/process-channel-message msg)
+        (sut/process-message msg)
         (is (= 1 (msg-utils/reply-count)))
         (is (msg-utils/replied-with? "🪙"))
         (is (msg-utils/replied-with? "bob"))
@@ -248,7 +248,7 @@
         (msg-utils/with-clean-replies
           (let [msg (msg-utils/mock-command-message "toss" ""
                       {:sender "alice"})]
-            (sut/process-channel-message msg)
+            (sut/process-message msg)
             (cond
               (msg-utils/replied-with? "Heads") (swap! results conj :heads)
               (msg-utils/replied-with? "Tails") (swap! results conj :tails)))))

@@ -675,7 +675,7 @@
   :receive-messages :commands
   :wants-private true
 
-  (defn process-channel-message [m]
+  (defn process-message [m]
     (let [command (msg/command m)
           text (msg/mod-text m)]
       (cond

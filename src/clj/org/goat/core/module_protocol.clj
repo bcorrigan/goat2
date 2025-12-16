@@ -34,11 +34,11 @@
    commands       ; Vector of keywords - [:roll :toss]
    message-type   ; Keyword - :all, :unclaimed, or :commands
    wants-private  ; Boolean - true if module wants private messages
-   dispatch-fn]   ; Function (fn [msg] ...) - the actual message processor
+   process-fn]    ; Function (fn [msg] ...) - the actual message processor
 
   Module
   (get-module-name [this] module-name)
   (get-commands [this] commands)
   (get-message-type [this] message-type)
   (wants-private? [this] wants-private)
-  (process-message [this msg] (dispatch-fn msg)))
+  (process-message [this msg] (process-fn msg)))

@@ -177,7 +177,7 @@
 (defmodule DiceRoll
   :commands [:roll :toss]
 
-  (defn process-channel-message [m]
+  (defn process-message [m]
     (case (msg/command m)
       :roll (handle-roll m)
       :toss (handle-toss m)

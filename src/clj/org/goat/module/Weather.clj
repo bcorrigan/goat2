@@ -687,5 +687,5 @@
 (defmodule Weather
   :commands [:weather :weathar :waether :metar :rawmetar]
 
-  (defn process-channel-message [m]
+  (defn process-message [m]
     (handle-weather m)))

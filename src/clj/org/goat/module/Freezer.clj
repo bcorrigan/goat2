@@ -639,7 +639,7 @@
   :receive-messages :commands
   :wants-private true
 
-  (defn process-channel-message [m]
+  (defn process-message [m]
     (if (msg/has-document? m)
       (handle-import-csv m)    
       (let [command (msg/command m)

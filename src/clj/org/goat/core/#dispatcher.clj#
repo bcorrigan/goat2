@@ -37,22 +37,10 @@
        (seq module-commands)
        (contains? (set module-commands) msg-cmd)))
 
-(defn- dispatch-to-module
-  "Dispatch message to a single module with error handling.
-   Logs exceptions and sends user-friendly error replies."
-  [module msg]
-  (try
-    ((:process-fn module) msg)
-    (catch Exception e
-      (log/error e "Error in module" (:module-name module))
-      (when (msg/has-text? msg)
-        (msg/reply msg (str (:module-name module) " caused an exception: "
-                           (.getMessage e)))))))
-
 (defn- dispatch-message
   "Dispatch a single message to appropriate modules.
 
-   Implements the same logic as the original dispatcher:
+   Logic:
    1. Send to all :all modules
    2. Check if any :all module claims the command
    3. Send to :commands modules if command matches
@@ -68,7 +56,10 @@
           ;; Step 1: Dispatch to :all modules
           _ (doseq [module all]
               (when (should-dispatch-to-module? msg module)
-                (dispatch-to-module module msg)))
+                (try
+                  ((:dispatch-fn module) msg)
+                  (catch Exception e
+                    (log/error e "Error in :all module" (:name module))))))
 
           ;; Step 2: Check if any :all module claimed this command
           claimed? (boolean
@@ -80,14 +71,20 @@
           _ (doseq [module commands]
               (when (and (command-matches? msg-cmd (:commands module))
                         (should-dispatch-to-module? msg module))
-                (dispatch-to-module module msg)
-                (reset! commands-claimed? true)))
+                (try
+                  ((:dispatch-fn module) msg)
+                  (reset! commands-claimed? true)
+                  (catch Exception e
+                    (log/error e "Error in :commands module" (:name module))))))
 
           ;; Step 4: If not claimed, dispatch to :unclaimed modules
           _ (when-not (or claimed? @commands-claimed?)
               (doseq [module unclaimed]
                 (when (should-dispatch-to-module? msg module)
-                  (dispatch-to-module module msg))))]
+                  (try
+                    ((:dispatch-fn module) msg)
+                    (catch Exception e
+                      (log/error e "Error in :unclaimed module" (:name module)))))))]
       nil)))
 
 (defn- dispatcher-loop
