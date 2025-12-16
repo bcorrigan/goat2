@@ -7,7 +7,8 @@
             [clojure.tools.logging :as log]
             [org.goat.core.registry :as registry]
             [org.goat.core.channels :as channels]
-            [org.goat.core.message :as msg]))
+            [org.goat.core.message :as msg]
+            [org.goat.core.module-protocol :as mp]))
 
 ;; Control channel for shutdown
 (defonce ^:private control-chan (chan))
@@ -42,7 +43,7 @@
    Logs exceptions and sends user-friendly error replies."
   [module msg]
   (try
-    ((:process-fn module) msg)
+    (mp/process-message module msg)
     (catch Exception e
       (log/error e "Error in module" (:module-name module))
       (when (msg/has-text? msg)
