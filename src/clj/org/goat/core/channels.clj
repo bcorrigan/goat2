@@ -14,9 +14,8 @@
 
 ;; Channel for outgoing messages to Telegram.
 ;; Modules put reply messages here via message/send-msg.
-;; ServerConnection's OutputHandler takes from this channel and sends via Platform.
-;; Buffer size: 100 messages
-(defonce outgoing-chan (async/chan 100))
+;; Buffer size: 10 messages
+(defonce outgoing-chan (async/chan 10))
 
 (defn put-incoming!
   "Put an incoming message on the incoming channel.
@@ -163,49 +162,3 @@
        (recur)))"
   [tap-chan]
   (async/tap (async/mult outgoing-chan) tap-chan))
-
-(comment
-  ;; Put and take messages (blocking)
-  (require '[org.goat.core.message-parse :as mp])
-
-  (def test-msg (mp/create-message :chat-id 123 :sender "alice" :private? false :text "hello"))
-
-  ;; Put incoming message
-  (put-incoming! test-msg)
-
-  ;; Take incoming message (in another thread/REPL)
-  (take-incoming!)
-
-  ;; Put outgoing message
-  (put-outgoing! (mp/create-reply test-msg :text "hi alice!"))
-
-  ;; Take outgoing message
-  (take-outgoing!)
-
-  ;; Check channel stats
-  (channel-stats)
-  ;; => {:incoming-buffer 0, :outgoing-buffer 0}
-
-  ;; Async operations in go blocks
-  (require '[clojure.core.async :refer [go go-loop <! >!]])
-
-  (go
-    (put-incoming-async! test-msg)
-    (println "Put message asynchronously"))
-
-  (go
-    (let [msg (take-incoming-async!)]
-      (println "Got message:" msg)))
-
-  ;; Tap for monitoring
-  (def monitor-chan (async/chan 10))
-  (tap-incoming monitor-chan)
-
-  (go-loop []
-    (when-let [msg (<! monitor-chan)]
-      (println "MONITOR:" (:message/text msg))
-      (recur)))
-
-  ;; Close channels (shutdown)
-  (close-channels!)
-  )

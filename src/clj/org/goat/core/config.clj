@@ -101,20 +101,3 @@
 ;; Load config when namespace is required
 (load-config!)
 
-(comment
-  ;; Get current config
-  @config
-
-  ;; Get token
-  (get-token)
-
-  ;; Get bot name
-  (get-bot-name)
-
-  ;; Set test mode
-  (set-test-mode! true)
-  (test-mode?)
-
-  ;; Reload config
-  (load-config!)
-  )

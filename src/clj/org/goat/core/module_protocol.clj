@@ -7,7 +7,7 @@
   "Protocol for Goat modules.
 
   Modules don't implement this directly - the defmodule macro generates
-  implementations automatically."
+  implementations automatically so use that."
 
   (get-module-name [this]
     "Return the module name as a string")
@@ -30,11 +30,11 @@
      process-channel-message or process-private-message"))
 
 (defrecord ModuleMetadata
-  [module-name    ; String - name of the module
+  [module-name    
    commands       ; Vector of keywords - [:roll :toss]
    message-type   ; Keyword - :all, :unclaimed, or :commands
-   wants-private  ; Boolean - true if module wants private messages
-   process-fn]    ; Function (fn [msg] ...) - the actual message processor
+   wants-private  
+   process-fn]    ; fn [msg] - the actual message processor
 
   Module
   (get-module-name [this] module-name)

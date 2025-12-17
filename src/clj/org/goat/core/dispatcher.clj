@@ -53,7 +53,6 @@
 (defn- dispatch-message
   "Dispatch a single message to appropriate modules.
 
-   Implements the same logic as the original dispatcher:
    1. Send to all :all modules
    2. Check if any :all module claims the command
    3. Send to :commands modules if command matches
@@ -149,28 +148,3 @@
   {:running? (some? @dispatcher-loop-chan)
    :channel-stats (channels/channel-stats)})
 
-(comment
-  ;; Start dispatcher
-  (start!)
-
-  ;; Check status
-  (dispatcher-status)
-  ;; => {:running? true, :channel-stats {...}}
-
-  ;; Stop dispatcher
-  (stop!)
-
-  ;; Test message dispatch
-  (require '[org.goat.core.message-parse :as mp])
-  (def test-msg (mp/create-message :chat-id 123
-                                   :sender "alice"
-                                   :private? false
-                                   :text "wordle 5"))
-
-  ;; Put message on incoming channel (simulates Telegram)
-  (channels/put-incoming! test-msg)
-
-  ;; Check registered modules
-  (require '[org.goat.core.registry :as registry])
-  (registry/get-modules)
-  )

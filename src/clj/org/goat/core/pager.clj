@@ -269,38 +269,3 @@
   []
   (set (keys @pager-cache)))
 
-(comment
-  ;; Check if text needs pagination
-  (should-paginate? "short text")
-  ;; => false
-
-  (should-paginate? (apply str (repeat 1000 "long text ")))
-  ;; => true
-
-  ;; Create paged reply
-  (require '[org.goat.core.message-parse :as mp])
-  (def source-msg (mp/create-message :chat-id 123 :sender "alice" :private? false))
-
-  (def long-text (apply str (repeat 1000 "This is a very long message. ")))
-  (def first-page-msg (create-paged-reply source-msg long-text))
-
-  ;; Check if more pages available
-  (has-next-page? 123)
-  ;; => true
-
-  ;; Get next page
-  (get-next-page 123)
-  ;; => "Page 2 content..."
-
-  ;; Create next page message
-  (create-next-page-message source-msg)
-
-  ;; View active pagers
-  (active-pagers)
-  ;; => #{123}
-
-  ;; Clear pager
-  (clear-pager! 123)
-  (has-next-page? 123)
-  ;; => false
-  )
