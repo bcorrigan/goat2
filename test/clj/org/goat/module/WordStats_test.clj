@@ -6,10 +6,6 @@
             [clojure.java.jdbc :as sql])
   (:import [java.io File]))
 
-;; ============================================================================
-;; Test Database Setup
-;; ============================================================================
-
 (def test-db
   {:classname "org.sqlite.JDBC"
    :subprotocol "sqlite"
@@ -19,7 +15,6 @@
   (let [db-file (File. "test/resources/test-wordstats.db")]
     (when (.exists db-file) (.delete db-file)))
 
-  ;; Create all tables
   (sql/db-do-commands test-db
     (sql/create-table-ddl :message_stats
       [[:username :text]
@@ -78,10 +73,7 @@
 
 (use-fixtures :each db-fixture)
 
-;; ============================================================================
 ;; Message Filtering Tests
-;; ============================================================================
-
 (deftest test-contains-url?
   (testing "Detects URLs in messages"
     (is (sut/contains-url? "Check out http://example.com"))
@@ -113,28 +105,6 @@
     (is (not (sut/should-analyse-message? "123")))  ; no words
     (is (not (sut/should-analyse-message? nil)))))
 
-;; ============================================================================
-;; Text Analysis Tests
-;; ============================================================================
-
-(deftest test-tokenize-message
-  (testing "Tokenizes message into words"
-    (is (= ["hello" "world"] (sut/tokenize-message "Hello world")))
-    (is (= ["test" "message"] (sut/tokenize-message "Test, message!")))
-    (is (= ["one" "two" "three"] (sut/tokenize-message "one, two, three")))))
-
-(deftest test-extract-sentences
-  (testing "Extracts sentences from text"
-    (is (= ["Hello" "How are you"] (sut/extract-sentences "Hello. How are you?")))
-    (is (= ["Stop"] (sut/extract-sentences "Stop!")))
-    (is (= ["Really" "Yes"] (sut/extract-sentences "Really? Yes.")))))
-
-(deftest test-count-sentences
-  (testing "Counts sentences correctly"
-    (is (= 2 (sut/count-sentences "First sentence. Second sentence.")))
-    (is (= 3 (sut/count-sentences "One! Two? Three.")))
-    (is (= 1 (sut/count-sentences "Just one")))))
-
 (deftest test-is-swear-word?
   (testing "Detects swear words"
     ;; Mock swear-words set
@@ -152,12 +122,6 @@
       (is (= [] (sut/extract-swear-words ["clean" "words" "only"])))
       (is (= ["shit"] (sut/extract-swear-words ["oh" "shit"]))))))
 
-(deftest test-normalize-word
-  (testing "Normalizes words for vocabulary tracking"
-    (is (= "hello" (sut/normalize-word "Hello")))
-    (is (= "world" (sut/normalize-word "world!")))
-    (is (= "test" (sut/normalize-word "TEST?")))))
-
 (deftest test-calculate-avg-word-length
   (testing "Calculates average word length"
     (is (= 5.0 (sut/calculate-avg-word-length ["hello" "world"])))
@@ -169,10 +133,6 @@
     (is (= 5.0 (sut/calculate-avg-sentence-length "One. Two." 10)))
     (is (= 3.0 (sut/calculate-avg-sentence-length "A. B. C." 9)))
     (is (= 0.0 (sut/calculate-avg-sentence-length "No sentences" 0)))))
-
-;; ============================================================================
-;; Message Analysis Integration Tests
-;; ============================================================================
 
 (deftest test-analyse-and-store-clean-message
   (testing "Analyzes and stores clean message correctly"
@@ -191,7 +151,7 @@
         (is (= 6 (db/get-vocabulary-size "alice" 123)))))))
 
 (deftest test-analyse-and-store-message-with-swear
-  (testing "Analyzes and stores message with swear word"
++  (testing "Analyzes and stores message with swear word"
     (with-redefs [sut/swear-words (delay #{"damn" "hell"})]
       (let [result (sut/analyse-and-store-message "Oh damn that sucks" "bob" 456)]
         (is (true? (:had-swear result)))
@@ -240,16 +200,15 @@
           (is (= 0 (:messages_since_last_swear stats-after)))
           (is (= 1 (:swear_words_count stats-after))))))))
 
-;; ============================================================================
-;; Purity Fall Detection Tests
-;; ============================================================================
+
+(deftest test-count-sentences
+  (testing "Counts sentences correctly"
+    (is (= 2 (sut/count-sentences "First sentence. Second sentence.")))
+    (is (= 3 (sut/count-sentences "One! Two? Three.")))
+    (is (= 1 (sut/count-sentences "Just one")))))
 
 ;; Note: Purity fall scolding is tested through integration test below
 ;; where we process actual messages through the module
-
-;; ============================================================================
-;; Display Function Tests
-;; ============================================================================
 
 (deftest test-show-user-stats-with-data
   (testing "Displays user stats correctly"
@@ -267,7 +226,7 @@
          :last_updated (System/currentTimeMillis)})
 
       (let [msg (msg-utils/mock-command-message "wordstats" nil {:sender "alice" :chat-id 123})]
-        (sut/process-message nil msg)
+        (sut/process-message msg)
 
         ;; Verify response contains key stats
         (is (msg-utils/replied-with? "Word Stats"))
@@ -280,7 +239,7 @@
   (testing "Handles user with no stats gracefully"
     (msg-utils/with-clean-replies
       (let [msg (msg-utils/mock-command-message "wordstats" nil {:sender "nobody" :chat-id 999})]
-        (sut/process-message nil msg)
+        (sut/process-message msg)
 
         (is (msg-utils/replied-with? "No statistics available"))))))
 
@@ -299,7 +258,7 @@
          :last_updated (System/currentTimeMillis)})
 
       (let [msg (msg-utils/mock-command-message "purity" nil {:sender "alice" :chat-id 123})]
-        (sut/process-message nil msg)
+        (sut/process-message msg)
 
         (is (msg-utils/replied-with? "PURE"))
         (is (msg-utils/replied-with? "50 messages"))
@@ -321,15 +280,12 @@
          :last_updated (System/currentTimeMillis)})
 
       (let [msg (msg-utils/mock-command-message "purity" nil {:sender "bob" :chat-id 456})]
-        (sut/process-message nil msg)
+        (sut/process-message msg)
 
         (is (msg-utils/replied-with? "IMPURE"))
         (is (msg-utils/replied-with? "clean up your act"))))))
 
-;; ============================================================================
-;; Module Integration Tests with Commands
-;; ============================================================================
-
+;; Full module Integration Tests with Commands
 (deftest test-stats-command
   (testing "Stats command triggers stats display"
     (msg-utils/with-clean-replies
@@ -347,7 +303,7 @@
 
       (let [msg (msg-utils/mock-command-message "wordstats" nil {:sender "alice" :chat-id 123})]
         ;; Simulate module processing
-        (sut/process-message nil msg)
+        (sut/process-message msg)
 
         (is (msg-utils/replied-with? "Word Stats"))))))
 
@@ -367,6 +323,6 @@
 
       (let [msg (msg-utils/mock-command-message "purity" nil {:sender "bob" :chat-id 456})]
         ;; Simulate module processing
-        (sut/process-message nil msg)
+        (sut/process-message msg)
 
         (is (msg-utils/replied-with? "Purity Report"))))))

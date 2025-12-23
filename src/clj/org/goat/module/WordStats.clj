@@ -2,11 +2,8 @@
   (:require [org.goat.core.macros :refer [defmodule]]
             [org.goat.core.message :as msg]
             [org.goat.db.user-stats :as db]
+            [org.goat.util.str :as goatstr]
             [clojure.string :as str]))
-
-;; ============================================================================
-;; Swear Word List
-;; ============================================================================
 
 (def swear-words
   "Set of swear words loaded from resources/swear_words.txt"
@@ -22,9 +19,6 @@
         (println "Warning: Could not load swear_words.txt:" (.getMessage e))
         #{}))))
 
-;; ============================================================================
-;; Message Filtering
-;; ============================================================================
 
 (defn contains-url?
   "Check if text contains a URL"
@@ -32,6 +26,8 @@
   (or (str/includes? text "http://")
       (str/includes? text "https://")
       (str/includes? text "www.")))
+
+;; Various filtering fns
 
 (defn quoted-text?
   "Check if text is enclosed in quotes or is a quote reply"
@@ -54,26 +50,6 @@
        (>= (count text) 3)
        (contains-words? text)))
 
-;; ============================================================================
-;; Text Analysis
-;; ============================================================================
-
-(defn tokenize-message
-  "Split message into words, removing punctuation"
-  [text]
-  (->> (str/split text #"\s+")
-       (map #(str/replace % #"[^\w]" ""))
-       (remove empty?)
-       (map str/lower-case)))
-
-(defn extract-sentences
-  "Split text into sentences"
-  [text]
-  (-> text
-      (str/split #"[.!?]+")
-      (->> (map str/trim)
-           (remove empty?))))
-
 (defn is-swear-word?
   "Check if a word is a swear word"
   [word]
@@ -84,24 +60,17 @@
   [words]
   (filter is-swear-word? words))
 
-(defn normalize-word
-  "Normalize word for vocabulary tracking"
-  [word]
-  (-> word
-      str/lower-case
-      (str/replace #"[^\w]" "")))
-
-(defn count-sentences
-  "Count number of sentences in text"
-  [text]
-  (count (extract-sentences text)))
-
 (defn calculate-avg-word-length
   "Calculate average word length from a list of words"
   [words]
   (if (empty? words)
     0.0
     (double (/ (reduce + (map count words)) (count words)))))
+
+(defn count-sentences
+  "Count number of sentences in text"
+  [text]
+  (count (goatstr/extract-sentences text)))
 
 (defn calculate-avg-sentence-length
   "Calculate average sentence length (words per sentence)"
@@ -110,10 +79,6 @@
     (if (> sentence-count 0)
       (double (/ word-count sentence-count))
       0.0)))
-
-;; ============================================================================
-;; Purity Tracking
-;; ============================================================================
 
 (defn check-purity-fall
   "Check if user just fell from purity and scold them if so"
@@ -127,14 +92,11 @@
                            previous-streak
                            swear-word)))))
 
-;; ============================================================================
 ;; Message Analysis and Storage
-;; ============================================================================
-
 (defn analyse-and-store-message
   "Analyse message and store stats. Returns true if message contained swears."
   [text username chatid]
-  (let [words (tokenize-message text)
+  (let [words (goatstr/tokenize-message text)
         word-count (count words)
         char-count (count text)
         swear-words (extract-swear-words words)
@@ -147,19 +109,16 @@
         avg-word-length (calculate-avg-word-length words)
         avg-sentence-length (calculate-avg-sentence-length text word-count)]
 
-    ;; Update message stats
     (db/update-message-stats username chatid word-count char-count)
 
     ;; Update vocabulary
     (doseq [word words]
-      (let [normalized (normalize-word word)]
+      (let [normalized (goatstr/normalise-word word)]
         (when-not (empty? normalized)
           (db/add-or-update-word username chatid normalized))))
 
-    ;; Update cached unique word count
     (db/update-unique-word-count username chatid)
 
-    ;; Record message history
     (db/record-message-history username chatid
                                word-count
                                char-count
@@ -168,41 +127,18 @@
                                avg-sentence-length
                                (count swear-words))
 
-    ;; Handle swear words and purity tracking
     (if had-swear
       (do
-        ;; Record each swear word
         (doseq [swear swear-words]
           (db/record-swear username chatid swear (inc current-message-num) timestamp))
-        ;; Update purity stats (reset streak)
         (db/update-purity-stats username chatid 0 timestamp)
-        ;; Return previous streak for fall detection
         {:had-swear true :previous-streak previous-streak})
       ;; No swear - increment clean streak
       (do
         (db/update-purity-stats username chatid (inc previous-streak) nil)
         {:had-swear false :previous-streak previous-streak}))))
 
-;; ============================================================================
-;; Display Functions
-;; ============================================================================
-
-(defn format-duration
-  "Format milliseconds into a human-readable duration"
-  [ms]
-  (let [days (int (/ ms 1000 60 60 24))]
-    (cond
-      (= days 0) "today"
-      (= days 1) "1 day"
-      :else (str days " days"))))
-
-(defn format-date
-  "Format timestamp to a readable date"
-  [timestamp]
-  (when timestamp
-    (let [date (java.util.Date. timestamp)
-          formatter (java.text.SimpleDateFormat. "MMM dd, yyyy")]
-      (.format formatter date))))
+;; Display fns
 
 (defn show-user-stats
   "Display comprehensive word statistics for a user"
@@ -259,7 +195,7 @@
                       "• Clean Streak: %d messages")
                   username
                   total-messages
-                  (format-date first-msg-time) days-active
+                  (goatstr/format-date first-msg-time) days-active
                   msgs-per-week
                   msgs-per-day
                   recent-7days
@@ -286,7 +222,7 @@
 
             is-pure (> msgs-since-swear 0)
             last-swear-str (if last-swear-time
-                             (format-duration (- (System/currentTimeMillis) last-swear-time))
+                             (goatstr/format-duration (- (System/currentTimeMillis) last-swear-time))
                              "Never")
             status-emoji (if is-pure "😇" "😈")]
 
@@ -316,10 +252,6 @@
                     last-swear-str
                     total-swears)))))))
 
-;; ============================================================================
-;; Module Definition
-;; ============================================================================
-
 (defmodule WordStats
   :commands [:wordstats :purity]
   :receive-messages :unclaimed
@@ -331,7 +263,6 @@
           command (msg/command m)
           is-private (msg/private? m)]
       (if command
-        ;; Handle stats commands (respond to both private and channel)
         (case command
           :wordstats (show-user-stats m username chatid)
           :purity (show-purity-stats m username chatid)

@@ -32,10 +32,6 @@
       (str/replace "<" "&lt;")
       (str/replace ">" "&gt;")))
 
-;; =============================================================================
-;; Duration Formatting
-;; =============================================================================
-
 (defn vshort-duration-string
   "Format a duration in milliseconds as a very short string.
 
@@ -65,3 +61,44 @@
     (if (empty? parts)
       "0s"
       (str/join " " parts))))
+
+(defn format-duration
+  "Format milliseconds into a human-readable duration"
+  [ms]
+  (let [days (int (/ ms 1000 60 60 24))]
+    (cond
+      (= days 0) "today"
+      (= days 1) "1 day"
+      :else (str days " days"))))
+
+(defn format-date
+  "Format timestamp to a readable date"
+  [timestamp]
+  (when timestamp
+    (let [date (java.util.Date. timestamp)
+          formatter (java.text.SimpleDateFormat. "MMM dd, yyyy")]
+      (.format formatter date))))
+
+(defn tokenize-message
+  "Split message into words, removing punctuation"
+  [text]
+  (->> (str/split text #"\s+")
+       (map #(str/replace % #"[^\w]" ""))
+       (remove empty?)
+       (map str/lower-case)))
+
+(defn extract-sentences
+  "Split text into sentences"
+  [text]
+  (-> text
+      (str/split #"[.!?]+")
+      (->> (map str/trim)
+           (remove empty?))))
+
+(defn normalise-word
+  "Normalise word (for vocabulary tracking)"
+  [word]
+  (-> word
+      str/lower-case
+      (str/replace #"[^\w]" "")))
+
