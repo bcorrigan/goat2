@@ -18,6 +18,7 @@
             [org.goat.module.Remind]
             [org.goat.module.Define]
             [org.goat.module.More]
+            [org.goat.module.flour]
             [org.goat.module.Wordle]))
 
 (defn init!
