@@ -262,12 +262,11 @@
           chatid (msg/chat-id m)
           command (msg/command m)
           is-private (msg/private? m)]
-      (if command
-        (case command
-          :wordstats (show-user-stats m username chatid)
-          :purity (show-purity-stats m username chatid)
-          nil)
-        ;; Analyse unclaimed messages ONLY from channels/groups (not private)
+      (case command
+        ;; Handle registered commands
+        :wordstats (show-user-stats m username chatid)
+        :purity (show-purity-stats m username chatid)
+        ;; Default case: treat as unclaimed message and analyse if appropriate
         (when (and (not is-private)
                    (should-analyse-message? text))
           (let [result (analyse-and-store-message text username chatid)]

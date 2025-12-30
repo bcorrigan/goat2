@@ -2,6 +2,7 @@
   (:require [org.goat.module.WordStats :as sut]
             [org.goat.db.user-stats :as db]
             [org.goat.testutils.message :as msg-utils]
+            [org.goat.core.message :as msg]
             [clojure.test :as t :refer [deftest is testing use-fixtures]]
             [clojure.java.jdbc :as sql])
   (:import [java.io File]))
@@ -326,3 +327,122 @@
         (sut/process-message msg)
 
         (is (msg-utils/replied-with? "Purity Report"))))))
+
+;; Integration tests for unclaimed message processing
+(deftest test-message-command-parsing
+  (testing "Message parser creates command from first word"
+    (let [msg (msg-utils/mock-message {:text "Hello world"
+                                       :sender "alice"
+                                       :chat-id 123
+                                       :private? false})]
+      (is (= "Hello world" (msg/get-text msg)))
+      (is (= :hello (msg/command msg)) "First word becomes command keyword"))))
+
+(deftest test-module-handles-unregistered-commands
+  (testing "Module treats unregistered commands as unclaimed messages"
+    ;; In production, the dispatcher only sends unclaimed messages to this module.
+    ;; But if we call process-message directly with an unregistered command,
+    ;; it should treat it as an unclaimed message and analyze it.
+    (msg-utils/with-clean-replies
+      (with-redefs [sut/swear-words (delay #{"damn"})]
+        ;; Simulate a message with a command registered by another module
+        ;; (in reality, dispatcher wouldn't send this here, but we're testing
+        ;; that the module correctly handles anything not :wordstats/:purity)
+        (let [msg (msg-utils/mock-message {:text "wordle 5 hard mode"
+                                           :sender "bob"
+                                           :chat-id 456
+                                           :private? false})]
+          (sut/process-message msg)
+
+          ;; Should analyze it since it's not :wordstats or :purity
+          (let [stats (db/get-user-stats "bob" 456)]
+            (is (some? stats) "Module analyzes any non-registered command")
+            (is (= 1 (:total_messages stats)))
+            (is (= 4 (:total_words stats)))))))))
+
+(deftest test-unclaimed-message-is-analyzed
+  (testing "Unclaimed non-private message gets analyzed and stored"
+    (msg-utils/with-clean-replies
+      (with-redefs [sut/swear-words (delay #{"damn"})]
+        ;; Create a regular message (not a command, not private)
+        (let [msg (msg-utils/mock-message {:text "Hello world this is a test message"
+                                           :sender "alice"
+                                           :chat-id 123
+                                           :private? false})]
+          ;; Process through the module
+          (sut/process-message msg)
+
+          ;; Verify stats were stored
+          (let [stats (db/get-user-stats "alice" 123)]
+            (is (some? stats) "Stats should be created")
+            (is (= 1 (:total_messages stats)) "Should have 1 message")
+            (is (= 7 (:total_words stats)) "Should have 7 words")
+            (is (= 1 (:messages_since_last_swear stats)) "Should have clean streak of 1"))
+
+          ;; Verify vocabulary was stored
+          (is (= 7 (db/get-vocabulary-size "alice" 123)) "Should have 7 unique words"))))))
+
+(deftest test-private-message-not-analyzed
+  (testing "Private messages are not analyzed"
+    (msg-utils/with-clean-replies
+      ;; Create a private message
+      (let [msg (msg-utils/mock-message {:text "Hello world this is a test message"
+                                         :sender "bob"
+                                         :chat-id 456
+                                         :private? true})]
+        ;; Process through the module
+        (sut/process-message msg)
+
+        ;; Verify NO stats were stored
+        (let [stats (db/get-user-stats "bob" 456)]
+          (is (nil? stats) "Private messages should not be analyzed"))))))
+
+(deftest test-unclaimed-message-with-swear
+  (testing "Unclaimed message with swear word is tracked"
+    (msg-utils/with-clean-replies
+      (with-redefs [sut/swear-words (delay #{"damn"})]
+        ;; Send a message with a swear word
+        (let [msg (msg-utils/mock-message {:text "Oh damn that is tough"
+                                           :sender "charlie"
+                                           :chat-id 789
+                                           :private? false})]
+          (sut/process-message msg)
+
+          ;; Verify stats
+          (let [stats (db/get-user-stats "charlie" 789)]
+            (is (= 1 (:total_messages stats)))
+            (is (= 0 (:messages_since_last_swear stats)) "Should have broken streak")
+            (is (= 1 (:swear_words_count stats)) "Should have 1 swear"))
+
+          ;; Verify swear was logged
+          (let [swears (db/get-last-two-swears "charlie" 789)]
+            (is (= 1 (count swears)))
+            (is (= "damn" (:swear_word (first swears))))))))))
+
+(deftest test-unclaimed-message-fall-from-grace
+  (testing "Fall from grace triggers scolding message"
+    (msg-utils/with-clean-replies
+      (with-redefs [sut/swear-words (delay #{"damn"})]
+        ;; Build up a streak of 10+ messages
+        (dotimes [_ 10]
+          (let [msg (msg-utils/mock-message {:text "Clean message here"
+                                             :sender "david"
+                                             :chat-id 999
+                                             :private? false})]
+            (sut/process-message msg)))
+
+        ;; Verify streak built up
+        (let [stats-before (db/get-user-stats "david" 999)]
+          (is (= 10 (:messages_since_last_swear stats-before))))
+
+        ;; Now send a swear - should trigger fall from grace
+        (let [msg (msg-utils/mock-message {:text "Oh damn it"
+                                           :sender "david"
+                                           :chat-id 999
+                                           :private? false})]
+          (sut/process-message msg)
+
+          ;; Should get scolded for falling from grace
+          (is (msg-utils/replied-with? "fallen from grace"))
+          (is (msg-utils/replied-with? "david"))
+          (is (msg-utils/replied-with? "10 messages")))))))

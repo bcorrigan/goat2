@@ -8,7 +8,8 @@
             [org.goat.core.registry :as registry]
             [org.goat.core.channels :as channels]
             [org.goat.core.message :as msg]
-            [org.goat.core.module-protocol :as mp]))
+            [org.goat.core.module-protocol :as mp]
+            [org.goat.db.module-settings :as module-settings]))
 
 ;; Control channel for shutdown
 (defonce ^:private control-chan (chan))
@@ -18,13 +19,17 @@
 
 (defn- should-dispatch-to-module?
   "Determine if message should be dispatched to this module.
-   Checks private message preference."
+   Checks private message preference and chat-based ignore settings."
   [msg module]
-  (let [{:keys [wants-private]} module
-        is-private (:message/private? msg)]
-    ;; Only check wants-private for private messages
-    ;; (all modules receive channel messages)
-    (or (not is-private) wants-private)))
+  (let [{:keys [wants-private module-name]} module
+        is-private (:message/private? msg)
+        chat-id (:message/chat-id msg)
+        ;; Check if module is ignored in this chat
+        ignored? (module-settings/is-module-ignored? chat-id module-name)]
+
+    ;; Don't dispatch if ignored, or if private and module doesn't want private
+    (and (not ignored?)
+         (or (not is-private) wants-private))))
 
 (defn- get-message-command
   "Extract command keyword from message, or nil if no command"

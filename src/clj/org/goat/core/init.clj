@@ -14,6 +14,7 @@
             [org.goat.module.Capture]
             [org.goat.module.Countdown]
             [org.goat.module.WordStats]
+            [org.goat.module.ModuleManagement]
             [org.goat.module.Freezer]
             [org.goat.module.Remind]
             [org.goat.module.Define]
