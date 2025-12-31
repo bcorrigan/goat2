@@ -96,6 +96,33 @@
     (is (not (sut/contains-words? "123 456")))
     (is (not (sut/contains-words? "🎉🎊")))))
 
+(deftest test-too-long?
+  (testing "Detects messages longer than 1000 characters"
+    (is (not (sut/too-long? "Short message")))
+    (is (not (sut/too-long? (apply str (repeat 1000 "x")))))
+    (is (sut/too-long? (apply str (repeat 1001 "x"))))
+    (is (sut/too-long? (apply str (repeat 2000 "x"))))))
+
+(deftest test-has-formatting?
+  (testing "Detects markdown and HTML formatting"
+    ;; Markdown bold
+    (is (sut/has-formatting? "This is **bold** text"))
+    (is (sut/has-formatting? "This is __bold__ text"))
+    ;; Markdown italic
+    (is (sut/has-formatting? "This is *italic* text"))
+    (is (sut/has-formatting? "This is _italic_ text"))
+    ;; HTML tags
+    (is (sut/has-formatting? "This is <b>bold</b> text"))
+    (is (sut/has-formatting? "This is <i>italic</i> text"))
+    (is (sut/has-formatting? "This is <strong>strong</strong> text"))
+    (is (sut/has-formatting? "This is <em>emphasized</em> text"))
+    (is (sut/has-formatting? "This is <code>code</code> text"))
+    ;; Code blocks
+    (is (sut/has-formatting? "```code block```"))
+    ;; No formatting
+    (is (not (sut/has-formatting? "Plain text message")))
+    (is (not (sut/has-formatting? "Text with numbers 123 and symbols !@#")))))
+
 (deftest test-should-analyse-message?
   (testing "Correctly filters messages for analysis"
     (is (sut/should-analyse-message? "This is a normal message"))
@@ -104,7 +131,11 @@
     (is (not (sut/should-analyse-message? "> Quote reply")))
     (is (not (sut/should-analyse-message? "Hi")))  ; too short
     (is (not (sut/should-analyse-message? "123")))  ; no words
-    (is (not (sut/should-analyse-message? nil)))))
+    (is (not (sut/should-analyse-message? nil)))
+    (is (not (sut/should-analyse-message? (apply str (repeat 1001 "x")))))  ; too long
+    (is (not (sut/should-analyse-message? "This is **bold** text")))  ; has formatting
+    (is (not (sut/should-analyse-message? "This is *italic* text")))  ; has formatting
+    (is (not (sut/should-analyse-message? "This is <b>HTML</b> text")))))
 
 (deftest test-is-swear-word?
   (testing "Detects swear words"
@@ -446,3 +477,106 @@
           (is (msg-utils/replied-with? "fallen from grace"))
           (is (msg-utils/replied-with? "david"))
           (is (msg-utils/replied-with? "10 messages")))))))
+
+(deftest test-formatted-messages-not-analyzed
+  (testing "Messages with formatting are excluded from analysis"
+    (msg-utils/with-clean-replies
+      (with-redefs [sut/swear-words (delay #{"damn"})]
+        ;; Send messages with various formatting - none should be analyzed
+        (let [formatted-msgs ["This is **bold** text"
+                              "This is *italic* text"
+                              "This has <b>HTML</b> tags"
+                              "```code block```"]]
+          (doseq [text formatted-msgs]
+            (let [msg (msg-utils/mock-message {:text text
+                                               :sender "eve"
+                                               :chat-id 111
+                                               :private? false})]
+              (sut/process-message msg))))
+
+        ;; No stats should be created
+        (let [stats (db/get-user-stats "eve" 111)]
+          (is (nil? stats) "Formatted messages should not be analyzed"))))))
+
+(deftest test-long-messages-not-analyzed
+  (testing "Messages longer than 1000 characters are excluded"
+    (msg-utils/with-clean-replies
+      ;; Create a long pasted message
+      (let [long-text (apply str (repeat 1001 "x"))
+            msg (msg-utils/mock-message {:text long-text
+                                         :sender "frank"
+                                         :chat-id 222
+                                         :private? false})]
+        (sut/process-message msg)
+
+        ;; No stats should be created
+        (let [stats (db/get-user-stats "frank" 222)]
+          (is (nil? stats) "Long messages should not be analyzed"))))))
+
+;; Integration tests for :allstats command
+
+(deftest test-allstats-command-with-multiple-users
+  (testing "Shows table of all users with statistics"
+    (msg-utils/with-clean-replies
+      ;; Create stats for multiple users
+      (doseq [[user msgs words chars unique swears clean]
+              [["alice" 100 500 2500 250 5 10]
+               ["bob" 50 300 1500 150 2 5]
+               ["charlie" 25 150 750 75 0 25]]]
+        (sql/insert! test-db :message_stats
+          {:username user :chatid 123
+           :total_messages msgs
+           :total_words words
+           :total_chars chars
+           :unique_words_count unique
+           :swear_words_count swears
+           :messages_since_last_swear clean
+           :first_message_time (System/currentTimeMillis)
+           :last_updated (System/currentTimeMillis)}))
+
+      (let [msg (msg-utils/mock-command-message "allstats" nil {:sender "alice" :chat-id 123})]
+        (sut/process-message msg)
+
+        ;; Verify table output
+        (is (msg-utils/replied-with? "Word Stats for All Users"))
+        (is (msg-utils/replied-with? "<pre>"))  ; Monospace table
+        (is (msg-utils/replied-with? "alice"))
+        (is (msg-utils/replied-with? "bob"))
+        (is (msg-utils/replied-with? "charlie"))
+        (is (msg-utils/replied-with? "100"))    ; alice's message count
+        (is (msg-utils/replied-with? "50"))     ; bob's message count
+        (is (msg-utils/replied-with? "25"))))))  ; charlie's message count
+
+(deftest test-allstats-command-no-users
+  (testing "Handles no users gracefully"
+    (msg-utils/with-clean-replies
+      (let [msg (msg-utils/mock-command-message "allstats" nil {:sender "nobody" :chat-id 999})]
+        (sut/process-message msg)
+
+        (is (msg-utils/replied-with? "No statistics available"))))))
+
+(deftest test-allstats-filters-low-message-users
+  (testing "Filters users with less than 5 messages"
+    (msg-utils/with-clean-replies
+      ;; Create users with varying message counts
+      (doseq [[user msgs words] [["alice" 10 50]
+                                  ["bob" 3 15]     ; Should be filtered (< 5)
+                                  ["charlie" 20 100]]]
+        (sql/insert! test-db :message_stats
+          {:username user :chatid 456
+           :total_messages msgs
+           :total_words words
+           :total_chars (* words 5)
+           :unique_words_count (int (/ words 2))
+           :swear_words_count 0
+           :messages_since_last_swear msgs
+           :first_message_time (System/currentTimeMillis)
+           :last_updated (System/currentTimeMillis)}))
+
+      (let [msg (msg-utils/mock-command-message "allstats" nil {:sender "alice" :chat-id 456})]
+        (sut/process-message msg)
+
+        ;; Verify alice and charlie are shown, but not bob
+        (is (msg-utils/replied-with? "alice"))
+        (is (msg-utils/replied-with? "charlie"))
+        (is (not (msg-utils/replied-with? "bob")))))))  ; bob filtered out

@@ -3,6 +3,7 @@
             [org.goat.core.message :as msg]
             [org.goat.db.user-stats :as db]
             [org.goat.util.str :as goatstr]
+            [org.goat.util.table :as table]
             [clojure.string :as str]))
 
 (def swear-words
@@ -41,12 +42,36 @@
   [text]
   (re-find #"[a-zA-Z]{2,}" text))
 
+(defn too-long?
+  "Check if message is longer than 1000 characters (likely pasted)"
+  [text]
+  (> (count text) 1000))
+
+(defn has-formatting?
+  "Check if message contains formatting (markdown or HTML)"
+  [text]
+  (or
+   ;; Markdown bold/italic
+   (re-find #"\*\*.*?\*\*" text)           ; **bold**
+   (re-find #"__.*?__" text)               ; __bold__
+   (re-find #"(?<!\*)\*(?!\*).*?\*(?!\*)" text)  ; *italic* (not **)
+   (re-find #"(?<!_)_(?!_).*?_(?!_)" text) ; _italic_ (not __)
+   ;; HTML tags
+   (re-find #"<[bi]>|</[bi]>" text)        ; <b>, <i>
+   (re-find #"<strong>|</strong>" text)
+   (re-find #"<em>|</em>" text)
+   (re-find #"<code>|</code>" text)
+   ;; Code blocks
+   (re-find #"```" text)))
+
 (defn should-analyse-message?
   "Determines if a message should be analysed"
   [text]
   (and text
        (not (contains-url? text))
        (not (quoted-text? text))
+       (not (too-long? text))
+       (not (has-formatting? text))
        (>= (count text) 3)
        (contains-words? text)))
 
@@ -252,8 +277,47 @@
                     last-swear-str
                     total-swears)))))))
 
+(defn show-all-users-stats
+  "Display comparative table of all users in chat"
+  [m chatid]
+  (let [all-stats (db/get-all-users-stats chatid 5)]
+    (if (empty? all-stats)
+      (msg/reply m "📊 No statistics available yet. Need at least 5 messages per user.")
+      (let [;; Compute display stats for each user
+            display-stats (map db/compute-display-stats all-stats)
+
+            ;; Define table structure
+            headers ["User" "Msgs" "Avg/Msg" "Vocab" "Avg Word" "Swear%" "Clean"]
+
+            rows (map (fn [s]
+                       [(:username s)
+                        (:messages s)
+                        (:avg-msg-length s)
+                        (:vocab-size s)
+                        (:avg-word-length s)
+                        (:swear-pct s)
+                        (:clean-streak s)])
+                     display-stats)
+
+            ;; Format configuration
+            table-opts {:align [:left :right :right :right :right :right :right]
+                       :formats [str                          ; username
+                                #(format "%,d" %)             ; messages (with commas)
+                                #(format "%.1f" %)            ; avg/msg
+                                #(format "%,d" %)             ; vocab size
+                                #(format "%.1f" %)            ; avg word length
+                                #(format "%.2f%%" %)          ; swear %
+                                #(format "%d" %)]             ; clean streak
+                       :max-width 15}
+
+            formatted-table (table/format-table (msg/fmt m) headers rows table-opts)
+
+            header (format "📊 <b>Word Stats for All Users</b> (min 5 messages)\n\n")]
+
+        (msg/reply m (str header formatted-table))))))
+
 (defmodule WordStats
-  :commands [:wordstats :purity]
+  :commands [:wordstats :purity :allstats]
   :receive-messages :unclaimed
 
   (defn process-message [m]
@@ -266,6 +330,7 @@
         ;; Handle registered commands
         :wordstats (show-user-stats m username chatid)
         :purity (show-purity-stats m username chatid)
+        :allstats (show-all-users-stats m chatid)
         ;; Default case: treat as unclaimed message and analyse if appropriate
         (when (and (not is-private)
                    (should-analyse-message? text))

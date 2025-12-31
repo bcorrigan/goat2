@@ -309,5 +309,53 @@
                        username chatid])]
          (or (:avg_sent_len (first result)) 0.0))})))
 
+;; ============================================================================
+;; Multi-User Query Functions
+;; ============================================================================
+
+(defn get-all-users-stats
+  "Get basic stats for all users in a chat, ordered by total messages DESC.
+   Returns vector of maps with raw stats from message_stats table.
+   Filters users with less than min-messages (default: 5)."
+  ([chatid] (get-all-users-stats chatid 5))
+  ([chatid min-messages]
+   (sql/query db
+     ["SELECT username, total_messages, total_words, total_chars,
+              unique_words_count, swear_words_count, messages_since_last_swear
+       FROM message_stats
+       WHERE chatid = ? AND total_messages >= ?
+       ORDER BY total_messages DESC"
+      chatid min-messages])))
+
+(defn compute-display-stats
+  "Transform raw stats into display-ready map with calculated fields.
+   Returns map with:
+   - :username (from raw)
+   - :messages (total_messages)
+   - :avg-msg-length (total_words / total_messages)
+   - :vocab-size (unique_words_count)
+   - :avg-word-length (total_chars / total_words)
+   - :swear-pct ((swear_words_count / total_words) * 100)
+   - :clean-streak (messages_since_last_swear)"
+  [stats]
+  (let [total-msgs (:total_messages stats)
+        total-words (:total_words stats)
+        total-chars (:total_chars stats)
+        unique-words (:unique_words_count stats)
+        swear-count (:swear_words_count stats)]
+    {:username (:username stats)
+     :messages total-msgs
+     :avg-msg-length (if (pos? total-msgs)
+                      (double (/ total-words total-msgs))
+                      0.0)
+     :vocab-size unique-words
+     :avg-word-length (if (pos? total-words)
+                       (double (/ total-chars total-words))
+                       0.0)
+     :swear-pct (if (pos? total-words)
+                 (* 100.0 (/ swear-count total-words))
+                 0.0)
+     :clean-streak (:messages_since_last_swear stats)}))
+
 ;; Initialize database on load
 (create-db)
