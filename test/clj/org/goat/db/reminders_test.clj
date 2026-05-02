@@ -159,10 +159,9 @@
       (is (= 1 (count (sut/get-user-reminders "Bob")))))))
 
 (deftest test-get-all-listable-reminders
-  (testing "Get all listable reminders regardless of user"
+  (testing "Get all listable reminders regardless of user, including recurring instances"
     (let [now (System/currentTimeMillis)
           pattern "{:type :interval :seconds 5}"]
-      ;; Add reminders for different users
       (sut/add-reminder! {:chat-id 123 :username "alice" :target-user "bob"
                           :message "task for bob" :due-time (+ now 3600000)})
       (sut/add-reminder! {:chat-id 123 :username "alice" :target-user "charlie"
@@ -170,27 +169,37 @@
       (sut/add-reminder! {:chat-id 123 :username "bob" :target-user "alice"
                           :message "task for alice" :due-time (+ now 10800000)})
 
-      ;; Add a recurring reminder and instance
+      ;; Recurring reminder: parent has fired, only the next instance is pending.
+      ;; This is the real lifecycle - the listing must show the instance so it
+      ;; can be cancelled or edited.
       (let [parent-id (sut/add-reminder!
                         {:chat-id 123 :username "alice" :target-user "alice"
                          :message "recurring task" :due-time (+ now 5000)
                          :recurrence-type "interval" :recurrence-pattern pattern})]
-        ;; Add an instance (should not appear in listable)
+        (sut/mark-reminder-fired! parent-id)
         (sut/add-reminder!
           {:chat-id 123 :username "alice" :target-user "alice"
            :message "recurring task" :due-time (+ now 10000)
            :recurrence-type "interval" :recurrence-pattern pattern
            :parent-reminder-id parent-id}))
 
-      ;; Get all listable reminders
       (let [all-reminders (sut/get-all-listable-reminders)]
-        ;; Should have 4 reminders (3 one-shot + 1 parent recurring, no instances)
-        (is (= 4 (count all-reminders)))
-        ;; Should include reminders for all users
+        (is (= 4 (count all-reminders))
+            "should show 3 one-shots + 1 pending recurring instance")
         (is (= #{"task for bob" "task for charlie" "task for alice" "recurring task"}
                (set (map :message all-reminders))))
-        ;; Should be ordered by due_time
         (is (= "recurring task" (:message (first all-reminders))))))))
+
+(deftest test-get-all-listable-reminders-shows-recurring-before-first-fire
+  (testing "Newly-created recurring reminder appears in listable even before first fire"
+    (let [now (System/currentTimeMillis)]
+      (sut/add-reminder! {:chat-id 123 :username "alice" :target-user "alice"
+                          :message "weekly thing" :due-time (+ now 5000)
+                          :recurrence-type "weekly"
+                          :recurrence-pattern "{:type :weekly :weekday :monday}"})
+      (let [all-reminders (sut/get-all-listable-reminders)]
+        (is (= 1 (count all-reminders)))
+        (is (= "weekly thing" (:message (first all-reminders))))))))
 
 ;; ============================================================================
 ;; Status Update Tests

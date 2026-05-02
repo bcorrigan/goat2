@@ -477,6 +477,103 @@
       (is (= "3am" (get-in result [:recurrence :time-text])))
       (is (= "run backup" (:task result))))))
 
+(deftest test-parse-monthly-day-command
+  (testing "Parse monthly day-of-month command (each Xth of the month)"
+    (let [result (sut/parse-monthly-day-command "me each 15th of the month at 9am to pay rent")]
+      (is (= :monthly-day (get-in result [:recurrence :type])))
+      (is (= 15 (get-in result [:recurrence :day-of-month])))
+      (is (= "9am" (get-in result [:recurrence :time-text])))
+      (is (= "pay rent" (:task result))))
+
+    (let [result (sut/parse-monthly-day-command "janet each 1st of the month at 8am to check council tax")]
+      (is (= "janet" (:target result)))
+      (is (= 1 (get-in result [:recurrence :day-of-month])))
+      (is (= "check council tax" (:task result))))
+
+    (let [result (sut/parse-monthly-day-command "me each 28th of the month at 6pm to run backup")]
+      (is (= 28 (get-in result [:recurrence :day-of-month]))))
+
+    ;; Out of range
+    (is (nil? (sut/parse-monthly-day-command "me each 32nd of the month at 9am to invalid")))
+    (is (nil? (sut/parse-monthly-day-command "me each 0th of the month at 9am to invalid")))
+
+    ;; Doesn't match weekday-of-month form
+    (is (nil? (sut/parse-monthly-day-command "me each first monday of the month at 9am to budget")))))
+
+(deftest test-monthly-day-creates-reminder
+  (testing "End-to-end: each Nth of the month creates a recurring reminder"
+    (msg-utils/with-clean-replies
+      (let [msg (msg-utils/mock-command-message
+                  "remind"
+                  "me each 15th of the month at 9am to pay rent"
+                  {:sender "alice" :chat-id 123})]
+        (sut/process-message msg)
+
+        (is (msg-utils/replied-with? "I'll remind"))
+        (is (msg-utils/replied-with? "pay rent"))
+        (is (msg-utils/replied-with? "(recurring)"))
+
+        (let [reminders (db/get-user-reminders "alice")]
+          (is (= 1 (count reminders)))
+          (let [reminder (first reminders)
+                pattern (clojure.edn/read-string (:recurrence_pattern reminder))]
+            (is (= "monthly-day" (:recurrence_type reminder)))
+            (is (= :monthly-day (:type pattern)))
+            (is (= 15 (:day-of-month pattern)))
+            (let [due-zdt (java.time.ZonedDateTime/ofInstant
+                            (java.time.Instant/ofEpochMilli (:due_time reminder))
+                            (java.time.ZoneId/of "Europe/London"))]
+              (is (= 15 (.getDayOfMonth due-zdt))
+                  "Should fire on the 15th"))))))))
+
+(deftest test-monthly-day-next-occurrence
+  (testing "Next occurrence advances to the same day-of-month next month"
+    ;; Start: Jan 15 2026 09:00 (Europe/London)
+    (let [first-zdt (java.time.ZonedDateTime/of 2026 1 15 9 0 0 0 (java.time.ZoneId/of "Europe/London"))
+          first-ts (.toEpochMilli (.toInstant first-zdt))
+          pattern {:type :monthly-day :day-of-month 15 :time-text "9am"}
+          next-ts (sut/calculate-next-occurrence pattern first-ts)
+          next-zdt (java.time.ZonedDateTime/ofInstant
+                     (java.time.Instant/ofEpochMilli next-ts)
+                     (java.time.ZoneId/of "Europe/London"))]
+      (is (= 15 (.getDayOfMonth next-zdt)))
+      (is (= 2 (.getMonthValue next-zdt)) "Should be February")
+      (is (= 2026 (.getYear next-zdt))))))
+
+(deftest test-monthly-day-clamps-to-last-day-in-short-months
+  (testing "Day-of-month 31 falls back to the last day in shorter months"
+    ;; Start: Jan 31 2026 — next should be Feb 28 2026 (clamped from 31)
+    (let [first-zdt (java.time.ZonedDateTime/of 2026 1 31 9 0 0 0 (java.time.ZoneId/of "Europe/London"))
+          first-ts (.toEpochMilli (.toInstant first-zdt))
+          pattern {:type :monthly-day :day-of-month 31 :time-text "9am"}
+          next-ts (sut/calculate-next-occurrence pattern first-ts)
+          next-zdt (java.time.ZonedDateTime/ofInstant
+                     (java.time.Instant/ofEpochMilli next-ts)
+                     (java.time.ZoneId/of "Europe/London"))]
+      (is (= 28 (.getDayOfMonth next-zdt)) "Feb has 28 days in 2026 (not leap)")
+      (is (= 2 (.getMonthValue next-zdt))))))
+
+(deftest test-format-recurrence-description-monthly-day
+  (testing "Recurrence description renders ordinal suffixes correctly"
+    (is (= "each 1st of the month"
+           (sut/format-recurrence-description "monthly-day"
+             "{:type :monthly-day :day-of-month 1 :time-text \"9am\"}")))
+    (is (= "each 2nd of the month"
+           (sut/format-recurrence-description "monthly-day"
+             "{:type :monthly-day :day-of-month 2 :time-text \"9am\"}")))
+    (is (= "each 3rd of the month"
+           (sut/format-recurrence-description "monthly-day"
+             "{:type :monthly-day :day-of-month 3 :time-text \"9am\"}")))
+    (is (= "each 11th of the month"
+           (sut/format-recurrence-description "monthly-day"
+             "{:type :monthly-day :day-of-month 11 :time-text \"9am\"}")))
+    (is (= "each 21st of the month"
+           (sut/format-recurrence-description "monthly-day"
+             "{:type :monthly-day :day-of-month 21 :time-text \"9am\"}")))
+    (is (= "each 28th of the month"
+           (sut/format-recurrence-description "monthly-day"
+             "{:type :monthly-day :day-of-month 28 :time-text \"9am\"}")))))
+
 ;; ============================================================================
 ;; Recurring Reminders Integration Tests
 ;; ============================================================================
@@ -600,23 +697,54 @@
 (deftest test-list-one-reminder
   (testing "Listing a single one-shot reminder"
     (msg-utils/with-clean-replies
-      ;; Create a reminder first
       (db/add-reminder! {:chat-id 123
                          :username "alice"
                          :target-user "alice"
                          :message "buy milk"
                          :due-time (+ (System/currentTimeMillis) 3600000)})
 
-      ;; List reminders
       (let [msg (msg-utils/mock-command-message
                   "reminders"
                   ""
                   {:sender "alice" :chat-id 123})]
         (sut/process-message msg)
 
-        (is (msg-utils/replied-with? "Your Reminders"))
+        (is (msg-utils/replied-with? "All Reminders"))
         (is (msg-utils/replied-with? "buy milk"))
         (is (msg-utils/replied-with? "1."))))))
+
+(deftest test-list-shows-recurring-instance
+  (testing "Listing shows the next pending instance of a recurring reminder
+            even after the original parent has fired"
+    (msg-utils/with-clean-replies
+      (let [parent-id (db/add-reminder!
+                        {:chat-id 123
+                         :username "alice"
+                         :target-user "alice"
+                         :message "do the bins"
+                         :due-time (+ (System/currentTimeMillis) 3600000)
+                         :recurrence-type "weekly"
+                         :recurrence-pattern "{:type :weekly :weekday :thursday}"})]
+        ;; Simulate the natural lifecycle: the parent fires, marking itself
+        ;; fired, and a fresh pending instance is created.
+        (db/mark-reminder-fired! parent-id)
+        (db/add-reminder! {:chat-id 123
+                           :username "alice"
+                           :target-user "alice"
+                           :message "do the bins"
+                           :due-time (+ (System/currentTimeMillis) 7200000)
+                           :recurrence-type "weekly"
+                           :recurrence-pattern "{:type :weekly :weekday :thursday}"
+                           :parent-reminder-id parent-id})
+
+        (let [msg (msg-utils/mock-command-message
+                    "reminders"
+                    ""
+                    {:sender "alice" :chat-id 123})]
+          (sut/process-message msg)
+
+          (is (msg-utils/replied-with? "do the bins"))
+          (is (msg-utils/replied-with? "every thursday")))))))
 
 (deftest test-list-recurring-reminder
   (testing "Listing a recurring reminder shows recurrence description"
@@ -673,9 +801,8 @@
       (is (= "second task" (:message (first (db/get-user-reminders "alice"))))))))
 
 (deftest test-remove-recurring-reminder
-  (testing "Removing a recurring reminder cancels it and all instances"
+  (testing "Removing a recurring reminder cancels parent and all instances"
     (msg-utils/with-clean-replies
-      ;; Create a recurring reminder
       (let [parent-id (db/add-reminder! {:chat-id 123
                                          :username "alice"
                                          :target-user "alice"
@@ -684,20 +811,23 @@
                                          :recurrence-type "interval"
                                          :recurrence-pattern "{:type :interval :seconds 10}"})]
 
-        ;; Create an instance of it
+        ;; Lifecycle: parent fires → marked fired → instance becomes the
+        ;; pending entry. Cancelling via the instance must wipe the lineage.
+        (db/mark-reminder-fired! parent-id)
         (db/add-reminder! {:chat-id 123
                            :username "alice"
                            :target-user "alice"
                            :message "daily standup"
                            :due-time (+ (System/currentTimeMillis) 3610000)
+                           :recurrence-type "interval"
+                           :recurrence-pattern "{:type :interval :seconds 10}"
                            :parent-reminder-id parent-id})
 
-        ;; Verify we have the parent in listable reminders
+        ;; Only one entry shows in the list (the instance) but it represents
+        ;; the whole lineage.
         (is (= 1 (count (db/get-user-listable-reminders "alice"))))
-        ;; Verify we have 2 total pending (parent + instance)
-        (is (= 2 (count (db/get-pending-reminders))))
+        (is (= 1 (count (db/get-pending-reminders))))
 
-        ;; Remove the recurring reminder
         (let [msg (msg-utils/mock-command-message
                     "reminders"
                     "remove 1"
@@ -706,9 +836,84 @@
 
           (is (msg-utils/replied-with? "Cancelled recurring reminder")))
 
-        ;; Verify both parent and instance are cancelled
+        ;; All pending instances cancelled; nothing left for scheduler to fire.
+        ;; The original parent retains its 'fired' status (history is preserved).
         (is (= 0 (count (db/get-user-reminders "alice"))))
-        (is (= 0 (count (db/get-pending-reminders))))))))
+        (is (= 0 (count (db/get-pending-reminders))))
+        (is (= "fired" (:status (db/get-reminder-by-id parent-id)))
+            "fired parent keeps its historical status; only pending entries get cancelled")))))
+
+(deftest test-edit-reminder-message
+  (testing "Editing a reminder updates the message text"
+    (msg-utils/with-clean-replies
+      (db/add-reminder! {:chat-id 123
+                         :username "alice"
+                         :target-user "alice"
+                         :message "buy milk"
+                         :due-time (+ (System/currentTimeMillis) 3600000)})
+
+      (let [msg (msg-utils/mock-command-message
+                  "reminders"
+                  "edit 1 buy oat milk and bread"
+                  {:sender "alice" :chat-id 123})]
+        (sut/process-message msg)
+
+        (is (msg-utils/replied-with? "Updated reminder"))
+        (is (msg-utils/replied-with? "buy oat milk and bread")))
+
+      (let [reminders (db/get-user-reminders "alice")]
+        (is (= 1 (count reminders)))
+        (is (= "buy oat milk and bread" (:message (first reminders))))))))
+
+(deftest test-edit-recurring-reminder-updates-lineage
+  (testing "Editing a recurring instance updates root parent and the pending instance"
+    (msg-utils/with-clean-replies
+      (let [parent-id (db/add-reminder! {:chat-id 123
+                                         :username "alice"
+                                         :target-user "alice"
+                                         :message "weekly meeting"
+                                         :due-time (+ (System/currentTimeMillis) 3600000)
+                                         :recurrence-type "weekly"
+                                         :recurrence-pattern "{:type :weekly :weekday :monday}"})
+            _ (db/mark-reminder-fired! parent-id)
+            instance-id (db/add-reminder! {:chat-id 123
+                                           :username "alice"
+                                           :target-user "alice"
+                                           :message "weekly meeting"
+                                           :due-time (+ (System/currentTimeMillis) 7200000)
+                                           :recurrence-type "weekly"
+                                           :recurrence-pattern "{:type :weekly :weekday :monday}"
+                                           :parent-reminder-id parent-id})]
+
+        (let [msg (msg-utils/mock-command-message
+                    "reminders"
+                    "edit 1 standup with the team"
+                    {:sender "alice" :chat-id 123})]
+          (sut/process-message msg)
+
+          (is (msg-utils/replied-with? "Updated reminder")))
+
+        (is (= "standup with the team" (:message (db/get-reminder-by-id parent-id)))
+            "root parent message updated so future-spawned instances get new text")
+        (is (= "standup with the team" (:message (db/get-reminder-by-id instance-id)))
+            "pending instance also updated")))))
+
+(deftest test-edit-invalid-number
+  (testing "Editing with invalid number replies with error"
+    (msg-utils/with-clean-replies
+      (db/add-reminder! {:chat-id 123
+                         :username "alice"
+                         :target-user "alice"
+                         :message "task"
+                         :due-time (+ (System/currentTimeMillis) 3600000)})
+
+      (let [msg (msg-utils/mock-command-message
+                  "reminders"
+                  "edit 5 new text"
+                  {:sender "alice" :chat-id 123})]
+        (sut/process-message msg)
+
+        (is (msg-utils/replied-with? "Invalid reminder number"))))))
 
 (deftest test-remove-invalid-number
   (testing "Attempting to remove with invalid reminder number"
@@ -732,35 +937,29 @@
 (deftest test-interval-weekly-uses-start-date-and-weeks-interval
   (testing "Interval weekly pattern (every third friday) means every 3 weeks on Friday"
     (msg-utils/with-clean-replies
-      ;; 12/12/25 is a Friday
-      ;; "every third friday starting 12/12/25" means every 3 weeks on Friday
-      ;; First: 12/12/25, Second: 2/1/26 (3 weeks later), Third: 23/1/26 (3 weeks after that)
+      ;; Use a future date so the first occurrence is not rejected as past.
+      ;; 1/1/2027 is a Friday.
       (let [msg (msg-utils/mock-command-message
                   "remind"
-                  "me every third friday at 3pm starting 12/12/25 to check timesheet"
+                  "me every third friday at 3pm starting 1/1/27 to check timesheet"
                   {:sender "alice" :chat-id 123})]
         (sut/process-message msg)
 
-        ;; Should confirm creation
         (is (msg-utils/replied-with? "I'll remind"))
         (is (msg-utils/replied-with? "check timesheet"))
 
-        ;; Check the reminder was created with correct start date
         (let [reminders (db/get-user-reminders "alice")]
           (is (= 1 (count reminders)))
           (let [reminder (first reminders)
                 due-zdt (java.time.ZonedDateTime/ofInstant
                          (java.time.Instant/ofEpochMilli (:due_time reminder))
-                         (java.time.ZoneId/systemDefault))]
-            ;; Should be December 12, 2025 (first occurrence)
-            (is (= 12 (.getDayOfMonth due-zdt)))
-            (is (= 12 (.getMonthValue due-zdt)))
-            (is (= 2025 (.getYear due-zdt)))
-            ;; Should be a Friday
+                         (java.time.ZoneId/of "Europe/London"))]
+            ;; Should be January 1 2027 (first occurrence)
+            (is (= 1 (.getDayOfMonth due-zdt)))
+            (is (= 1 (.getMonthValue due-zdt)))
+            (is (= 2027 (.getYear due-zdt)))
             (is (= java.time.DayOfWeek/FRIDAY (.getDayOfWeek due-zdt)))
-            ;; Should be 3pm
             (is (= 15 (.getHour due-zdt)))
-            ;; Should be interval-weekly type with 3 weeks
             (is (= "interval-weekly" (:recurrence_type reminder)))
             (let [pattern (clojure.edn/read-string (:recurrence_pattern reminder))]
               (is (= :interval-weekly (:type pattern)))

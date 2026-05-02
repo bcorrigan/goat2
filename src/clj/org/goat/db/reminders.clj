@@ -182,40 +182,66 @@
 
 (defn get-user-listable-reminders
   "Get reminders to show in a list for a user.
-   Includes one-shot reminders and parent recurring reminders (not instances).
+   Includes one-shot reminders, parent recurring reminders that haven't yet
+   fired, and the next pending instance of each recurring lineage.
    Returns them ordered by next due time."
   [username]
   (sql/query db
     ["SELECT * FROM reminders
       WHERE target_user = ? COLLATE NOCASE
       AND status = 'pending'
-      AND parent_reminder_id IS NULL
       ORDER BY due_time ASC"
      username]))
 
 (defn get-all-listable-reminders
   "Get all reminders to show in a list.
-   Includes one-shot reminders and parent recurring reminders (not instances).
-   Returns them ordered by next due time."
+   Includes one-shot reminders, parent recurring reminders that haven't yet
+   fired, and the next pending instance of each recurring lineage. Since
+   firing a recurring reminder marks the prior occurrence as fired and
+   creates a single new pending instance, at most one entry per lineage is
+   pending at any time. Returns them ordered by next due time."
   []
   (sql/query db
     ["SELECT * FROM reminders
       WHERE status = 'pending'
-      AND parent_reminder_id IS NULL
       ORDER BY due_time ASC"]))
 
+(defn root-parent-id
+  "Given any reminder ID in a recurring lineage, return the root parent ID.
+   Returns the reminder-id itself for one-shots or the original recurring
+   reminder. Returns nil if reminder doesn't exist."
+  [reminder-id]
+  (when-let [reminder (get-reminder-by-id reminder-id)]
+    (or (:parent_reminder_id reminder) (:reminder_id reminder))))
+
 (defn cancel-recurring-and-instances!
-  "Cancel a recurring reminder and all its pending instances"
-  [parent-id]
-  (sql/db-transaction* db
-    (fn [t-con]
-      ;; Cancel the parent
-      (sql/execute! t-con
-        ["UPDATE reminders SET status = 'cancelled' WHERE reminder_id = ?" parent-id])
-      ;; Cancel all pending instances
-      (sql/execute! t-con
-        ["UPDATE reminders SET status = 'cancelled'
-          WHERE parent_reminder_id = ? AND status = 'pending'" parent-id]))))
+  "Cancel a recurring reminder lineage given any reminder ID in it.
+   Cancels the root parent (if pending) and all pending instances."
+  [reminder-id]
+  (when-let [root-id (root-parent-id reminder-id)]
+    (sql/db-transaction* db
+      (fn [t-con]
+        (sql/execute! t-con
+          ["UPDATE reminders SET status = 'cancelled'
+            WHERE reminder_id = ? AND status = 'pending'" root-id])
+        (sql/execute! t-con
+          ["UPDATE reminders SET status = 'cancelled'
+            WHERE parent_reminder_id = ? AND status = 'pending'" root-id])))))
+
+(defn update-reminder-message!
+  "Update the message text of a reminder. For recurring lineages, updates the
+   root parent and any pending instance so future fires use the new text."
+  [reminder-id new-message]
+  (when-let [root-id (root-parent-id reminder-id)]
+    (sql/db-transaction* db
+      (fn [t-con]
+        (sql/execute! t-con
+          ["UPDATE reminders SET message = ? WHERE reminder_id = ?"
+           new-message root-id])
+        (sql/execute! t-con
+          ["UPDATE reminders SET message = ?
+            WHERE parent_reminder_id = ? AND status = 'pending'"
+           new-message root-id])))))
 
 (defn delete-old-reminders!
   "Delete reminders that have been fired or cancelled and are older than the specified age.

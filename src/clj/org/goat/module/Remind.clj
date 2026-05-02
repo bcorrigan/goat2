@@ -151,11 +151,31 @@
                           :time-text (str/trim time-text)})
            :task (str/trim task)})))))
 
+(defn parse-monthly-day-command
+  "Parse 'remind <person> each <N>(st|nd|rd|th) of the month [at/in] <time> to <task>'.
+   Supports days 1-31. Returns {:target username :pattern map :task text} or nil."
+  [text]
+  (when text
+    (let [trimmed (str/trim text)]
+      (when-let [[_ target-text day-num time-text task]
+                 (re-find #"^(\S+)\s+each\s+(\d{1,2})(?:st|nd|rd|th)\s+of\s+the\s+month\s+(?:(?:at|in)\s+)?(.+?)\s+to\s+(.+)$" trimmed)]
+        (let [day (Integer/parseInt day-num)]
+          (when (and (>= day 1) (<= day 31))
+            (let [target (if (= "me" (.toLowerCase target-text))
+                           nil
+                           target-text)]
+              {:target target
+               :recurrence {:type :monthly-day
+                            :day-of-month day
+                            :time-text (str/trim time-text)}
+               :task (str/trim task)})))))))
+
 (defn parse-recurring-command
   "Parse any recurring reminder command. Returns nil if not a recurring command."
   [text]
   (or (parse-interval-command text)
       (parse-weekly-command text)
+      (parse-monthly-day-command text)
       (parse-monthly-command text)))
 
 (defn parse-remind-command
@@ -253,6 +273,14 @@
   [zdt]
   (.with zdt (TemporalAdjusters/lastDayOfMonth)))
 
+(defn day-of-month-or-last
+  "Get the Nth day of the month for the month containing zdt, clamped to the
+   last day if the month has fewer days (e.g. Feb 30 → Feb 28/29)."
+  [zdt day-of-month]
+  (let [last-day (.getDayOfMonth (.with zdt (TemporalAdjusters/lastDayOfMonth)))
+        clamped (min day-of-month last-day)]
+    (.withDayOfMonth zdt clamped)))
+
 (defn calculate-next-occurrence
   "Calculate next occurrence timestamp from pattern and last occurrence.
    Returns timestamp in milliseconds, or nil if can't calculate."
@@ -309,6 +337,15 @@
               next-month (.plusMonths last-zdt 1)
               first-of-next-month (.with next-month (TemporalAdjusters/firstDayOfMonth))
               target-date (last-day-of-month first-of-next-month)
+              with-time (with-time-of-day target-date time-text)]
+          (zoned-to-timestamp with-time))
+
+        :monthly-day
+        (let [day-of-month (:day-of-month pattern)
+              time-text (:time-text pattern)
+              next-month (.plusMonths last-zdt 1)
+              first-of-next-month (.with next-month (TemporalAdjusters/firstDayOfMonth))
+              target-date (day-of-month-or-last first-of-next-month day-of-month)
               with-time (with-time-of-day target-date time-text)]
           (zoned-to-timestamp with-time))
 
@@ -442,6 +479,20 @@
                   with-time (with-time-of-day target-date time-text)]
               (zoned-to-timestamp with-time))))
 
+        :monthly-day
+        (let [day-of-month (:day-of-month pattern)
+              time-text (:time-text pattern)
+              now-zdt (timestamp-to-zoned now)
+              first-of-month (.with now-zdt (TemporalAdjusters/firstDayOfMonth))
+              target-date (day-of-month-or-last first-of-month day-of-month)
+              candidate-timestamp (zoned-to-timestamp (with-time-of-day target-date time-text))]
+          (if (> candidate-timestamp now)
+            candidate-timestamp
+            (let [next-month (.plusMonths first-of-month 1)
+                  target-date (day-of-month-or-last next-month day-of-month)
+                  with-time (with-time-of-day target-date time-text)]
+              (zoned-to-timestamp with-time))))
+
         nil))
     (catch Exception e
       (println "Error calculating first occurrence:" (.getMessage e))
@@ -548,6 +599,16 @@
 ;; Reminder Listing and Management
 ;; ============================================================================
 
+(defn day-of-month-suffix
+  "Return the English ordinal suffix for a day-of-month (1-31)."
+  [n]
+  (cond
+    (and (>= n 11) (<= n 13)) "th"
+    (= 1 (mod n 10)) "st"
+    (= 2 (mod n 10)) "nd"
+    (= 3 (mod n 10)) "rd"
+    :else "th"))
+
 (defn format-recurrence-description
   "Format a recurrence pattern into a human-readable description"
   [recurrence-type recurrence-pattern]
@@ -564,8 +625,12 @@
 
           :interval-weekly
           (let [weeks (:weeks pattern)
-                week-str (if (= weeks 2) "2 weeks" (str weeks " weeks"))]
-            (str "every " week-str " on " (name (:weekday pattern))))
+                week-str (cond
+                           (= weeks 2) "fortnight"
+                           :else (str weeks " weeks"))]
+            (if (= weeks 2)
+              (str "every " week-str " on " (name (:weekday pattern)))
+              (str "every " week-str " on " (name (:weekday pattern)))))
 
           :ordinal-weekly
           (let [ordinals {2 "second" 3 "third" 4 "fourth" 5 "fifth"
@@ -579,6 +644,10 @@
 
           :monthly-lastday
           "each last day of the month"
+
+          :monthly-day
+          (let [d (:day-of-month pattern)]
+            (str "each " d (day-of-month-suffix d) " of the month"))
 
           "recurring"))
       (catch Exception e
@@ -610,10 +679,12 @@
                            (str (:number formatted) ". " (:description formatted))))
                        reminders))
            "\n\n"
-           "Use <b>reminders remove &lt;number&gt;</b> to delete a reminder."))))
+           "<b>reminders remove &lt;number&gt;</b> to delete; "
+           "<b>reminders edit &lt;number&gt; &lt;new text&gt;</b> to change the text."))))
 
 (defn remove-reminder
-  "Remove a reminder by its list number (1-based)"
+  "Remove a reminder by its list number (1-based). For recurring reminders,
+   cancels the entire lineage even when the listed entry is an instance."
   [number-str]
   (try
     (let [number (Integer/parseInt number-str)
@@ -625,11 +696,9 @@
               reminder-id (:reminder_id reminder)
               is-recurring (:recurrence_type reminder)]
           (if is-recurring
-            ;; Cancel recurring reminder and all instances
             (do
               (db/cancel-recurring-and-instances! reminder-id)
               (str "✅ Cancelled recurring reminder: " (:message reminder)))
-            ;; Cancel single reminder
             (do
               (db/cancel-reminder! reminder-id)
               (str "✅ Cancelled reminder: " (:message reminder)))))))
@@ -637,6 +706,32 @@
       "❌ Invalid number. Use <b>reminders remove &lt;number&gt;</b>")
     (catch Exception e
       (str "❌ Error removing reminder: " (.getMessage e)))))
+
+(defn edit-reminder
+  "Edit the message text of a reminder by its list number (1-based).
+   For recurring reminders, updates both the root parent and the next
+   pending instance so future fires use the new text."
+  [number-str new-message]
+  (try
+    (let [number (Integer/parseInt number-str)
+          reminders (db/get-all-listable-reminders)]
+      (cond
+        (or (< number 1) (> number (count reminders)))
+        (str "❌ Invalid reminder number. There are " (count reminders) " reminder(s).\n\n"
+             "Use <b>reminders</b> to see the list.")
+
+        (str/blank? new-message)
+        "❌ New text is empty. Use <b>reminders edit &lt;number&gt; &lt;new text&gt;</b>"
+
+        :else
+        (let [reminder (nth reminders (dec number))
+              reminder-id (:reminder_id reminder)]
+          (db/update-reminder-message! reminder-id (str/trim new-message))
+          (str "✏️ Updated reminder: " (str/trim new-message)))))
+    (catch NumberFormatException e
+      "❌ Invalid number. Use <b>reminders edit &lt;number&gt; &lt;new text&gt;</b>")
+    (catch Exception e
+      (str "❌ Error editing reminder: " (.getMessage e)))))
 
 ;; ============================================================================
 ;; Module Definition
@@ -656,13 +751,28 @@
        "• remind Barry next Tuesday to phone mum\n"
        "• remind me at 5/3/2026 3pm to renew passport\n\n"
        "<b>Recurring Reminders:</b>\n\n"
-       "<b>Weekly:</b>\n"
+       "<b>Weekly (same weekday every week):</b>\n"
        "• remind me every tuesday at 9am starting 9/12/25 to put out bins\n"
-       "• remind me every third friday at 3pm starting 12/12/25 to check timesheet (every 3 weeks)\n\n"
-       "<b>Monthly patterns:</b>\n"
+       "• remind janet every sunday at 6pm starting 14/12/25 to put out the milk bottles\n\n"
+       "<b>Fortnightly / every N weeks (uses ordinal):</b>\n"
+       "• remind me every second friday at 5pm starting 9/1/26 to fortnightly review (every 2 weeks)\n"
+       "• remind me every third thursday at 6pm starting 15/1/26 to put out the green bin (every 3 weeks)\n"
+       "• remind me every fourth monday at 9am starting 5/1/26 to do team retro (every 4 weeks)\n\n"
+       "<b>Monthly — Nth weekday of the month:</b>\n"
        "• remind me each first monday of the month at 7pm to review budget\n"
-       "• remind me each last thursday of the month at 9am to submit expenses\n"
+       "• remind me each second tuesday of the month at 12pm to pay credit card\n"
+       "• remind me each last thursday of the month at 9am to submit expenses\n\n"
+       "<b>Monthly — specific day of the month (1st-31st):</b>\n"
+       "• remind me each 1st of the month at 9am to pay rent\n"
+       "• remind me each 15th of the month at 10am to check savings\n"
+       "• remind me each 28th of the month at 6pm to run backups\n"
+       "  (days 29-31 fall back to the last day in shorter months)\n\n"
+       "<b>Monthly — last day of the month:</b>\n"
        "• remind me each last day of the month at 3am to run backup\n\n"
+       "<b>Managing reminders:</b>\n"
+       "• <b>reminders</b> — list all pending reminders (one-shot and recurring)\n"
+       "• <b>reminders remove &lt;number&gt;</b> — cancel a reminder; for recurring, the whole series stops\n"
+       "• <b>reminders edit &lt;number&gt; &lt;new text&gt;</b> — change the reminder text\n\n"
        "<b>Time Formats:</b>\n"
        "• in 2 hours, in 30 minutes, in 1 minute\n"
        "• at 3pm, at 9:30am, at 15:00\n"
@@ -681,13 +791,24 @@
       (cond
         ;; Handle "reminders" command
         (= command :reminders)
-        (if (str/blank? text)
-          ;; List reminders
-          (msg/reply m (list-reminders))
-          ;; Check for "remove N" subcommand
-          (if-let [[_ number] (re-find #"^remove\s+(\d+)$" (str/trim text))]
-            (msg/reply m (remove-reminder number))
-            (msg/reply m "❌ Invalid command. Use <b>reminders</b> to list or <b>reminders remove &lt;number&gt;</b> to delete.")))
+        (let [trimmed (str/trim (or text ""))]
+          (cond
+            (str/blank? trimmed)
+            (msg/reply m (list-reminders))
+
+            (re-find #"^remove\s+\d+$" trimmed)
+            (let [[_ number] (re-find #"^remove\s+(\d+)$" trimmed)]
+              (msg/reply m (remove-reminder number)))
+
+            (re-find #"^edit\s+\d+\s+\S" trimmed)
+            (let [[_ number new-text] (re-find #"^edit\s+(\d+)\s+(.+)$" trimmed)]
+              (msg/reply m (edit-reminder number new-text)))
+
+            :else
+            (msg/reply m (str "❌ Invalid command. Use:\n"
+                              "• <b>reminders</b> — list reminders\n"
+                              "• <b>reminders remove &lt;number&gt;</b> — delete a reminder\n"
+                              "• <b>reminders edit &lt;number&gt; &lt;new text&gt;</b> — change the reminder text"))))
 
         ;; Handle "remind" command
         (= command :remind)
