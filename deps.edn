@@ -14,7 +14,8 @@
         http-kit/http-kit {:mvn/version "2.9.0-beta3"}
         compojure/compojure {:mvn/version "1.7.2"}
         cheshire/cheshire {:mvn/version "6.2.0"}
-        ring/ring-json {:mvn/version "0.5.1"}}
+        ring/ring-json {:mvn/version "0.5.1"}
+        org.slf4j/slf4j-nop {:mvn/version "2.0.17"}}
 
  :aliases
  {:dev

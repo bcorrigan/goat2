@@ -17,6 +17,7 @@
             [org.goat.module.ModuleManagement]
             [org.goat.module.Freezer]
             [org.goat.module.Remind]
+            [org.goat.module.Zappi]
             [org.goat.module.Define]
             [org.goat.module.More]
             [org.goat.module.flour]

@@ -289,15 +289,19 @@
       ;; Create CLI platform (no capture, direct stdout)
       (let [cli-platform (platform/create-cli-platform :capture? false)]
 
+        ;; Mark running BEFORE spawning the input handler - its loop guards on
+        ;; (:running? @connection-state) and would otherwise race the swap!
+        ;; below and exit immediately on slow JVM scheduling.
+        (swap! connection-state assoc
+               :running? true
+               :platform cli-platform
+               :platform-type :cli)
+
         ;; Start handlers
         (let [input-future (start-cli-input-handler cli-platform debug?)
               output-chan (start-output-handler cli-platform)]
 
-          ;; Update state
           (swap! connection-state assoc
-                 :running? true
-                 :platform cli-platform
-                 :platform-type :cli
                  :input-handler input-future
                  :output-handler output-chan)
 

@@ -142,6 +142,7 @@
       (if capture?
         (println (format "[CLI %s] %s" chat-id text))
         (println text))
+      (flush)
       msg))
 
   (send-image [this chat-id image options]
@@ -154,6 +155,7 @@
       (println (if capture?
                  (format "[CLI %s] <image>" chat-id)
                  "[IMAGE: Cannot display images in CLI mode]"))
+      (flush)
       msg))
 
   (send-document [this chat-id bytes filename options]
@@ -167,6 +169,7 @@
       (println (if capture?
                  (format "[CLI %s] <document: %s (%d bytes)>" chat-id filename (count bytes))
                  (format "[DOCUMENT: %s (%d bytes)]" filename (count bytes))))
+      (flush)
       msg))
 
   (download-document [this file-id]
