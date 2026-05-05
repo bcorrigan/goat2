@@ -45,7 +45,7 @@
   (b/javac {:src-dirs ["src/java"]
             :class-dir class-dir
             :basis basis
-            :javac-opts ["--release" "25"]}))
+            :javac-opts ["--release" "26"]}))
 
 (defn compile-clojure [_]
   (println "AOT compiling Clojure sources...")
@@ -66,6 +66,7 @@
     (b/compile-clj {:basis basis
                     :ns-compile all-namespaces
                     ;;:compile-opts {:direct-linking true}
+                    :bindings {#'clojure.core/*compiler-options* {:bytecode-version 26}}
                     :class-dir class-dir})))
 
 (defn uber [_]
