@@ -12,6 +12,7 @@
   (:import [org.telegram.telegrambots.longpolling TelegramBotsLongPollingApplication]
            [org.telegram.telegrambots.longpolling.util LongPollingSingleThreadUpdateConsumer]
            [org.telegram.telegrambots.meta.api.objects Update Document]
+           [org.telegram.telegrambots.meta.api.objects.photo PhotoSize]
            [org.telegram.telegrambots.client.okhttp OkHttpTelegramClient]))
 
 ;; Atom holding the current connection state.
@@ -32,16 +33,27 @@
     (.hasChannelPost update) (.getChannelPost update)
     :else nil))
 
+(defn- largest-photo
+  "Pick the largest PhotoSize from a Telegram photo list (by file size)."
+  [photos]
+  (when (seq photos)
+    (apply max-key #(or (.getFileSize ^PhotoSize %) 0) photos)))
+
 (defn- telegram-message->map
   "Convert a Telegram message to a Clojure message map.
 
-   Downloads documents if present using the platform."
+   Downloads documents and photos if present using the platform.
+   For photos, the caption is used as the message text so commands
+   embedded in captions (e.g. 'meal Mac & Cheese') parse normally."
   [telegram-msg platform-inst]
   (let [chat-id (.getChatId telegram-msg)
         sender (if-let [from (.getFrom telegram-msg)]
                 (.getFirstName from)
                 "unknown")
-        text (.getText telegram-msg)
+        has-photo? (.hasPhoto telegram-msg)
+        ;; For photos, use the caption as the text so command parsing works
+        text (or (.getText telegram-msg)
+                 (when has-photo? (.getCaption telegram-msg)))
         chat (if-let [c (.getChat telegram-msg)]
               (.getTitle c)
               nil)
@@ -56,21 +68,35 @@
                   :private? is-private
                   :text text
                   :chatname chat
-                  :platform-data {:raw-update telegram-msg})]
+                  :platform-data {:raw-update telegram-msg})
 
-    ;; Add document if present
-    (if (.hasDocument telegram-msg)
-      (let [^Document doc (.getDocument telegram-msg)
-            file-name (.getFileName doc)
-            file-id (.getFileId doc)
-            doc-bytes (platform/download-document platform-inst file-id)]
-        (if doc-bytes
-          (assoc base-msg
-                 :message.attachment/document-bytes doc-bytes
-                 :message.attachment/document-filename file-name
-                 :message.attachment/type (conj (:message.attachment/type base-msg #{}) :document))
-          base-msg))
-      base-msg)))
+        ;; Add document if present
+        with-doc (if (.hasDocument telegram-msg)
+                   (let [^Document doc (.getDocument telegram-msg)
+                         file-name (.getFileName doc)
+                         file-id (.getFileId doc)
+                         doc-bytes (platform/download-document platform-inst file-id)]
+                     (if doc-bytes
+                       (assoc base-msg
+                              :message.attachment/document-bytes doc-bytes
+                              :message.attachment/document-filename file-name
+                              :message.attachment/type (conj (:message.attachment/type base-msg #{}) :document))
+                       base-msg))
+                   base-msg)]
+
+    ;; Add photo if present (largest size)
+    (if has-photo?
+      (let [^PhotoSize photo (largest-photo (.getPhoto telegram-msg))
+            file-id (.getFileId photo)
+            img-bytes (platform/download-photo platform-inst file-id)]
+        (if img-bytes
+          (assoc with-doc
+                 :message.attachment/image-bytes img-bytes
+                 :message.attachment/type (conj (:message.attachment/type with-doc #{}) :image))
+          (do
+            (log/warn "Failed to download photo" file-id "for chat" chat-id "- dispatching without image data")
+            with-doc)))
+      with-doc)))
 
 (defn- process-single-update
   "Process a single Telegram Update into a message map and put on channel."

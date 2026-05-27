@@ -4,7 +4,8 @@
    This protocol defines the interface for sending messages and downloading
    attachments from different messaging platforms (Telegram, CLI, etc.).
    Keeps the core bot logic platform-agnostic."
-  (:require [clojure.tools.logging :as log])
+  (:require [clojure.tools.logging :as log]
+            [clojure.java.io :as io])
   (:import [org.telegram.telegrambots.meta.api.methods.send SendMessage SendPhoto SendDocument]
            [org.telegram.telegrambots.meta.api.objects InputFile]
            [org.telegram.telegrambots.client.okhttp OkHttpTelegramClient]
@@ -56,6 +57,14 @@
      - file-id: Platform-specific file identifier
 
      Returns: Byte array of document content, or nil on error")
+
+  (download-photo [this file-id]
+    "Download a photo from the platform.
+
+     Arguments:
+     - file-id: Platform-specific file identifier
+
+     Returns: Byte array of photo content, or nil on error")
 
   (platform-name [this]
     "Returns the name of this platform as a keyword (e.g., :telegram, :cli)"))
@@ -115,14 +124,26 @@
 
   (download-document [this file-id]
     (try
-      ;; Get file path from Telegram
       (let [get-file (org.telegram.telegrambots.meta.api.methods.GetFile. file-id)
-            file (.execute client get-file)
-            file-path (.getFilePath file)]
-        ;; Download file content
-        (.downloadFileAsBytes client file-path))
+            file (.execute client get-file)]
+        (with-open [in (.downloadFileAsStream client file)]
+          (let [out (java.io.ByteArrayOutputStream.)]
+            (io/copy in out)
+            (.toByteArray out))))
       (catch Exception e
         (log/error e "Failed to download document" file-id)
+        nil)))
+
+  (download-photo [this file-id]
+    (try
+      (let [get-file (org.telegram.telegrambots.meta.api.methods.GetFile. file-id)
+            file (.execute client get-file)]
+        (with-open [in (.downloadFileAsStream client file)]
+          (let [out (java.io.ByteArrayOutputStream.)]
+            (io/copy in out)
+            (.toByteArray out))))
+      (catch Exception e
+        (log/error e "Failed to download photo" file-id)
         nil)))
 
   (platform-name [this]
@@ -174,6 +195,10 @@
 
   (download-document [this file-id]
     (log/warn "CLI platform does not support document download")
+    nil)
+
+  (download-photo [this file-id]
+    (log/warn "CLI platform does not support photo download")
     nil)
 
   (platform-name [this]

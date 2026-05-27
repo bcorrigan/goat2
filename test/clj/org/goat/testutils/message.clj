@@ -68,7 +68,7 @@
 
   ([] (mock-message {}))
   ([{:keys [text chat-id sender chatname private? authorized?
-            document-bytes document-filename bot-name]
+            document-bytes document-filename image-bytes bot-name]
      :or {text "test message"
           chat-id 123
           sender "test-user"
@@ -88,7 +88,8 @@
     :authorized? authorized?
     :bot-name bot-name
     :document-bytes document-bytes
-    :document-filename document-filename)))
+    :document-filename document-filename
+    :image-bytes image-bytes)))
 
 (defn mock-command-message
   "Convenience function to create a message with a bot command.

@@ -26,6 +26,7 @@
   (has-document? [this] "True if this message has a document")
   (get-document-bytes [this] "Get the document bytes")
   (get-document-filename [this] "Get the document filename")
+  (get-image-bytes [this] "Get the image bytes (e.g. from a photo message)")
   (has-next-page? [this] "True if this message has a next page for pagination")
   (create-next-page [this] "Create and return the next page message")
   (fmt [this] "Get the formatter for this message's platform"))
@@ -86,6 +87,9 @@
 
   (get-document-filename [this]
     (:message.attachment/document-filename this))
+
+  (get-image-bytes [this]
+    (:message.attachment/image-bytes this))
 
   (has-next-page? [this]
     (pager/has-next-page? (:message/chat-id this)))
@@ -181,6 +185,11 @@
   "Shorthand for get-document-filename"
   [msg]
   (get-document-filename msg))
+
+(defn image-bytes
+  "Shorthand for get-image-bytes"
+  [msg]
+  (get-image-bytes msg))
 
 (defn fmt
   "Shorthand for getting formatter from message.
