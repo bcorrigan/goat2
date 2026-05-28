@@ -6,6 +6,7 @@
   (:require [org.goat.core.init :as init]
             [org.goat.core.connection :as conn]
             [org.goat.core.config :as config]
+            [org.goat.http.meals-server :as meals-server]
             [clojure.tools.logging :as log])
   (:import [java.util Locale])
   (:gen-class))
@@ -88,6 +89,9 @@
   ;; Initialize module system
   (log/info "Initializing Clojure module system...")
   (init/init!)
+
+  ;; Start meals diary web server
+  (meals-server/start! 21000)
 
   ;; Start connection
   (if (config/test-mode?)

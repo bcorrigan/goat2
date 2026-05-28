@@ -131,6 +131,48 @@
        (mapv (fn [m] (assoc m :ingredients (get-ingredients (:meal_id m))))
              rows))))
 
+(defn list-meals
+  "Return meals ordered by meal_id desc, with optional limit and offset.
+   Each meal map includes :ingredients."
+  [& {:keys [limit offset] :or {limit 20 offset 0}}]
+  (with-tables
+    #(let [rows (sql/query db
+                  ["select * from meals order by meal_id desc limit ? offset ?"
+                   limit offset])]
+       (mapv (fn [m] (assoc m :ingredients (get-ingredients (:meal_id m))))
+             rows))))
+
+(defn search-meals-paged
+  "Like search-meals but with limit/offset for pagination."
+  [term limit offset]
+  (with-tables
+    #(let [pattern (str "%" (str/lower-case (or term "")) "%")
+           rows (sql/query db
+                  ["select distinct m.* from meals m
+                    left join meal_ingredients i on i.meal_id = m.meal_id
+                    where lower(m.title) like ?
+                       or lower(coalesce(m.description,'')) like ?
+                       or lower(coalesce(i.ingredient,'')) like ?
+                    order by m.meal_id desc
+                    limit ? offset ?"
+                   pattern pattern pattern limit offset])]
+       (mapv (fn [m] (assoc m :ingredients (get-ingredients (:meal_id m))))
+             rows))))
+
+(defn count-search-results
+  "Count meals matching a search term."
+  [term]
+  (with-tables
+    #(let [pattern (str "%" (str/lower-case (or term "")) "%")]
+       (-> (sql/query db
+             ["select count(distinct m.meal_id) as c from meals m
+               left join meal_ingredients i on i.meal_id = m.meal_id
+               where lower(m.title) like ?
+                  or lower(coalesce(m.description,'')) like ?
+                  or lower(coalesce(i.ingredient,'')) like ?"
+              pattern pattern pattern])
+           first :c))))
+
 (defn delete-meal
   "Delete a meal and its ingredients (cascade). Returns true."
   [meal-id]
