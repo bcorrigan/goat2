@@ -18,6 +18,27 @@
 
 (def ^:private per-page 20)
 
+(def ^:dynamic *base-path*
+  "Prefix prepended to all generated URLs. Set via start! or bind dynamically."
+  "/goat")
+
+(defn- path
+  "Prepend *base-path* to a relative URL."
+  [s]
+  (str *base-path* s))
+
+(defn- strip-base-path
+  "Ring middleware that strips *base-path* from the request URI before routing.
+   Allows routes to be defined with bare paths (e.g. /meals) while serving
+   behind a reverse proxy at a sub-path (e.g. /goat/meals)."
+  [handler]
+  (fn [req]
+    (let [uri (:uri req)
+          bp *base-path*]
+      (if (and (seq bp) (clojure.string/starts-with? uri bp))
+        (handler (assoc req :uri (subs uri (count bp))))
+        (handler req)))))
+
 (defn- fmt-date [epoch-ms]
   (let [fmt (DateTimeFormatter/ofPattern "d MMM yyyy")]
     (.format (-> (Instant/ofEpochMilli (long epoch-ms))
@@ -220,11 +241,11 @@
     [:body
      [:header
       [:div.container
-       [:h1 [:a {:href "/"} "🏠 House of the Future"]]
+       [:h1 [:a {:href (path "/")} "🏠 House of the Future"]]
         [:nav
-         [:a {:href "/meals" :class (when (= active-nav :meals) "active")}
+         [:a {:href (path "/meals") :class (when (= active-nav :meals) "active")}
           "🍽️ Meals"]
-         [:a {:href "/urls" :class (when (= active-nav :urls) "active")}
+         [:a {:href (path "/urls") :class (when (= active-nav :urls) "active")}
           "🔗 URLs"]]]]
      [:div.container
       body]
@@ -235,34 +256,34 @@
 ;; ============================================================================
 
 (defn- search-bar [q action]
-  [:form.search-bar {:action action :method "get"}
+  [:form.search-bar {:action (path action) :method "get"} 
    [:input {:type "text" :name "q" :placeholder "Search…" :value (or q "")}]
    [:button {:type "submit"} "Search"]])
 
-(def ^:private page-qs
-  "Build query string for a page number, preserving existing search param."
-  (fn [page q]
-    (str "?page=" page (when q (str "&q=" (java.net.URLEncoder/encode q "UTF-8"))))))
+(defn- page-qs
+  "Build a full URL for a page number, preserving existing search param."
+  [base-url page q]
+  (str (path base-url) "?page=" page (when q (str "&q=" (java.net.URLEncoder/encode q "UTF-8")))))
 
-(defn- pagination [page total q]
+(defn- pagination [base-url page total q]
   (let [pages (-> (/ total per-page) Math/ceil int)]
     (when (> pages 1)
       [:div.pagination
        (when (> page 1)
-         [:a {:href (page-qs (dec page) q)} "← Prev"])
+         [:a {:href (page-qs base-url (dec page) q)} "← Prev"])
        [:span (str "Page " page " of " pages)]
        (when (< page pages)
-         [:a {:href (page-qs (inc page) q)} "Next →"])])))
+         [:a {:href (page-qs base-url (inc page) q)} "Next →"])])))
 
 ;; ============================================================================
 ;; Meals
 ;; ============================================================================
 
 (defn- meal-card [meal]
-  [:a {:class "meal-card" :href (str "/meal/" (:meal_id meal))}
+  [:a {:class "meal-card" :href (path (str "/meal/" (:meal_id meal)))}
     [:div.meal-card-img
      (if (photos/photo-path (:meal_id meal))
-       [:img {:src (str "/photo/" (:meal_id meal)) :alt (:title meal) :loading "lazy"}]
+       [:img {:src (path (str "/photo/" (:meal_id meal))) :alt (:title meal) :loading "lazy"}]
        "🍽️")]
     [:div.meal-card-body
      [:h3 (escape-html (:title meal))]
@@ -280,11 +301,11 @@
 
 (defn- meal-detail [meal]
   [:div
-   [:a {:href "/meals" :class "back-link"} "← Back to meals"]
+   [:a {:href (path "/meals") :class "back-link"} "← Back to meals"]
    [:div.detail
     (if (photos/photo-path (:meal_id meal))
       [:div.detail-img
-       [:img {:src (str "/photo/" (:meal_id meal)) :alt (:title meal)}]]
+       [:img {:src (path (str "/photo/" (:meal_id meal))) :alt (:title meal)}]]
       [:div.detail-no-img "🍽️"])
     [:div.detail-body
      [:h2 (escape-html (:title meal))]
@@ -308,7 +329,7 @@
      [:div.meal-grid
       (for [meal meals]
         (meal-card meal))]
-     (pagination page total q)]
+     (pagination "/meals" page total q)]
     [:div.empty-state
      [:div.icon "🍽️"]
      [:h2 (if q "Nothing found" "No meals yet")]
@@ -324,12 +345,12 @@
   "The new-meal form. Accepts optional error message and preserved field values."
   [& {:keys [error title score ingredients description]}]
   [:div.add-meal-page
-   [:a {:href "/meals" :class "back-link"} "← Back to meals"]
+   [:a {:href (path "/meals") :class "back-link"} "← Back to meals"]
    [:div.form-card
     [:h2 "➕ Add a Meal"]
     (when error
       [:div.form-error error])
-    [:form {:action "/meals/new" :method "post" :enctype "multipart/form-data"}
+    [:form {:action (path "/meals/new") :method "post" :enctype "multipart/form-data"}
      [:div.form-group
       [:label "Photo"]
       [:input {:type "file" :name "photo" :accept "image/*"}]]
@@ -356,7 +377,7 @@
        (or description "")]]
      [:div.form-actions
       [:button {:type "submit"} "💾 Save Meal"]
-      [:a {:href "/meals" :class "btn-cancel"} "Cancel"]]]]])
+      [:a {:href (path "/meals") :class "btn-cancel"} "Cancel"]]]]])
 
 ;; ============================================================================
 ;; URLs
@@ -385,7 +406,7 @@
       [:tbody
        (for [u urls]
          (url-row u))]]
-     (pagination page total q)]
+     (pagination "/meals" page total q)]
     [:div.empty-state
      [:div.icon "🔗"]
      [:h2 (if q "Nothing found" "No URLs yet")]
@@ -497,7 +518,7 @@
 (defroutes meals-routes
   ;; Home redirect
   (GET "/" []
-    {:status 302 :headers {"Location" "/meals"} :body ""})
+    {:status 302 :headers {"Location" (path "/meals")} :body ""})
 
   ;; Meals
   (GET "/meals" [q page]
@@ -520,7 +541,7 @@
           (-> (layout "Meals" :meals
                 [:div.toolbar
                  (search-bar nil "/meals")
-                 [:a.btn-add {:href "/meals/new"} "➕ Add Meal"]]
+                 [:a.btn-add {:href (path "/meals/new")} "➕ Add Meal"]]
                 (meals-index meals page total nil))
               html)))))
 
@@ -585,7 +606,7 @@
                 (catch Exception e
                   (println "Photo upload error:" (.getMessage e)))))
             {:status 302
-             :headers {"Location" (str "/meal/" id)}
+             :headers {"Location" (path (str "/meal/" id))}
              :body ""})
           (catch Exception e
             (println "DB error:" (.getMessage e))
@@ -638,12 +659,17 @@
 
 
 (defn start!
-  "Start the unified web server on the given port (default 21000)."
-  ([] (start! 21000))
-  ([port]
+  "Start the unified web server on the given port (default 21000).
+   Accepts optional :base-path for reverse proxy (e.g. \"/goat\")."
+  ([] (start! 21000 nil))
+  ([port] (start! port nil))
+  ([port base-path]
    (when-not @server
-     (reset! server (server/run-server meals-routes {:port port :legacy-return-value? false}))
-     (println (str "🏠 House of the Future web server started on http://localhost:" port)))))
+     (alter-var-root #'*base-path* (constantly (or base-path "")))
+     (reset! server (server/run-server (strip-base-path meals-routes)
+                                       {:port port :legacy-return-value? false}))
+     (println (str "🏠 House of the Future web server started on http://localhost:" port
+                   (when base-path (str " (base: " base-path ")")))))))
 
 (defn stop!
   "Stop the web server."
