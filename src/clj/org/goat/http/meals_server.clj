@@ -19,7 +19,10 @@
 (def ^:private per-page 20)
 
 (def ^:dynamic *base-path*
-  "Prefix prepended to all generated URLs. Set via start! or bind dynamically."
+  "Prefix prepended to generated URLs for reverse-proxy setups.
+   Set to the nginx location (e.g. \"/goat\") so links point to the proxied path.
+   The nginx proxy_pass should use a trailing slash to strip this prefix
+   before forwarding to the backend: proxy_pass http://127.0.0.1:21000/;"
   "/goat")
 
 (defn- path
@@ -27,17 +30,7 @@
   [s]
   (str *base-path* s))
 
-(defn- strip-base-path
-  "Ring middleware that strips *base-path* from the request URI before routing.
-   Allows routes to be defined with bare paths (e.g. /meals) while serving
-   behind a reverse proxy at a sub-path (e.g. /goat/meals)."
-  [handler]
-  (fn [req]
-    (let [uri (:uri req)
-          bp *base-path*]
-      (if (and (seq bp) (clojure.string/starts-with? uri bp))
-        (handler (assoc req :uri (subs uri (count bp))))
-        (handler req)))))
+
 
 (defn- fmt-date [epoch-ms]
   (let [fmt (DateTimeFormatter/ofPattern "d MMM yyyy")]
@@ -661,15 +654,16 @@
 (defn start!
   "Start the unified web server on the given port (default 21000).
    Accepts optional :base-path for reverse proxy (e.g. \"/goat\")."
-  ([] (start! 21000 nil))
+  ([] (start! 21000))
   ([port] (start! port nil))
   ([port base-path]
    (when-not @server
-     (alter-var-root #'*base-path* (constantly (or base-path "")))
-     (reset! server (server/run-server (strip-base-path meals-routes)
+     (when base-path
+       (alter-var-root #'*base-path* (constantly base-path)))
+     (reset! server (server/run-server meals-routes
                                        {:port port :legacy-return-value? false}))
      (println (str "🏠 House of the Future web server started on http://localhost:" port
-                   (when base-path (str " (base: " base-path ")")))))))
+                   (when (seq *base-path*) (str " (base: " *base-path* ")")))))))
 
 (defn stop!
   "Stop the web server."
