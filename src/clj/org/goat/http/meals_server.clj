@@ -653,13 +653,12 @@
 
 (defn start!
   "Start the unified web server on the given port (default 21000).
-   Accepts optional :base-path for reverse proxy (e.g. \"/goat\")."
-  ([] (start! 21000))
-  ([port] (start! port nil))
+   Accepts optional base-path for reverse proxy (e.g. \"/goat\")."
+  ([] (start! 21000 "/goat"))
+  ([port] (start! port "/goat"))
   ([port base-path]
    (when-not @server
-     (when base-path
-       (alter-var-root #'*base-path* (constantly base-path)))
+     (alter-var-root #'*base-path* (constantly (or base-path "")))
      (reset! server (server/run-server meals-routes
                                        {:port port :legacy-return-value? false}))
      (println (str "🏠 House of the Future web server started on http://localhost:" port
