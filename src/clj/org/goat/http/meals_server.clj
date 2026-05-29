@@ -312,9 +312,14 @@
        [:div.detail-section
         [:h4 "Notes"]
         [:p (escape-html (:description meal))]])
-     [:div.detail-meta
-      (str "Added by " (escape-html (:added_by meal))
-           " on " (fmt-date (:added_date meal)))]]]])
+      [:div.detail-meta
+       (str "Added by " (escape-html (:added_by meal))
+            " on " (fmt-date (:added_date meal)))]
+      [:div {:style "margin-top:24px"}
+       [:form {:action (path (str "/meal/" (:meal_id meal) "/delete"))
+               :method "post"
+               :onsubmit "return confirm('Delete this meal?')"}
+          [:button {:type "submit" :style "background:#dc2626;color:#fff;border:none;padding:8px 20px;border-radius:8px;cursor:pointer;font-weight:600"} "🗑 Delete Meal"]]]]]])
 
 (defn- meals-index [meals page total q]
   (if (seq meals)
@@ -448,37 +453,51 @@
   "Parse multipart/form-data body bytes. Returns {field-name value} map."
   [body content-type]
   (when (and body content-type)
-    (let [bs (read-body-bytes body)
-          boundary (second (re-find #"boundary=([^\s;]+)" content-type))]
-      (when boundary
-        (let [delim (.getBytes (str "--" boundary) "UTF-8")
-              double-crlf (.getBytes "\r\n\r\n" "UTF-8")
-              delim-len (alength delim)]
-          (loop [offset (alength delim)
-                 params {}]
-            (if (>= offset (- (alength bs) delim-len))
-              params
-              (if-let [header-end (byte-index-of bs double-crlf offset)]
-                (let [header (String. bs offset (- header-end offset) "UTF-8")
-                      body-start (+ header-end 4)]
-                  (if-let [next-boundary (byte-index-of bs delim body-start)]
-                    (let [field-name (second (re-find #"name=\"([^\"]+)\"" header))
-                          filename   (second (re-find #"filename=\"([^\"]+)\"" header))
-                          data-end   (if (= (aget bs (- next-boundary 1)) 13)
-                                      (- next-boundary 1) next-boundary)
-                          next-offset (+ next-boundary delim-len 2)]
-                      (if (and field-name filename)
-                        (recur next-offset
-                               (assoc params field-name
-                                      {:filename filename
-                                       :content-type (or (second (re-find #"Content-Type:\s*(\S+)" header))
-                                                        "application/octet-stream")
-                                       :bytes (java.util.Arrays/copyOfRange bs body-start data-end)}))
-                        (recur next-offset
-                               (assoc params field-name
-                                      (String. bs body-start (- data-end body-start) "UTF-8")))))
-                    params))
-                params))))))))
+    (try
+      (let [bs (read-body-bytes body)
+            boundary (second (re-find #"boundary=([^\s;]+)" content-type))]
+        (when boundary
+          (let [delim (.getBytes (str "--" boundary) "UTF-8")
+                delim-len (alength delim)
+                ;; detect line ending style: \r\n or \n
+                first-delim-end (byte-index-of bs delim (alength delim))
+                header-sep (if (and first-delim-end
+                                    (>= (alength bs) (+ first-delim-end delim-len 2))
+                                    (= (aget bs (+ first-delim-end delim-len)) 13))
+                            (.getBytes "\r\n\r\n" "UTF-8")
+                            (.getBytes "\n\n" "UTF-8"))
+                header-sep-len (alength header-sep)
+                cr-after-sep? (= header-sep-len 4)  ;; \r\n\r\n = 4 bytes
+                line-sep-len (if cr-after-sep? 2 1)]  ;; \r\n vs \n
+            (loop [offset (alength delim)
+                   params {}]
+              (if (>= offset (- (alength bs) delim-len))
+                params
+                (if-let [header-end (byte-index-of bs header-sep offset)]
+                  (let [header (String. bs offset (- header-end offset) "UTF-8")
+                        body-start (+ header-end header-sep-len)]
+                    (if-let [next-boundary (byte-index-of bs delim body-start)]
+                      (let [field-name (second (re-find #"name=\"([^\"]+)\"" header))
+                            filename   (second (re-find #"filename=\"([^\"]+)\"" header))
+                            ;; trim trailing line ending before boundary
+                            trim-before (if cr-after-sep? 1 0)
+                            data-end   (- next-boundary trim-before)
+                            next-offset (+ next-boundary delim-len line-sep-len)]
+                        (if (and field-name filename)
+                          (recur next-offset
+                                 (assoc params field-name
+                                        {:filename filename
+                                         :content-type (or (second (re-find #"Content-Type:\s*(\S+)" header))
+                                                          "application/octet-stream")
+                                         :bytes (java.util.Arrays/copyOfRange bs body-start data-end)}))
+                          (recur next-offset
+                                 (assoc params field-name
+                                        (String. bs body-start (- data-end body-start) "UTF-8")))))
+                      params))
+                  params))))))
+      (catch Exception e
+        (println "Multipart parse error:" (.getMessage e))
+        nil))))
 
 ;; ============================================================================
 ;; Request parsing
@@ -555,6 +574,17 @@
              [:div.icon "🤷"]
              [:h2 "Meal not found"]])
           html)))
+
+  (POST "/meal/:id/delete" [id]
+    (if-let [meal-id (some-> id parse-long)]
+      (do
+        (db/delete-meal meal-id)
+        {:status 302
+         :headers {"Location" (path "/meals")}
+         :body ""})
+      {:status 302
+       :headers {"Location" (path "/meals")}
+       :body ""}))
 
   (GET "/photo/:id" [id]
     (if-let [meal-id (some-> id parse-long)]
