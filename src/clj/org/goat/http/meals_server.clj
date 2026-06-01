@@ -6,8 +6,7 @@
             [org.httpkit.server :as server]
             [compojure.core :refer [defroutes GET POST]]
             [compojure.route :as route]
-            [hiccup.core :refer [html]]
-            [hiccup.page :refer [html5]]
+            [hiccup2.core :refer [html raw]]
             [clojure.string :as str])
   (:import [java.time Instant ZoneId LocalDate]
            [java.time.format DateTimeFormatter]))
@@ -47,10 +46,6 @@
     (repeat 5 "☆")
     (let [n (-> score (max 0) (min 5))]
       (concat (repeat n "★") (repeat (- 5 n) "☆")))))
-
-(defn- escape-html [s]
-  (when s
-    (-> s (str/replace "&" "&amp;") (str/replace "<" "&lt;") (str/replace ">" "&gt;"))))
 
 (defn- snippet [s max-len]
   (when s
@@ -225,24 +220,26 @@
 (defn- layout
   "Base HTML wrapper for all pages."
   [title active-nav & body]
-  (html5 {:lang "en"}
-    [:head
-     [:meta {:charset "utf-8"}]
-     [:meta {:name "viewport" :content "width=device-width, initial-scale=1"}]
-     [:title (str title " — House of the Future")]
-     [:style styles]]
-    [:body
-     [:header
-      [:div.container
-       [:h1 [:a {:href (path "/")} "🏠 House of the Future"]]
-        [:nav
-         [:a {:href (path "/meals") :class (when (= active-nav :meals) "active")}
-          "🍽️ Meals"]
-         [:a {:href (path "/urls") :class (when (= active-nav :urls) "active")}
-          "🔗 URLs"]]]]
-     [:div.container
-      body]
-     [:footer "House of the Future"]]))
+  (str "<!DOCTYPE html>\n"
+       (html {:mode :html}
+         [:html {:lang "en"}
+          [:head
+           [:meta {:charset "utf-8"}]
+           [:meta {:name "viewport" :content "width=device-width, initial-scale=1"}]
+           [:title (str title " — House of the Future")]
+           [:style (raw styles)]]
+          [:body
+           [:header
+            [:div.container
+             [:h1 [:a {:href (path "/")} "🏠 House of the Future"]]
+             [:nav
+              [:a {:href (path "/meals") :class (when (= active-nav :meals) "active")}
+               "🍽️ Meals"]
+              [:a {:href (path "/urls") :class (when (= active-nav :urls) "active")}
+               "🔗 URLs"]]]]
+           [:div.container
+            body]
+           [:footer "House of the Future"]]])))
 
 ;; ============================================================================
 ;; Shared components
@@ -279,16 +276,16 @@
        [:img {:src (path (str "/photo/" (:meal_id meal))) :alt (:title meal) :loading "lazy"}]
        "🍽️")]
     [:div.meal-card-body
-     [:h3 (escape-html (:title meal))]
+     [:h3 (:title meal)]
      [:span.stars (apply str (stars (:score meal)))]
      (when (seq (:ingredients meal))
        [:div {:style "margin-bottom:6px"}
         (for [ing (:ingredients meal)]
-          [:span.ingredient-tag-sm {:key ing} (escape-html ing)])])
+           [:span.ingredient-tag-sm {:key ing} ing])])
      (when-let [d (snippet (:description meal) 120)]
        [:div.desc d])
      [:div.meal-card-meta
-      (str "by " (escape-html (:added_by meal)))
+      (str "by " (:added_by meal))
       [:span "·"]
       (fmt-date (:added_date meal))]]])
 
@@ -301,19 +298,19 @@
        [:img {:src (path (str "/photo/" (:meal_id meal))) :alt (:title meal)}]]
       [:div.detail-no-img "🍽️"])
     [:div.detail-body
-     [:h2 (escape-html (:title meal))]
+     [:h2 (:title meal)]
      [:span.stars (apply str (stars (:score meal)))]
      (when (seq (:ingredients meal))
        [:div.detail-section
         [:h4 "Ingredients"]
         (for [ing (:ingredients meal)]
-          [:span.ingredient-tag {:key ing} (escape-html ing)])])
+          [:span.ingredient-tag {:key ing} ing])])
      (when (and (:description meal) (not (str/blank? (:description meal))))
        [:div.detail-section
         [:h4 "Notes"]
-        [:p (escape-html (:description meal))]])
+        [:p (:description meal)]])
       [:div.detail-meta
-       (str "Added by " (escape-html (:added_by meal))
+       (str "Added by " (:added_by meal)
             " on " (fmt-date (:added_date meal)))]
       [:div {:style "margin-top:24px"}
        [:form {:action (path (str "/meal/" (:meal_id meal) "/delete"))
@@ -384,10 +381,10 @@
 (defn- url-row [u]
   [:tr
    [:td.url-col
-    [:a {:href (:url u) :target "_blank" :rel "noopener"} (escape-html (:url u))]]
-   [:td.msg-col (escape-html (snippet (:msg u) 200))]
-   [:td (escape-html (:sender u))]
-   [:td (escape-html (:chatname u))]
+    [:a {:href (:url u) :target "_blank" :rel "noopener"} (:url u)]]
+   [:td.msg-col (snippet (:msg u) 200)]
+   [:td (:sender u)]
+   [:td (:chatname u)]
    [:td (fmt-date-secs (:time u))]])
 
 (defn- urls-index [urls page total q]
@@ -541,39 +538,34 @@
       (if q
         (let [meals (db/search-meals-paged q limit offset)
               total (db/count-search-results q)]
-          (-> (layout "Meals" :meals
+          (layout "Meals" :meals
                 (search-bar q "/meals")
                 [:div.result-count
                  (str (if (pos? total) (str total " meal" (when (not= 1 total) "s")) "No meals")
-                      " matching \"" (escape-html q) "\"")]
-                (meals-index meals page total q))
-              html))
+                      " matching \"" q "\"")]
+                (meals-index meals page total q)))
         (let [meals (db/list-meals :limit limit :offset offset)
               total (db/count-meals)]
-          (-> (layout "Meals" :meals
+          (layout "Meals" :meals
                 [:div.toolbar
                  (search-bar nil "/meals")
                  [:a.btn-add {:href (path "/meals/new")} "➕ Add Meal"]]
-                (meals-index meals page total nil))
-              html)))))
+                (meals-index meals page total nil))))))
 
   (GET "/meal/:id" [id]
     (if-let [meal-id (some-> id parse-long)]
       (if-let [meal (db/get-meal meal-id)]
-        (-> (layout (:title meal) :meals
+        (layout (:title meal) :meals
               (meal-detail meal))
-            html)
-        (-> (layout "Not Found" :meals
+        (layout "Not Found" :meals
               [:div.empty-state
                [:div.icon "🤷"]
                [:h2 "Meal not found"]
-               [:p "That meal doesn't exist or may have been deleted."]])
-            html))
-      (-> (layout "Not Found" :meals
+               [:p "That meal doesn't exist or may have been deleted."]]))
+      (layout "Not Found" :meals
             [:div.empty-state
              [:div.icon "🤷"]
-             [:h2 "Meal not found"]])
-          html)))
+              [:h2 "Meal not found"]]))))
 
   (POST "/meal/:id/delete" [id]
     (if-let [meal-id (some-> id parse-long)]
@@ -598,9 +590,8 @@
 
   ;; Add meal form
   (GET "/meals/new" []
-    (-> (layout "Add Meal" :meals
+    (layout "Add Meal" :meals
           (add-meal-form))
-        html))
 
   (POST "/meals/new" req
     (let [params (parse-request-body req)
@@ -610,12 +601,11 @@
           desc   (some-> (get params "description") clojure.string/trim)
           photo  (get params "photo")]
       (if (clojure.string/blank? title)
-        (-> (layout "Add Meal" :meals
+        (layout "Add Meal" :meals
               (add-meal-form
                 :error "Title is required."
                 :title title :score (str score)
                 :ingredients ings :description desc))
-            html)
         (try
           (let [id (db/add-meal {:title title
                                  :score score
@@ -633,12 +623,11 @@
              :body ""})
           (catch Exception e
             (println "DB error:" (.getMessage e))
-            (-> (layout "Add Meal" :meals
+            (layout "Add Meal" :meals
                   (add-meal-form
                     :error (str "Database error: " (.getMessage e))
                     :title title :score (str score)
-                    :ingredients ings :description desc))
-                html))))))
+                    :ingredients ings :description desc)))))))
 
   ;; URLs
   (GET "/urls" [q page]
@@ -652,25 +641,22 @@
           all-urls (urls-db/get-urls 1000 0 search)
           total (count all-urls)]
       (if q
-        (-> (layout "URLs" :urls
+        (layout "URLs" :urls
               (search-bar q "/urls")
               [:div.result-count
                (str (if (pos? total) (str total " URL" (when (not= 1 total) "s")) "No URLs")
-                    " matching \"" (escape-html q) "\"")]
-              (urls-index urls page total q))
-            html)
-        (-> (layout "URLs" :urls
+                    " matching \"" q "\"")]
+               (urls-index urls page total q))
+        (layout "URLs" :urls
               (search-bar nil "/urls")
-              (urls-index urls page total nil))
-            html))))
+              (urls-index urls page total nil)))))
 
   (route/not-found
-    (-> (layout "Not Found" :meals
+    (layout "Not Found" :meals
           [:div.empty-state
            [:div.icon "🤷"]
            [:h2 "Page not found"]
-            [:p "Nothing here."]])
-        html)))
+            [:p "Nothing here."]])))
 
 ;; ============================================================================
 ;; Server lifecycle
