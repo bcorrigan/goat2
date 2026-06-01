@@ -525,6 +525,17 @@
 ;; ============================================================================
 
 (defroutes meals-routes
+  ;; Photo serving (must come first to avoid route conflicts)
+  (GET "/photo/:id" [id]
+    (if-let [meal-id (some-> id parse-long)]
+      (or (when-let [bs (photos/load-photo-bytes meal-id)]
+            {:status 200
+             :headers {"Content-Type" "image/jpeg"
+                       "Cache-Control" "public, max-age=86400"}
+             :body (java.io.ByteArrayInputStream. bs)})
+          {:status 404 :body "No photo"})
+      {:status 400 :body "Invalid id"}))
+
   ;; Home redirect
   (GET "/" []
     {:status 302 :headers {"Location" (path "/meals")} :body ""})
@@ -576,17 +587,7 @@
          :body ""})
       {:status 302
        :headers {"Location" (path "/meals")}
-       :body ""}))
-
-  (GET "/photo/:id" [id]
-    (if-let [meal-id (some-> id parse-long)]
-      (if-let [bs (photos/load-photo-bytes meal-id)]
-        {:status 200
-         :headers {"Content-Type" "image/jpeg"
-                   "Cache-Control" "public, max-age=86400"}
-         :body bs}
-        {:status 404 :body "No photo"})
-      {:status 400 :body "Invalid id"}))
+        :body ""}))
 
   ;; Add meal form
   (GET "/meals/new" []

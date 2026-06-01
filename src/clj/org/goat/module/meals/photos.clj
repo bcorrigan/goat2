@@ -62,18 +62,21 @@
 (defn- image->bytes
   "Encode a BufferedImage to JPEG bytes at the given quality (0.0–1.0)."
   [^BufferedImage img ^double quality]
-  (let [out (ByteArrayOutputStream.)
-        writer (ImageIO/getImageWritersByFormatName "jpeg")
-        iw (.next writer)
-        params (.getDefaultWriteParam iw)]
-    (.setCompressionMode params ImageWriteParam/MODE_EXPLICIT)
-    (.setCompressionQuality params (float quality))
+  (let [baos (ByteArrayOutputStream.)
+        ios  (ImageIO/createImageOutputStream baos)]
     (try
-      (.setOutput iw (ImageIO/createImageOutputStream out))
-      (.write iw nil (IIOImage. img nil nil) params)
+      (let [writer (ImageIO/getImageWritersByFormatName "jpeg")
+            iw (.next writer)
+            params (.getDefaultWriteParam iw)]
+        (.setCompressionMode params ImageWriteParam/MODE_EXPLICIT)
+        (.setCompressionQuality params (float quality))
+        (.setOutput iw ios)
+        (.write iw nil (IIOImage. img nil nil) params)
+        (.dispose iw))
+      (.flush ios)
+      (.toByteArray baos)
       (finally
-        (.dispose iw)))
-    (.toByteArray out)))
+        (.close ios)))))
 
 (defn- resize-bytes
   "If the image exceeds max-dimension, scale it down and return JPEG bytes."
@@ -131,4 +134,6 @@
                  (io/copy in out)
                  (.toByteArray out))]
         (resize-bytes bs))
-      (catch Exception _ nil))))
+      (catch Exception e
+        (println "Error loading photo" meal-id ":" (.getMessage e))
+        nil))))
