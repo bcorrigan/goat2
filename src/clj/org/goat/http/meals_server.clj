@@ -169,7 +169,7 @@
   .form-group input[type=\"file\"] { padding: 8px; }
   .score-select { display: flex; gap: 4px; flex-wrap: wrap; }
   .score-option { cursor: pointer; }
-  .score-option input { display: none; }
+  .score-option input { position: absolute; opacity: 0; width: 0; height: 0; }
   .score-option span { display: block; padding: 8px 10px; border-radius: 8px;
                        border: 2px solid #e0d5c7; font-size: 0.9rem; color: #e8a838;
                        transition: background 0.15s; }

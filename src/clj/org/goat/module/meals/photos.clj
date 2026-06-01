@@ -2,9 +2,11 @@
   "On-disk storage for meal photos. One file per meal-id under photo-dir.
    Format is sniffed from the leading bytes (JPEG/PNG); defaults to .jpg."
   (:require [clojure.java.io :as io])
-  (:import [java.io File ByteArrayInputStream]
-           [java.awt.image RenderedImage]
-           [javax.imageio ImageIO]))
+  (:import [java.io File ByteArrayInputStream ByteArrayOutputStream]
+           [java.awt Graphics2D RenderingHints Image]
+           [java.awt.image BufferedImage RenderedImage]
+           [javax.imageio IIOImage ImageIO ImageWriteParam]
+           [javax.imageio.plugins.jpeg JPEGImageWriteParam]))
 
 (def ^:dynamic *photo-dir*
   "Directory where meal photo files live. Dynamic so tests can rebind."
@@ -35,6 +37,54 @@
 
     :else "jpg"))
 
+(def ^:private max-dimension
+  "Photos exceeding this on the longest side will be scaled down."
+  1600)
+
+(defn- resize-image
+  "Scale a BufferedImage down to fit within max-dimension. Returns a new image."
+  [^BufferedImage orig]
+  (if (and (<= (.getWidth orig) max-dimension)
+           (<= (.getHeight orig) max-dimension))
+    orig
+    (let [w (.getWidth orig)
+          h (.getHeight orig)
+          ratio (min (/ (double max-dimension) w) (/ (double max-dimension) h))
+          new-w (int (* w ratio))
+          new-h (int (* h ratio))
+          scaled (BufferedImage. new-w new-h BufferedImage/TYPE_INT_RGB)
+          g (.createGraphics scaled)]
+      (.setRenderingHint g RenderingHints/KEY_INTERPOLATION RenderingHints/VALUE_INTERPOLATION_BILINEAR)
+      (.drawImage g orig 0 0 new-w new-h nil)
+      (.dispose g)
+      scaled)))
+
+(defn- image->bytes
+  "Encode a BufferedImage to JPEG bytes at the given quality (0.0–1.0)."
+  [^BufferedImage img ^double quality]
+  (let [out (ByteArrayOutputStream.)
+        writer (ImageIO/getImageWritersByFormatName "jpeg")
+        iw (.next writer)
+        params (.getDefaultWriteParam iw)]
+    (.setCompressionMode params ImageWriteParam/MODE_EXPLICIT)
+    (.setCompressionQuality params (float quality))
+    (try
+      (.setOutput iw (ImageIO/createImageOutputStream out))
+      (.write iw nil (IIOImage. img nil nil) params)
+      (finally
+        (.dispose iw)))
+    (.toByteArray out)))
+
+(defn- resize-bytes
+  "If the image exceeds max-dimension, scale it down and return JPEG bytes."
+  [^bytes bs]
+  (let [orig (ImageIO/read (ByteArrayInputStream. bs))]
+    (if (or (nil? orig)
+            (and (<= (.getWidth orig) max-dimension)
+                 (<= (.getHeight orig) max-dimension)))
+      bs
+      (image->bytes (resize-image orig) 0.85))))
+
 (defn- candidate-files
   "All on-disk filenames that could hold a photo for meal-id."
   [meal-id]
@@ -49,33 +99,36 @@
        first))
 
 (defn save-photo!
-  "Persist photo bytes for meal-id. Returns the File written.
-   Removes any pre-existing file for the same meal-id (different extension)."
+  "Persist photo bytes for meal-id, resizing if needed. Returns the File written."
   [meal-id ^bytes bs]
   (ensure-dir!)
-  ;; Clear out any stale file at another extension
   (doseq [^File f (candidate-files meal-id)]
     (when (.exists f) (.delete f)))
-  (let [ext (sniff-ext bs)
+  (let [resized (resize-bytes bs)
+        ext (sniff-ext resized)
         ^File f (io/file *photo-dir* (str meal-id "." ext))]
     (with-open [out (io/output-stream f)]
-      (.write out bs))
+      (.write out resized))
     f))
 
 (defn load-photo
-  "Load the photo for meal-id as a RenderedImage suitable for msg/reply-image.
+  "Load the photo for meal-id as a RenderedImage, resizing if needed.
    Returns nil if no photo exists or it can't be decoded."
   [meal-id]
   (when-let [^File f (photo-path meal-id)]
     (try
-      (ImageIO/read f)
+      (when-let [img (ImageIO/read f)]
+        (resize-image img))
       (catch Exception _ nil))))
 
 (defn load-photo-bytes
-  "Load raw photo bytes for meal-id, or nil if no photo exists."
+  "Load raw photo bytes for meal-id, resizing if needed."
   [meal-id]
   (when-let [^File f (photo-path meal-id)]
-    (with-open [in (io/input-stream f)
-                out (java.io.ByteArrayOutputStream.)]
-      (io/copy in out)
-      (.toByteArray out))))
+    (try
+      (let [bs (with-open [in (io/input-stream f)
+                            out (java.io.ByteArrayOutputStream.)]
+                 (io/copy in out)
+                 (.toByteArray out))]
+        (resize-bytes bs))
+      (catch Exception _ nil))))
